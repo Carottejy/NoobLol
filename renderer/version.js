@@ -1,6 +1,14 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.3.0';
+var APP_VERSION = '2.4.0';
 var APP_RELEASES = [
+  { v: '2.4.0', date: '2026-10-22', notes: [
+    'Sélection : face-à-face par rôle (top, jungle, mid, support, adc) entre ton équipe et l\'équipe adverse. Les rôles adverses sont estimés d\'après les statistiques et la classe des champions. Un clic sur un ennemi le désigne comme ton adversaire de voie.',
+    'Sélection : pourcentage AD / AP de chaque champion et de chaque équipe.',
+    'Sélection : un clic sur une page de runes ou une paire de sorts d\'invocateur l\'applique directement dans le client du jeu.',
+    'En jeu : plus aucun bouton. La mini-carte affiche une image fixe de la Faille hors partie et le zoom en direct uniquement pendant la partie.',
+    'En jeu : tableau des objectifs (dragon, larves, Héraut, Nashor, dragon ancestral) avec le temps avant apparition et le nombre pris par chaque équipe, plus les tours et inhibiteurs. Alarme sonore quand un objectif apparaît.',
+    'En jeu : le bandeau horloge / caler / nouvelle partie et le suivi manuel des sorts adverses sont retirés. Les options de la mini-carte et du son sont dans Réglages.',
+  ]},
   { v: '2.3.0', date: '2026-10-22', notes: [
     'En jeu : nouvelle mise en page plein écran. La page utilise toute la largeur, la mini-carte est carrée et calée sur la hauteur de la fenêtre, tout le reste est à droite et tient sans défiler en 1080p.',
     'En jeu : bandeau compact (horloge, ton champion, or, boutons mini-carte / écran 2 / son), sorts adverses et objectifs côte à côte, timers sur une ligne.',

@@ -153,6 +153,15 @@ class StatsDb {
   matchup(champ, opp, role, days = 30) {
     return this.one('SELECT COUNT(*) games, SUM(win) wins FROM picks WHERE champ = ? AND opp = ? AND role = ? AND created >= ?', [champ, opp, role, this.since(days)]) || { games: 0, wins: 0 };
   }
+  /* Répartition des rôles joués pour une liste de champions (pour deviner les rôles adverses) */
+  roleDist(champs, days = 30) {
+    const ks = (champs || []).map(Number).filter(Boolean);
+    if (!ks.length) return {};
+    const out = {};
+    this.all(`SELECT champ, role, COUNT(*) games FROM picks WHERE created >= ? AND champ IN (${ks.map(() => '?').join(',')}) GROUP BY champ, role`, [this.since(days), ...ks])
+      .forEach((r) => { (out[r.champ] = out[r.champ] || {})[r.role] = r.games; });
+    return out;
+  }
   mainRole(champ, days = 30) {
     const r = this.one('SELECT role, COUNT(*) games FROM picks WHERE champ = ? AND created >= ? GROUP BY role ORDER BY games DESC LIMIT 1', [champ, this.since(days)]);
     return r ? r.role : '';

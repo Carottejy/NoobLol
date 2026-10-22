@@ -39,7 +39,7 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* stockage plein */ } };
 
   /* ---------- État en direct (non enregistré) ---------- */
-  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '' };
+  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {} };
   const cache = new Map(); /* résultats de statistiques (requêtes vers la base locale) */
   function cached(key, fn) {
     if (cache.has(key)) { const v = cache.get(key); return v === PENDING ? undefined : v; }
@@ -414,31 +414,67 @@
     }
     return ['', ''];
   }
+  /* Profil AD / AP d'un champion (sans objets : d'après ses caractéristiques Riot) */
+  const champAd = (c) => (c ? (c.info.attack + 0.01) / (c.info.attack + c.info.magic + 0.02) : 0.5);
+  const ROLE_ORDER = ['top', 'jungle', 'mid', 'support', 'adc'];
   function selectionData() {
     const cs = R.lcu.champSelect;
+    let allies, enemyKeys, enemyFixed = {}, bans = [], me = null, live = false;
     if (cs) {
-      const me = cs.myTeam.find((p) => p.isMe) || null;
-      const myChamp = me && me.champ ? me.champ : 0;
-      const [myRole, roleSrc] = detectRole(cs.myRole, myChamp);
-      return { live: true, cs, me, myRole, roleSrc, allies: cs.myTeam, enemies: cs.theirTeam.map((p) => p.champ).filter(Boolean), bans: cs.bans, myChamp, locked: !!(me && me.locked) };
+      live = true; me = cs.myTeam.find((p) => p.isMe) || null;
+      allies = cs.myTeam.map((p) => Object.assign({}, p));
+      enemyKeys = cs.theirTeam.map((p) => p.champ).filter(Boolean);
+      cs.theirTeam.forEach((p) => { if (p.champ && p.role) enemyFixed[p.champ] = p.role; });
+      bans = cs.bans;
+    } else {
+      const meC = D.champs && D.champs[S.select.manualMe];
+      me = { champ: meC ? +meC.key : 0, role: '', isMe: true, locked: false, spells: [0, 0] };
+      allies = [me];
+      enemyKeys = S.select.manualEnemies.map((id) => (D.champs && D.champs[id] ? +D.champs[id].key : 0)).filter(Boolean);
     }
-    const meC = D.champs && D.champs[S.select.manualMe];
-    const myChamp = meC ? +meC.key : 0;
-    const [myRole, roleSrc] = detectRole('', myChamp);
-    return { live: false, cs: null, me: null, myRole: myRole || 'mid', roleSrc: roleSrc || 'manual', allies: [], enemies: S.select.manualEnemies.map((id) => (D.champs && D.champs[id] ? +D.champs[id].key : 0)).filter(Boolean), bans: [], myChamp, locked: false };
+    const myChamp = me && me.champ ? me.champ : 0;
+    const allKeys = allies.map((p) => p.champ).concat(enemyKeys).filter(Boolean);
+    const dist = NB && allKeys.length ? cached('rd:' + allKeys.slice().sort().join(','), () => NB.stats.roleDist(allKeys)) : {};
+    const allyFixed = {};
+    allies.forEach((p) => { if (p.champ && p.role) allyFixed[p.champ] = p.role; });
+    if (S.select.role && myChamp) allyFixed[myChamp] = S.select.role;
+    const allyRoles = Builds.assignRoles(allies.map((p) => p.champ).filter(Boolean), D, dist || {}, allyFixed);
+    const enemyRoles = Builds.assignRoles(enemyKeys, D, dist || {}, enemyFixed);
+    let myRole = S.select.role || (me && me.role) || (myChamp ? allyRoles[myChamp] : '') || '';
+    const roleSrc = S.select.role ? 'manual' : me && me.role ? 'client' : myRole ? 'guess' : '';
+    if (!live && !myRole) myRole = 'mid';
+    allies.forEach((p) => { p.r = p.role || (p.champ ? allyRoles[p.champ] : '') || ''; });
+    return { live, cs, me, myRole, roleSrc, allies, enemies: enemyKeys, enemyRoles, enemyFixed, bans, myChamp, locked: !!(me && me.locked) };
   }
-  /* Adversaire de voie : choisi par toi, sinon deviné (rôle le plus joué d'après les statistiques). */
+  /* Adversaire de voie : celui que tu as désigné, sinon l'ennemi dont le rôle estimé est le tien */
   function laneOpponent(sd) {
-    const role = sd.myRole;
     if (S.select.opp && sd.enemies.includes(+S.select.opp)) return +S.select.opp;
-    if (!role) return 0;
-    for (const k of sd.enemies) {
-      const main = NB ? cached('main:' + k, () => NB.stats.mainRole(k)) : '';
-      const c = byKey(k);
-      const guess = main || (c ? beginnerRole(c.id) : '');
-      if (guess === role) return k;
-    }
-    return 0;
+    if (!sd.myRole) return 0;
+    return sd.enemies.find((k) => sd.enemyRoles[k] === sd.myRole) || 0;
+  }
+  /* Face-à-face par rôle : top / jungle / mid / support / adc */
+  function faceOff(sd, opp) {
+    const rows = ROLE_ORDER.map((r) => ({ r, ally: null, enemy: 0 }));
+    const leftovers = [];
+    sd.allies.forEach((p) => { const row = rows.find((x) => x.r === p.r && !x.ally); if (row) row.ally = p; else leftovers.push(p); });
+    leftovers.forEach((p) => { const row = rows.find((x) => !x.ally); if (row) row.ally = p; });
+    const eLeft = [];
+    sd.enemies.forEach((k) => { const row = rows.find((x) => x.r === sd.enemyRoles[k] && !x.enemy); if (row) row.enemy = k; else eLeft.push(k); });
+    eLeft.forEach((k) => { const row = rows.find((x) => !x.enemy); if (row) row.enemy = k; });
+    const teamAd = (keys) => { const cs2 = keys.map(byKey).filter(Boolean); return cs2.length ? cs2.reduce((s2, c) => s2 + champAd(c), 0) / cs2.length : null; };
+    const aAd = teamAd(sd.allies.map((p) => p.champ).filter(Boolean)), eAd = teamAd(sd.enemies);
+    const cell = (c, cls, extra, attrs) => `<div class="vs-cell ${cls}" ${attrs || ''}>${cIcon(c, 'ico')}<div class="grow"><div class="vs-name"><b class="ell">${c ? esc(c.name) : '…'}</b>${extra || ''}</div>${c ? dmgBar(champAd(c)) : ''}</div></div>`;
+    let h = `<div class="card vs"><div class="vs-row vs-head"><div class="vs-cell ally"><div class="grow"><b>🟦 Mon équipe</b>${aAd != null ? dmgBar(aAd) : ''}</div></div><div class="vs-role"></div><div class="vs-cell enemy"><div class="grow"><b>🟥 Adversaires</b>${eAd != null ? dmgBar(eAd) : ''}</div></div></div>`;
+    h += rows.map((x) => {
+      const a = x.ally, ac = a ? byKey(a.champ) : null, ec = x.enemy ? byKey(x.enemy) : null;
+      const mine = a && a.isMe;
+      const aTag = a ? `${a.isMe ? '<span class="tag gold">Toi</span>' : ''}${a.intent ? '<span class="muted small">intention</span>' : ''}${a.champ && !a.locked && !a.intent && sd.live ? '<span class="muted small">survol</span>' : ''}` : '';
+      const guessed = ec && !sd.enemyFixed[x.enemy];
+      const eTag = `${ec && +ec.key === opp ? '<span class="tag gold">adversaire</span>' : ''}${guessed ? '<span class="muted small" title="Rôle estimé d\'après les statistiques et la classe du champion">estimé</span>' : ''}`;
+      return `<div class="vs-row ${mine ? 'me' : ''}">${cell(ac, 'ally', aTag)}<div class="vs-role" title="${ROLE_NAME[x.r]}">${ROLE_IC[x.r]}<span>${ROLE_NAME[x.r]}</span></div>${cell(ec, 'enemy' + (ec && +ec.key === opp ? ' opp' : ''), eTag, ec ? `data-act="selOpp" data-val="${ec.key}" title="Désigner comme adversaire de voie"` : '')}</div>`;
+    }).join('');
+    if (sd.bans.length) h += `<div class="row" style="margin-top:8px"><span class="muted small">🚫 Bannis :</span>${sd.bans.map((k) => cIcon(byKey(k), 'ico sm ban')).join('')}</div>`;
+    return h + '</div>';
   }
   function suggestions(sd, opp) {
     const role = sd.myRole;
@@ -478,40 +514,27 @@
       const TPH = { PLANNING: 'Déclaration des intentions', BAN_PICK: 'Bannissements et choix', FINALIZATION: 'Finalisation (runes et sorts)', GAME_STARTING: 'La partie démarre' };
       h += `<div class="row sp"><h1>🎯 Sélection en cours</h1><span class="pill on big">${esc(TPH[t && t.phase] || 'Sélection')}${t ? ` · <b data-sel-left="${t.at + t.left * 1000}">${left}</b> s` : ''}</span></div>`;
     } else {
-      h += `<h1>🎯 Sélection des champions</h1><div class="card"><p>${NB ? (R.lcu.connected ? 'Tu n\'es pas en sélection. Dès qu\'une partie est trouvée, cet écran se remplit tout seul avec les champions des deux équipes.' : 'Lance le client League of Legends : dès que la sélection commence, cet écran se remplit tout seul.') : 'Dans l\'application PC, cet écran se remplit tout seul pendant la sélection.'}</p>
-        <p class="muted small">En attendant, tu peux simuler une sélection : choisis ton rôle et les champions adverses ci-dessous.</p></div>`;
+      h += `<h1>🎯 Sélection des champions</h1><div class="card"><p>${NB ? (R.lcu.connected ? 'Tu n\'es pas en sélection. Dès qu\'une partie est trouvée, Noob LOL bascule ici tout seul.' : 'Lance le client League of Legends : dès que la sélection commence, Noob LOL bascule ici tout seul.') : 'Dans l\'application PC, cet écran se remplit tout seul pendant la sélection.'}</p>
+        <details class="flat"><summary class="small">Simuler une sélection</summary>${(() => { const opts = (sel) => `<option value="">—</option>${D.champList.map((x) => `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
+          return `<label>Mon champion</label><select data-sel="me">${opts(S.select.manualMe)}</select><label style="margin-top:8px">Champions adverses</label><div class="grid g2">${S.select.manualEnemies.map((id, i) => `<select data-sel="enemy" data-i="${i}">${opts(id)}</select>`).join('')}</div>`; })()}</details></div>`;
     }
     h += `<div class="card"><div class="row"><b>Mon rôle :</b>${ROLES.map((r) => `<button class="chip ${role === r ? 'on' : ''}" data-act="selRole" data-val="${r}">${ROLE_IC[r]} ${ROLE_NAME[r]}</button>`).join('')}
-      ${S.select.role ? `<button class="chip" data-act="selRole" data-val="">↩ Détection automatique</button>` : (role ? `<span class="muted small">Lane ${ROLE_SRC[sd.roleSrc] || ''}</span>` : '')}</div></div>`;
-    h += '<div class="cols">';
-    /* Équipes */
-    h += '<div>';
-    if (sd.live) {
-      h += `<div class="card"><h2>🟦 Mon équipe</h2>${sd.allies.map((p) => { const c = byKey(p.champ); return `<div class="slot ${p.isMe ? 'me' : ''} ${p.intent ? 'intent' : ''}">${cIcon(c)}<div class="grow"><b>${c ? esc(c.name) : '…'}</b>${p.isMe ? ' <span class="tag gold">Toi</span>' : ''}${p.intent ? ' <span class="muted small">(intention)</span>' : ''}${!p.locked && p.champ && !p.intent ? ' <span class="muted small">(survol)</span>' : ''}<div class="muted small">${p.role ? ROLE_IC[p.role] + ' ' + ROLE_NAME[p.role] : ''}</div></div></div>`; }).join('')}</div>`;
-      h += `<div class="card"><h2>🟥 Équipe adverse</h2><p class="muted small">Clique sur ton adversaire de voie pour des conseils précis.</p>${sd.cs.theirTeam.map((p) => { const c = byKey(p.champ); return `<button class="slot btnlike ${c && +c.key === opp ? 'opp' : ''}" ${c ? `data-act="selOpp" data-val="${c.key}"` : 'disabled'}>${cIcon(c)}<div class="grow"><b>${c ? esc(c.name) : 'Pas encore choisi'}</b>${c && +c.key === opp ? ' <span class="tag gold">Mon adversaire</span>' : ''}</div></button>`; }).join('')}</div>`;
-      if (sd.bans.length) h += `<div class="card"><h2>🚫 Bannis</h2><div class="row">${sd.bans.map((k) => cIcon(byKey(k), 'ico sm ban')).join('')}</div></div>`;
-    } else {
-      const opts = (sel) => `<option value="">—</option>${D.champList.map((x) => `<option value="${esc(x.id)}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}`;
-      h += `<div class="card"><h2>Simulation</h2><label>Mon champion (facultatif)</label><select data-sel="me">${opts(S.select.manualMe)}</select>
-        <label style="margin-top:8px">Champions adverses</label>${S.select.manualEnemies.map((id, i) => `<select data-sel="enemy" data-i="${i}" style="margin-bottom:6px">${opts(id)}</select>`).join('')}
-        ${sd.enemies.length ? `<label>Mon adversaire de voie</label><div class="row">${sd.enemies.map((k) => { const c = byKey(k); return `<button class="chip ${k === opp ? 'on' : ''}" data-act="selOpp" data-val="${k}">${esc(c.name)}</button>`; }).join('')}</div>` : ''}</div>`;
-    }
-    h += '</div><div>';
-    /* Conseils */
-    if (sd.myChamp) h += pickPanel(sd, opp);
+      ${S.select.role ? `<button class="chip" data-act="selRole" data-val="">↩ Détection automatique</button>` : (role ? `<span class="muted small">Rôle ${ROLE_SRC[sd.roleSrc] || ''}</span>` : '<span class="muted small">Rôle pas encore détecté</span>')}</div></div>`;
+    h += '<div class="cols"><div>';
+    h += faceOff(sd, opp);
+    if (opp) { const oc = byKey(opp); const f = needFull(oc.id); if (f) h += tipsCards(f, 'enemy'); }
     if (!sd.locked) {
       const sug = suggestions(sd, opp);
-      h += `<div class="card gold"><h2>💡 Champions conseillés ${role ? 'en ' + ROLE_NAME[role] : ''}${opp ? ' contre ' + esc(byKey(opp).name) : ''}</h2>`;
+      h += `<div class="card"><h2>💡 Champions conseillés ${role ? 'en ' + ROLE_NAME[role] : ''}${opp ? ' contre ' + esc(byKey(opp).name) : ''}</h2>`;
       if (!role) h += '<p class="muted">Choisis ton rôle ci-dessus.</p>';
       else if (!sug || !sug.length) h += '<div class="loader small">Calcul…</div>';
       else h += sug.map((o) => { const c = byKey(o.k); return `<button class="sug" data-act="champ" data-val="${esc(c.id)}">${cIcon(c, 'ico lg')}<div class="grow"><b>${esc(c.name)}</b><div class="small muted">${o.why.slice(0, 3).join(' · ') || 'Choix sûr pour ce rôle'}</div></div></button>`; }).join('')
-        + `<p class="muted small">👉 Clique toi-même sur le champion dans le client du jeu. ${R.col && R.col.picks ? '' : 'Démarre le collecteur (Réglages) pour des conseils basés sur les statistiques.'}</p>`;
+        + '<p class="muted small">👉 Clique toi-même sur le champion dans le client du jeu.</p>';
       h += '</div>';
     }
-    if (opp) {
-      const oc = byKey(opp); const f = needFull(oc.id);
-      if (f) h += tipsCards(f, 'enemy');
-    }
+    h += '</div><div>';
+    if (sd.myChamp) h += pickPanel(sd, opp);
+    else h += '<div class="card"><p class="muted">Survole ou choisis ton champion dans le client : ses runes, sorts et objets conseillés apparaîtront ici.</p></div>';
     h += '</div></div>';
     return h;
   }
@@ -519,6 +542,13 @@
   const ROLE_SRC = { client: 'attribuée par le client', manual: 'choisie dans Noob LOL', guess: 'déduite de ton champion' };
   const wr = (o) => `<span class="${o.wins / o.games >= 0.5 ? 'pos' : 'neg'}">${pct(o.wins, o.games)}</span> <span class="muted">· ${nf(o.games)}</span>`;
   const itemsRow = (list) => list.map((id) => `<span class="itm" data-act="item" data-val="${id}">${itIcon(id, 'ico')}</span>`).join('');
+  const pageKey = (r) => r.runes + '#' + r.shards;
+  function runePayload(r, c, role) {
+    const [pri, sub] = String(r.runes || '').split('|');
+    const [pt, pr] = (pri || '').split(':'), [st, sr] = (sub || '').split(':');
+    return { key: pageKey(r), name: `Noob LOL ${c.name} ${ROLE_NAME[role] || ''}`.trim(), primaryStyleId: +pt, subStyleId: +st,
+      selectedPerkIds: [].concat(String(pr || '').split(','), String(sr || '').split(','), String(r.shards || '').split(',')).filter(Boolean).map(Number) };
+  }
   function pickPanel(sd, opp) {
     const c = byKey(sd.myChamp); if (!c) return '';
     const role = sd.myRole;
@@ -537,10 +567,13 @@
 
     /* Runes */
     const ctx = (vs, n) => (oc ? (vs ? `<span class="tag gold">contre ${esc(oc.name)} · ${n} parties</span>` : `<span class="tag">général · seulement ${A.vsGames} partie${A.vsGames > 1 ? 's' : ''} contre ${esc(oc.name)}</span>`) : '<span class="tag">général</span>');
-    h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
-    h += A.runes.length ? A.runes.slice(0, 2).map((r, i) => `<div class="small" style="margin-top:8px">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</div>${runePage(r)}`).join('') : '<p class="muted small">Pas de données de runes.</p>';
-    if (A.spells && A.spells.length) h += `<h3>Sorts d'invocateur</h3><div class="row">${A.spells.map((x) => `<span class="pair">${spellPair(x.spells)} <span class="small">${wr(x)}</span></span>`).join('')}</div>`;
-    h += '<p class="muted small" style="margin-top:6px">À recopier dans le client (page de runes et sorts).</p></div>';
+    h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes et sorts</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
+    const canApply = !!(NB && sd.live);
+    R.selPages = A.runes.slice(0, 3).map((r) => runePayload(r, c, role));
+    R.selSpells = (A.spells || []).map((x) => x.spells);
+    h += A.runes.length ? A.runes.slice(0, 3).map((r, i) => `<button class="rbtn ${R.applied.runes === pageKey(r) ? 'done' : ''}" ${canApply ? `data-act="applyRunes" data-i="${i}"` : 'disabled'}><div class="row sp nw"><span class="small">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</span><span class="small apply">${R.applied.runes === pageKey(r) ? '✅ Appliquée dans le client' : canApply ? '⤴ Appliquer' : ''}</span></div>${runePage(r)}</button>`).join('') : '<p class="muted small">Pas de données de runes.</p>';
+    if (A.spells && A.spells.length) h += `<h3>Sorts d'invocateur</h3><div class="row">${A.spells.map((x, i) => `<button class="pair rbtn ${R.applied.spells === x.spells ? 'done' : ''}" ${canApply ? `data-act="applySpells" data-i="${i}"` : 'disabled'}>${spellPair(x.spells)} <span class="small">${wr(x)}</span>${R.applied.spells === x.spells ? ' ✅' : ''}</button>`).join('')}</div>`;
+    h += `<p class="muted small" style="margin-top:6px">${canApply ? 'Clique sur une page ou une paire de sorts : elle est créée / sélectionnée directement dans le client.' : 'Pendant une vraie sélection, un clic applique la page ou les sorts dans le client.'}</p></div>`;
 
     /* Kit d'objets */
     h += `<div class="card"><div class="row sp"><h2 style="margin:0">🛒 Kit d'objets</h2>${A.timelineGames ? ctx(A.earlyVs, A.earlyGames) : ''}</div>`;
@@ -623,6 +656,11 @@
       else if (e.name === 'Ace') logEv(e.t, '💀 Équipe entière éliminée');
     }
     if (G.seenEv.length > 400) G.seenEv = G.seenEv.slice(-300);
+    /* Alarme quand un objectif apparaît */
+    try {
+      const O = Builds.objectives(L, L.me ? L.me.team : 'ORDER');
+      for (const r of O.rows) { const prev = R.prevObj[r.id]; if (prev === 'spawn' && r.state === 'up') { alarm(); toast(`🔔 ${r.name} : disponible !`); } R.prevObj[r.id] = r.state; }
+    } catch (e) { /* ignoré */ }
     renderTop();
     if (S.mode === 'game' && !busy()) render(true); else save();
   }
@@ -707,8 +745,9 @@
   }
   function mmPlaceholder() {
     if (!NB) return '<p class="muted">La mini-carte est disponible dans l\'application PC.</p>';
-    if (!S.opt.miniEmbed) return '<p class="muted">Mini-carte masquée.</p><button class="btn small" data-act="miniEmbed">Afficher la mini-carte</button>';
-    if (MM.err) return `<p class="muted">Impossible de filmer l'écran du jeu : ${esc(MM.err)}</p><button class="btn small" data-act="miniRetry">Réessayer</button>`;
+    /* Hors partie : image fixe de la Faille de l'invocateur */
+    if (!R.live) return D.version ? `<img class="mmstatic" alt="Faille de l'invocateur" src="https://ddragon.leagueoflegends.com/cdn/${D.version}/img/map/map11.png"><span class="mmcap">La mini-carte en direct s'affichera ici pendant la partie</span>` : '<p class="muted">Faille de l\'invocateur</p>';
+    if (MM.err) return `<p class="muted">Impossible de filmer l'écran du jeu : ${esc(MM.err)}.<br>Vérifie dans Réglages → Mini-carte (mode « Fenêtré sans bordure »).</p>`;
     return '<p class="muted">Connexion à l\'écran du jeu…</p>';
   }
   /* Le même canevas est replacé à chaque rafraîchissement de l'écran : pas de clignotement. */
@@ -719,66 +758,47 @@
     else slot.innerHTML = mmPlaceholder();
   }
   function mmSync() {
-    if (S.mode === 'game' && S.opt.miniEmbed && NB) { if (!MM.stream && !MM.err) mmStart(); mmPlace(); }
-    else mmStop();
+    if (S.mode === 'game' && S.opt.miniEmbed && NB && R.live) { if (!MM.stream && !MM.err) mmStart(); mmPlace(); }
+    else { mmStop(); MM.err = ''; mmPlace(); }
   }
 
-  /* Écran « En jeu » pensé pour le plein écran : mini-carte carrée à gauche (taille calée sur la hauteur),
-     tout le reste à droite en colonnes qui se réorganisent selon la largeur disponible. */
+  /* Écran « En jeu » : aucun bouton, tout est automatique.
+     Mini-carte carrée à gauche (image fixe hors partie, capture en direct en partie), joueurs et objectifs à droite. */
+  const OBJ_IC = { drake: '🐉', grubs: '🪲', herald: '🦀', baron: '👾', elder: '🔥' };
+  const firstAt = { drake: '5:00', grubs: '8:00', herald: '15:00', baron: '20:00', elder: 'l\'âme' };
+  function objectivesCard(L) {
+    const myTeam = L && L.me ? L.me.team : 'ORDER';
+    const O = Builds.objectives(L, myTeam);
+    const status = (r) => {
+      if (!L) return `<span class="muted">à ${firstAt[r.id]}</span>`;
+      if (r.state === 'spawn') return `<span class="ocd" data-ospawn="${Date.now() + r.in * 1000}">${fmt(r.in)}</span>`;
+      if (r.state === 'up') return '<span class="pos"><b>disponible</b></span>';
+      return `<span class="muted">${esc(r.label || '')}</span>`;
+    };
+
+    const score = (sc) => `<span class="osc"><b class="us">${sc.us}</b><span class="muted">–</span><b class="them">${sc.them}</b></span>`;
+    let h = `<div class="card objs"><div class="row sp nw"><h2 style="margin:0">🐉 Objectifs</h2><span class="small muted">apparition · pris 🟦 nous – 🟥 eux</span></div>`;
+    h += O.rows.map((r) => `<div class="orow ${r.state}"><span class="oic">${OBJ_IC[r.id]}</span><div class="onm"><b>${esc(r.name)}</b>${r.id === 'drake' && (O.drakeTypes.us.length || O.drakeTypes.them.length) ? `<span class="small muted ell">🟦 ${O.drakeTypes.us.join(', ') || '—'} · 🟥 ${O.drakeTypes.them.join(', ') || '—'}</span>` : ''}</div><div class="ost">${status(r)}</div>${score(r.score)}</div>`).join('');
+    h += `<div class="orow"><span class="oic">🏰</span><div class="onm"><b>Tours</b></div><div class="ost"></div>${score(O.turret)}</div>`;
+    h += `<div class="orow"><span class="oic">💎</span><div class="onm"><b>Inhibiteurs</b></div><div class="ost"></div>${score(O.inhib)}</div>`;
+    return h + '</div>';
+  }
   function viewGame() {
     const nd = needData();
-    const g = S.game, L = R.live;
+    const L = R.live;
     const showMap = S.opt.miniEmbed && NB;
-    const tools = NB ? `<div class="row nw gm-btns"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed" title="Mini-carte dans la fenêtre">🗺️ <span class="hide-s">Mini-carte</span></button><button class="chip ${R.miniOpen ? 'on' : ''}" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}" title="Mini-carte sur l'écran 2">🖥️ <span class="hide-s">Écran 2</span></button><button class="chip ${S.opt.sound ? 'on' : ''}" data-act="opt" data-val="sound" title="Alarme sonore">🔔</button></div>` : '';
     const mapCard = showMap ? `<div class="gm-map card"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
-    if (nd) return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${tools}${nd}</div></div>`;
-
-    /* Bandeau : horloge + mon champion */
-    let strip = `<div class="card gm-strip"><div class="gm-clock">${g.start ? `<span class="clock" data-clock>${fmt(gameSec())}</span>` : '<span class="clock off">--:--</span>'}${L ? '<span class="pill live">● En direct</span>' : ''}</div>`;
-    if (L && L.me && L.me.stats) {
-      const st = L.me.stats; const c = D.champs[L.me.champ];
-      strip += `<div class="gm-me">${cIcon(c, 'ico')}<div class="grow"><b>${esc(c ? c.name : '')} · niv. ${L.me.level}</b><span class="muted small">❤️ ${st.hp}/${st.maxHp} · ⚔️ ${st.ad} · 🔮 ${st.ap} · 🛡️ ${st.armor}/${st.mr} · 👟 ${st.ms}</span></div><span class="gold-big">${nf(L.me.gold)} 🪙</span></div>`;
-    } else if (!L) {
-      strip += g.start
-        ? `<div class="row nw grow"><input type="text" placeholder="Corriger (ex. 12:30)" id="clockFix" class="grow"><button class="btn ghost small" data-act="clockFix">Caler</button><button class="btn danger small" data-act="newGame">Nouvelle partie</button></div>`
-        : `<div class="row nw grow"><button class="btn small" data-act="clockStart">▶ 0:00</button><input type="text" placeholder="ou heure du jeu, ex. 3:45" id="clockFix" class="grow"><button class="btn ghost small" data-act="clockFix">OK</button></div>`;
+    if (nd) return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${nd}</div></div>`;
+    const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted idle">${NB ? 'Aucune partie en cours. Dès que la partie démarre, Noob LOL bascule ici tout seul et affiche les 10 joueurs avec leurs kills, morts, assistances, objets et leur profil AD / AP.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
+    let side = '';
+    if (L) {
+      const me = L.me && L.me.stats ? L.me : null; const c = me ? D.champs[me.champ] : null;
+      side += `<div class="card gm-strip"><span class="clock">${fmt(L.time)}</span>${me ? `<div class="gm-me">${cIcon(c, 'ico')}<div class="grow"><b>${esc(c ? c.name : '')} · niv. ${me.level}</b><span class="muted small">❤️ ${me.stats.hp}/${me.stats.maxHp} · ⚔️ ${me.stats.ad} · 🔮 ${me.stats.ap} · 🛡️ ${me.stats.armor}/${me.stats.mr} · 👟 ${me.stats.ms}</span></div><span class="gold-big">${nf(me.gold)} 🪙</span></div>` : ''}</div>`;
     }
-    strip += tools + '</div>';
-
-    const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted">${NB ? 'Aucune partie détectée. Pendant une partie, les 10 joueurs s\'affichent ici avec leurs kills, morts, assistances, objets et leur profil AD / AP.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
-
-    /* Sorts adverses */
-    let spells = `<div class="card"><div class="row sp nw"><h2 style="margin:0" title="Clique sur un sort utilisé : le compte à rebours démarre (re-clic = annuler).">⚔️ Sorts adverses</h2><div class="row nw" style="gap:6px"><button class="chip" data-act="copyChat" title="Copier les temps de recharge pour le chat">📋 Chat</button>${L ? '' : '<button class="chip" data-act="resetEnemies">Vider</button>'}<button class="chip" data-act="toggleEdit">${S.opt.editEnemies ? '✔' : '✏️'}</button></div></div>
-      <p class="muted small gm-hint">Clique sur un sort utilisé : le compte à rebours démarre (re-clic = annuler).</p>`;
-    spells += g.enemies.map((e, i) => {
-      const c = D.champs[e.champ];
-      const head = S.opt.editEnemies || !c
-        ? `<select data-enemy="${i}" data-field="champ"><option value="">— Ennemi ${i + 1} —</option>${D.champList.map((x) => `<option value="${esc(x.id)}" ${x.id === e.champ ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`
-        : `<div class="row nw">${cIcon(c, 'ico sm')}<b class="ell">${esc(c.name)}</b></div>`;
-      const btns = [0, 1].map((k) => {
-        const s = summ(e.s[k]), run = e.until[k] > now();
-        return `<button class="sspell ${run ? 'run' : ''}" data-act="sspell" data-i="${i}" data-k="${k}" title="${esc(s ? s.name : 'Choisir un sort')}">${s ? `<img alt="" src="${Dd.img.spell(s)}">` : '<span class="none">choisir</span>'}${run ? `<span class="cdv" data-until="${e.until[k]}">${fmt((e.until[k] - now()) / 1000)}</span>` : ''}</button>`;
-      }).join('');
-      let edit = '';
-      if (S.opt.editEnemies) {
-        edit = `<div class="row" style="margin-top:6px">${[0, 1].map((k) => `<select class="grow" data-enemy="${i}" data-field="s${k}"><option value="">— Sort ${k ? 'F' : 'D'} —</option>${D.summList.map((x) => `<option value="${esc(x.id)}" ${x.id === e.s[k] ? 'selected' : ''}>${esc(x.name)} (${x.cooldownBurn} s)</option>`).join('')}</select>`).join('')}</div>
-          <div class="row" style="margin-top:6px"><span class="muted small">Accélération :</span>${[0, 10, 18, 28].map((v) => `<button class="chip ${e.haste === v ? 'on' : ''}" data-act="haste" data-i="${i}" data-val="${v}">${v ? '+' + v : '0'}</button>`).join('')}</div>`;
-      }
-      const info = [0, 1].filter((k) => e.until[k] > now()).map((k) => { const x = summ(e.s[k]); const at = atGame(e.until[k]); return `${esc(x ? x.name : '?')} ${at ? 'à ' + at : ''}`; }).join(' · ');
-      return `<div class="enemy"><div class="row nw"><div class="grow" style="min-width:0">${head}${info ? `<span class="muted small ell">⏳ ${info}</span>` : ''}</div>${btns}</div>${edit}</div>`;
-    }).join('');
-    spells += '</div>';
-
-    /* Objectifs + journal */
-    let objs = `<div class="card"><h2 title="${L ? 'Dragons et Nashor se lancent tout seuls. ' : ''}Nashor apparaît à 20:00. Repères indicatifs selon les patchs.">🐉 Objectifs et buffs</h2><div class="timers">${GUIDE.timers.map((t) => {
-      const u = g.timers[t.id] || 0, run = u > now();
-      return `<div class="timer ${run ? 'run' : ''}" title="${run && g.start ? 'Revient à ' + atGame(u) : 'Réapparition en ' + fmt(t.respawn)}"><span class="ti">${t.icon}</span><div class="nm"><b class="ell">${esc(t.name)}</b>${run && g.start ? `<span class="muted small">à ${atGame(u)}</span>` : ''}</div>
-        ${run ? `<span class="cd" data-until="${u}">${fmt((u - now()) / 1000)}</span>` : ''}
-        ${run ? `<button class="chip" data-act="timerStop" data-val="${t.id}">✕</button>` : `<button class="btn small" data-act="timerGo" data-val="${t.id}">Tué</button>`}</div>`;
-    }).join('')}</div><p class="muted small gm-hint">${L ? 'Dragons et Nashor se lancent tout seuls. ' : ''}Nashor apparaît à 20:00. Repères indicatifs selon les patchs.</p></div>`;
-    if (g.log.length) objs += `<div class="card"><h2>📜 Journal</h2><div class="log">${g.log.slice(0, 12).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>`;
-
-    return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${strip}${players}<div class="gm-tools"><div>${spells}</div><div>${objs}</div></div></div></div>`;
+    side += players;
+    const journal = S.game.log.length && L ? `<div class="card"><h2>📜 Journal</h2><div class="log">${S.game.log.slice(0, 14).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>` : '';
+    side += journal ? `<div class="gm-tools"><div>${objectivesCard(L)}</div><div>${journal}</div></div>` : objectivesCard(L);
+    return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${side}</div></div>`;
   }
   function chatLine() {
     const parts = [];
@@ -792,6 +812,7 @@
   function tick() {
     const t = now();
     document.querySelectorAll('[data-until]').forEach((el) => { el.textContent = fmt((+el.dataset.until - t) / 1000); });
+    document.querySelectorAll('[data-ospawn]').forEach((el) => { el.textContent = fmt((+el.dataset.ospawn - t) / 1000); });
     document.querySelectorAll('[data-sel-left]').forEach((el) => { el.textContent = Math.max(0, Math.round((+el.dataset.selLeft - t) / 1000)); });
     const ck = document.querySelector('[data-clock]'); if (ck) ck.textContent = fmt(gameSec(t));
     let ended = false;
@@ -866,6 +887,7 @@
       <div class="grow"><label>Afficher sur</label><select data-cfg="minimap.displayId">${ds.map((d) => `<option value="${d.id}" ${String(m.displayId || (ds.find((x) => !x.primary) || ds[0] || {}).id) === String(d.id) ? 'selected' : ''}>${esc(d.label)} ${d.bounds.width}×${d.bounds.height}${d.primary ? ' (principal)' : ''}</option>`).join('')}</select></div></div>
       ${ds.length < 2 ? '<p class="small warn">Un seul écran détecté : la mini-carte s\'ouvrira dans une fenêtre.</p>' : ''}
       <h3>Zone de la mini-carte</h3><p class="muted small">Prends une capture pendant une partie (ou l'Outil d'entraînement), puis trace un rectangle autour de la mini-carte.</p>
+      <div class="chips" style="margin:6px 0"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed">🗺️ Mini-carte dans l'écran « En jeu »</button><button class="chip ${S.opt.sound ? 'on' : ''}" data-act="opt" data-val="sound">🔔 Son quand un objectif apparaît</button></div>
       <div class="row"><button class="btn ghost small" data-act="miniShot">📸 Prendre une capture</button><button class="btn ghost small" data-act="miniReset">Position par défaut</button><button class="chip ${m.alwaysOnTop ? 'on' : ''}" data-act="miniTop">Toujours au premier plan</button></div>`;
     if (R.shot) h += `<div class="cropper" id="cropper"><img src="${R.shot}" alt="Capture" draggable="false"><div class="crop" id="cropBox" style="left:${crop.x * 100}%;top:${crop.y * 100}%;width:${crop.w * 100}%;height:${crop.h * 100}%"></div></div>
       <div class="row"><button class="btn small" data-act="miniSaveCrop">Enregistrer la zone</button><span class="muted small">Glisse sur l'image pour tracer la zone.</span></div>`;
@@ -921,6 +943,23 @@
       case 'profileReload': cache.clear(); loadProfile(true); render(true); break;
       case 'selRole': S.select.role = v; render(true); break;
       case 'selOpp': S.select.opp = S.select.opp === v ? '' : v; render(true); break;
+      case 'applyRunes': {
+        const pg = R.selPages[+el.dataset.i]; if (!pg) break;
+        el.classList.add('busy');
+        NB.lcu.applyRunes(pg).then(() => { R.applied.runes = pg.key; toast('✅ Page de runes créée et sélectionnée dans le client'); }).catch((e) => toast('❌ ' + e.message)).finally(() => render(true));
+        break;
+      }
+      case 'applySpells': {
+        const pair = R.selSpells[+el.dataset.i]; if (!pair) break;
+        let [a, b] = pair.split(',').map(Number);
+        /* Saut éclair reste sur la touche où tu l'as déjà (D ou F) */
+        const me = (R.lcu.champSelect && R.lcu.champSelect.myTeam.find((p) => p.isMe)) || {};
+        const cur = me.spells || [];
+        if (b === 4 && cur[1] !== 4) [a, b] = [b, a];
+        if (a === 4 && cur[1] === 4) [a, b] = [b, a];
+        NB.lcu.applySpells([a, b]).then(() => { R.applied.spells = pair; toast('✅ Sorts d\'invocateur mis à jour dans le client'); }).catch((e) => toast('❌ ' + e.message)).finally(() => render(true));
+        break;
+      }
       case 'clockStart': g.start = now(); render(true); break;
       case 'clockFix': { const s = parseMS((document.getElementById('clockFix') || {}).value); if (s == null) { toast('Format attendu : minutes:secondes, ex. 12:30'); break; } g.start = now() - s * 1000; render(true); break; }
       case 'newGame': if (confirmTap(el, 'Sûr ? Clique encore')) { S.game = newGame(); render(true); } break;
@@ -1048,7 +1087,8 @@
       const old = R.lcu; R.lcu = st;
       const auto = !R.cfg || R.cfg.autoMode !== false;
       if (st.phase !== prevPhase) {
-        if (auto && st.phase === 'ChampSelect') { S.mode = 'select'; S.view = { champ: null, item: null }; S.select.opp = ''; S.select.role = ''; }
+        if (st.phase === 'ChampSelect') { R.applied = { runes: '', spells: '' }; S.select.opp = ''; S.select.role = ''; }
+        if (auto && st.phase === 'ChampSelect') { S.mode = 'select'; S.view = { champ: null, item: null }; }
         else if (auto && (st.phase === 'InProgress' || st.phase === 'GameStart')) S.mode = 'game';
         else if (auto && prevPhase === 'ChampSelect' && /Lobby|Matchmaking|None/.test(st.phase) && S.mode === 'select') S.mode = 'prep';
         prevPhase = st.phase;

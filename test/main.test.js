@@ -254,3 +254,41 @@ test('recommandations : runes et 2 premiers objets contre l\'adversaire, objets 
   assert.strictEqual(B.useVs, false); assert.deepStrictEqual(B.core[0].items, [6672, 3031]);
   assert.ok(B.situational.some((x) => x.id === 'armor'));
 });
+
+test('rôles adverses : attribution la plus probable (stats + classe du champion)', () => {
+  const Builds = require('../renderer/builds.js');
+  const D = { byKey: {} };
+  const c = (key, tags) => { D.byKey[key] = { key: String(key), tags, info: { attack: 5, magic: 5 } }; };
+  c(1, ['Marksman']); c(2, ['Support', 'Mage']); c(3, ['Fighter']); c(4, ['Mage']); c(5, ['Fighter', 'Tank']);
+  /* sans statistiques : la classe suffit */
+  const a = Builds.assignRoles([1, 2, 3, 4, 5], D, {});
+  assert.strictEqual(a[1], 'adc'); assert.strictEqual(a[2], 'support'); assert.strictEqual(a[4], 'mid');
+  assert.ok(['top', 'jungle'].includes(a[3]) && ['top', 'jungle'].includes(a[5]) && a[3] !== a[5]);
+  /* les statistiques départagent : 5 est surtout joué jungle */
+  const b = Builds.assignRoles([1, 2, 3, 4, 5], D, { 5: { jungle: 300, top: 20 }, 3: { top: 200 } });
+  assert.strictEqual(b[5], 'jungle'); assert.strictEqual(b[3], 'top');
+  /* rôle fixé (attribué par le client) respecté, les autres s'adaptent */
+  const f = Builds.assignRoles([1, 4], D, {}, { 4: 'adc' });
+  assert.strictEqual(f[4], 'adc'); assert.notStrictEqual(f[1], 'adc');
+});
+
+test('objectifs : temps avant apparition, scores, âme, tours et inhibiteurs', () => {
+  const Builds = require('../renderer/builds.js');
+  const players = [{ name: 'Moi#EUW', gameName: 'Moi', team: 'ORDER' }, { name: 'Eux#1', gameName: 'Eux', team: 'CHAOS' }];
+  const at = (time, events) => Builds.objectives({ time, players, events }, 'ORDER');
+  const row = (o, id) => o.rows.find((r) => r.id === id);
+  let o = at(120, []);
+  assert.deepStrictEqual([row(o, 'drake').state, Math.round(row(o, 'drake').in)], ['spawn', 180]);
+  assert.strictEqual(row(o, 'baron').in, 1080); assert.strictEqual(row(o, 'elder').state, 'locked');
+  o = at(700, [{ name: 'DragonKill', t: 600, killer: 'Eux', dragon: 'Fire' }, { name: 'HordeKill', t: 500, killer: 'Moi' }, { name: 'TurretKilled', t: 650, turret: 'Turret_T2_L_03_A', killer: 'Moi' }]);
+  assert.strictEqual(row(o, 'drake').in, 200); assert.deepStrictEqual(row(o, 'drake').score.them, 1);
+  assert.strictEqual(o.drakeTypes.them[0], 'infernal'); assert.strictEqual(row(o, 'grubs').score.us, 1); assert.strictEqual(row(o, 'grubs').state, 'up');
+  assert.deepStrictEqual(o.turret, { us: 1, them: 0 });
+  /* âme puis ancestral 6 min plus tard ; Nashor tué → 6 min ; héraut disparu */
+  const ev = [1, 2, 3, 4].map((i) => ({ name: 'DragonKill', t: 300 * i + 10, killer: 'Moi', dragon: 'Water' }));
+  ev.push({ name: 'BaronKill', t: 1300, killer: 'Eux' }, { name: 'InhibKilled', t: 1400, inhib: 'Barracks_T1_L1', killer: 'Eux' });
+  o = at(1500, ev);
+  assert.strictEqual(row(o, 'drake').state, 'done'); assert.strictEqual(row(o, 'elder').in, 1210 + 360 - 1500);
+  assert.strictEqual(row(o, 'baron').in, 160); assert.strictEqual(row(o, 'baron').score.them, 1);
+  assert.strictEqual(row(o, 'herald').state, 'gone'); assert.deepStrictEqual(o.inhib, { us: 0, them: 1 });
+});

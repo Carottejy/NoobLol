@@ -83,6 +83,8 @@ function handlers() {
   h('config:setKey', async (key) => { cfg.setApiKey(key); if (!key) return { valid: false }; await api.status(); return { valid: true }; });
   h('config:testKey', async () => { await api.status(); return { valid: true }; });
   h('lcu:state', () => lcu.state);
+  h('lcu:applyRunes', (page) => lcu.applyRunes(page));
+  h('lcu:applySpells', (spells) => lcu.applySpells(spells));
   h('live:state', () => live.last);
 
   h('riot:profile', async (riotId) => {
@@ -104,6 +106,7 @@ function handlers() {
 
   h('stats:counts', () => db.counts());
   h('stats:champ', (champ, role, days) => db.champ(champ, role, days));
+  h('stats:roleDist', (champs) => db.roleDist(champs));
   h('stats:builds', (champ, role, days) => db.builds(champ, role, days));
   h('stats:tier', (role, days, minGames) => db.tier(role, days, minGames));
   h('stats:counters', (enemy, role, days) => db.counters(enemy, role, days));

@@ -10,21 +10,24 @@ const { EventEmitter } = require('events');
 /* Le certificat du client est auto-signé : on ne l'accepte QUE pour 127.0.0.1. */
 const localAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
 
-function localGet(port, pathname, auth, timeout = 2500) {
+function localGet(port, pathname, auth, timeout = 2500) { return localRequest(port, 'GET', pathname, auth, undefined, timeout); }
+function localRequest(port, method, pathname, auth, body, timeout = 4000) {
   return new Promise((resolve, reject) => {
-    const req = https.request({ host: '127.0.0.1', port, path: pathname, method: 'GET', agent: localAgent, timeout,
-      headers: Object.assign({ Accept: 'application/json' }, auth ? { Authorization: 'Basic ' + Buffer.from('riot:' + auth).toString('base64') } : {}) }, (res) => {
+    const data = body === undefined ? null : Buffer.from(JSON.stringify(body));
+    const req = https.request({ host: '127.0.0.1', port, path: pathname, method, agent: localAgent, timeout,
+      headers: Object.assign({ Accept: 'application/json' }, data ? { 'Content-Type': 'application/json', 'Content-Length': data.length } : {}, auth ? { Authorization: 'Basic ' + Buffer.from('riot:' + auth).toString('base64') } : {}) }, (res) => {
       let body = '';
       res.setEncoding('utf8');
       res.on('data', (c) => { body += c; });
       res.on('end', () => {
-        if (res.statusCode === 404) return resolve(null);
-        if (res.statusCode >= 400) return reject(Object.assign(new Error('HTTP ' + res.statusCode), { status: res.statusCode }));
+        if (res.statusCode === 404 && method === 'GET') return resolve(null);
+        if (res.statusCode >= 400) { let msg = ''; try { msg = JSON.parse(body).message || ''; } catch (e) { /* ignoré */ } return reject(Object.assign(new Error(msg || 'HTTP ' + res.statusCode), { status: res.statusCode })); }
         try { resolve(body ? JSON.parse(body) : null); } catch (e) { resolve(body); }
       });
     });
     req.on('timeout', () => req.destroy(new Error('timeout')));
     req.on('error', reject);
+    if (data) req.write(data);
     req.end();
   });
 }
@@ -89,6 +92,30 @@ class LcuWatcher extends EventEmitter {
     });
   }
   get(p) { return localGet(this.creds.port, p, this.creds.password); }
+  req(method, p, body) { if (!this.creds) throw new Error('Client LoL non détecté.'); return localRequest(this.creds.port, method, p, this.creds.password, body); }
+
+  /* ---- Actions déclenchées par un clic de l'utilisateur (comme Blitz / Porofessor) ----
+     Créer une page de runes et choisir les sorts d'invocateur. Jamais de choix de champion. */
+  async applyRunes(page) {
+    const ids = (page.selectedPerkIds || []).map(Number).filter(Boolean);
+    if (!page.primaryStyleId || !page.subStyleId || ids.length !== 9) throw new Error('Page de runes incomplète.');
+    const body = { name: String(page.name || 'Noob LOL').slice(0, 50), primaryStyleId: +page.primaryStyleId, subStyleId: +page.subStyleId, selectedPerkIds: ids, current: true };
+    const pages = (await this.req('GET', '/lol-perks/v1/pages')) || [];
+    /* On remplace d'abord une ancienne page Noob LOL */
+    for (const p of pages) if (p.isDeletable && /^Noob LOL/.test(p.name || '')) await this.req('DELETE', `/lol-perks/v1/pages/${p.id}`).catch(() => {});
+    try { return await this.req('POST', '/lol-perks/v1/pages', body); } catch (e) {
+      /* Plus de place : on remplace la page actuellement sélectionnée si elle est modifiable */
+      const cur = await this.req('GET', '/lol-perks/v1/currentpage').catch(() => null);
+      if (cur && cur.isDeletable) { await this.req('DELETE', `/lol-perks/v1/pages/${cur.id}`); return this.req('POST', '/lol-perks/v1/pages', body); }
+      throw new Error('Impossible de créer la page de runes : ' + e.message);
+    }
+  }
+  async applySpells(spells) {
+    if (this.state.phase !== 'ChampSelect') throw new Error('Possible uniquement pendant la sélection des champions.');
+    const [a, b] = spells.map(Number);
+    if (!a || !b) throw new Error('Sorts incomplets.');
+    return this.req('PATCH', '/lol-champ-select/v1/session/my-selection', { spell1Id: a, spell2Id: b });
+  }
 
   async loop() {
     let delay = 3000;
@@ -119,4 +146,4 @@ class LcuWatcher extends EventEmitter {
   }
 }
 
-module.exports = { LcuWatcher, localGet, parseLockfile, parseCommandLine, simplifySession };
+module.exports = { LcuWatcher, localGet, localRequest, parseLockfile, parseCommandLine, simplifySession };

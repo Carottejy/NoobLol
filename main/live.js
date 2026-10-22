@@ -26,7 +26,7 @@ function simplify(d) {
     me: me ? { name: me.name, champ: me.champ, team: me.team, level: ap.level, gold: Math.floor(ap.currentGold || 0),
       stats: ap.championStats ? { ad: Math.round(ap.championStats.attackDamage), ap: Math.round(ap.championStats.abilityPower), armor: Math.round(ap.championStats.armor), mr: Math.round(ap.championStats.magicResist), ms: Math.round(ap.championStats.moveSpeed), hp: Math.round(ap.championStats.currentHealth), maxHp: Math.round(ap.championStats.maxHealth) } : null } : null,
     players,
-    events: ((d.events || {}).Events || []).map((e) => ({ id: e.EventID, name: e.EventName, t: e.EventTime, killer: e.KillerName || '', victim: e.VictimName || '', dragon: e.DragonType || '', stolen: e.Stolen === 'True' || e.Stolen === true, turret: e.TurretKilled || '' })),
+    events: ((d.events || {}).Events || []).map((e) => ({ id: e.EventID, name: e.EventName, t: e.EventTime, killer: e.KillerName || '', victim: e.VictimName || '', dragon: e.DragonType || '', stolen: e.Stolen === 'True' || e.Stolen === true, turret: e.TurretKilled || '', inhib: e.InhibKilled || '' })),
   };
 }
 

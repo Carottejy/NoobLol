@@ -125,6 +125,77 @@ var Builds = (() => {
     });
   }
 
-  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS };
+  /* ---------- Rôles : attribuer un rôle à chaque champion d'une équipe ----------
+     dist = { champKey: { top: n, jungle: n, … } } (parties analysées), fixed = { champKey: rôle connu }.
+     On teste toutes les répartitions possibles (5! = 120) et on garde la plus probable. */
+  const ROLES5 = ['top', 'jungle', 'mid', 'adc', 'support'];
+  const TAG_PRIOR = {
+    Marksman: { adc: 6, mid: 1, top: 0.5, support: 0.3, jungle: 0.3 }, Support: { support: 6, mid: 1, top: 0.3, jungle: 0.3, adc: 0.3 },
+    Mage: { mid: 4, support: 2, top: 0.6, jungle: 0.5, adc: 0.6 }, Assassin: { mid: 3, jungle: 3, top: 0.8, support: 0.2, adc: 0.2 },
+    Fighter: { top: 4, jungle: 3, mid: 0.8, support: 0.2, adc: 0.2 }, Tank: { top: 3, jungle: 2.5, support: 2.5, mid: 0.4, adc: 0.1 },
+  };
+  function roleProbs(key, D, dist) {
+    const c = D.byKey[String(key)];
+    const prior = { top: 0.2, jungle: 0.2, mid: 0.2, adc: 0.2, support: 0.2 };
+    if (c) for (const t of c.tags || []) { const tp = TAG_PRIOR[t]; if (tp) for (const r of ROLES5) prior[r] += tp[r] || 0; }
+    const pn = ROLES5.reduce((s, r) => s + prior[r], 0);
+    const st = (dist || {})[key] || (dist || {})[String(key)] || {};
+    const games = ROLES5.reduce((s, r) => s + (st[r] || 0), 0);
+    const out = {};
+    /* Les statistiques dominent dès qu'il y a des parties ; l'a priori (classe du champion) sert de base. */
+    for (const r of ROLES5) out[r] = ((st[r] || 0) + 8 * prior[r] / pn) / (games + 8);
+    return out;
+  }
+  function assignRoles(keys, D, dist, fixed = {}) {
+    const ks = keys.filter(Boolean);
+    const free = ROLES5.filter((r) => !Object.values(fixed).includes(r));
+    const todo = ks.filter((k) => !fixed[k]);
+    const probs = Object.fromEntries(todo.map((k) => [k, roleProbs(k, D, dist)]));
+    let best = null, bestScore = -Infinity;
+    const perm = (i, used, acc, score) => {
+      if (i === todo.length) { if (score > bestScore) { bestScore = score; best = Object.assign({}, acc); } return; }
+      for (const r of free) { if (used.has(r)) continue; used.add(r); acc[todo[i]] = r; perm(i + 1, used, acc, score + Math.log(probs[todo[i]][r] + 1e-6)); used.delete(r); }
+    };
+    if (todo.length <= free.length) perm(0, new Set(), {}, 0);
+    const out = Object.assign({}, best || {});
+    for (const k of Object.keys(fixed)) out[k] = fixed[k];
+    return out;
+  }
+
+  /* ---------- Objectifs de la Faille (saison 2026) à partir des événements officiels du jeu ---------- */
+  const OBJ = { drake: { first: 300, respawn: 300 }, elder: { respawn: 360 }, grubs: { first: 480, end: 885 }, herald: { first: 900, end: 1185 }, baron: { first: 1200, respawn: 360 } };
+  const DRAKE_FR = { Fire: 'infernal', Water: 'océans', Earth: 'montagnes', Air: 'nuages', Hextech: 'hextech', Chemtech: 'chemtech' };
+  function objectives(L, myTeam) {
+    const t = L ? L.time : 0;
+    const me = myTeam || 'ORDER';
+    const teamOf = {};
+    if (L) for (const p of L.players || []) { teamOf[p.name] = p.team; teamOf[p.gameName] = p.team; }
+    const side = (team) => (!team ? null : team === me ? 'us' : 'them');
+    const sideOfKiller = (n) => side(teamOf[n] || teamOf[String(n || '').split('#')[0]] || (/_T100|Order/i.test(n) ? 'ORDER' : /_T200|Chaos/i.test(n) ? 'CHAOS' : ''));
+    const ownerSide = (name) => { const m = String(name || '').match(/_T([12])_/); if (!m) return null; return side(m[1] === '1' ? 'ORDER' : 'CHAOS'); };
+    const S = { drake: { us: 0, them: 0, types: { us: [], them: [] } }, elder: { us: 0, them: 0 }, grubs: { us: 0, them: 0 }, herald: { us: 0, them: 0 }, baron: { us: 0, them: 0 }, turret: { us: 0, them: 0 }, inhib: { us: 0, them: 0 } };
+    let lastDrake = null, lastElder = null, lastBaron = null, soulAt = null, heraldDone = false, grubsKilled = 0;
+    for (const e of (L && L.events) || []) {
+      if (e.name === 'DragonKill') {
+        const sd = sideOfKiller(e.killer);
+        if (/elder/i.test(e.dragon)) { lastElder = e.t; if (sd) S.elder[sd]++; }
+        else { lastDrake = e.t; if (sd) { S.drake[sd]++; S.drake.types[sd].push(DRAKE_FR[e.dragon] || e.dragon); if (S.drake[sd] === 4 && soulAt == null) soulAt = e.t; } }
+      } else if (e.name === 'BaronKill') { lastBaron = e.t; const sd = sideOfKiller(e.killer); if (sd) S.baron[sd]++; }
+      else if (e.name === 'HeraldKill') { heraldDone = true; const sd = sideOfKiller(e.killer); if (sd) S.herald[sd]++; }
+      else if (e.name === 'HordeKill') { grubsKilled++; const sd = sideOfKiller(e.killer); if (sd) S.grubs[sd]++; }
+      else if (e.name === 'TurretKilled') { const o = ownerSide(e.turret); if (o) S.turret[o === 'us' ? 'them' : 'us']++; }
+      else if (e.name === 'InhibKilled') { const o = ownerSide(e.inhib); if (o) S.inhib[o === 'us' ? 'them' : 'us']++; }
+    }
+    const timed = (next) => (t < next ? { state: 'spawn', in: next - t } : { state: 'up' });
+    const rows = [];
+    rows.push(Object.assign({ id: 'drake', name: 'Dragon', score: S.drake }, soulAt != null ? { state: 'done', label: 'âme prise' } : timed(lastDrake != null ? lastDrake + OBJ.drake.respawn : OBJ.drake.first)));
+    rows.push(Object.assign({ id: 'grubs', name: 'Larves du Néant', score: S.grubs }, grubsKilled >= 3 ? { state: 'done', label: 'prises' } : t >= OBJ.grubs.end ? { state: 'gone', label: 'disparues' } : timed(OBJ.grubs.first)));
+    rows.push(Object.assign({ id: 'herald', name: 'Héraut de la Faille', score: S.herald }, heraldDone ? { state: 'done', label: 'pris' } : t >= OBJ.herald.end ? { state: 'gone', label: 'disparu' } : timed(OBJ.herald.first)));
+    rows.push(Object.assign({ id: 'baron', name: 'Baron Nashor', score: S.baron }, timed(lastBaron != null ? lastBaron + OBJ.baron.respawn : OBJ.baron.first)));
+    rows.push(Object.assign({ id: 'elder', name: 'Dragon ancestral', score: S.elder }, soulAt == null ? { state: 'locked', label: 'après l\'âme' } : timed((lastElder != null && lastElder > soulAt ? lastElder : soulAt) + OBJ.elder.respawn)));
+    return { rows, turret: S.turret, inhib: S.inhib, drakeTypes: S.drake.types, time: t };
+  }
+
+  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, ROLES5 };
 })();
 if (typeof module !== 'undefined') module.exports = Builds;

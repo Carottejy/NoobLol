@@ -370,3 +370,51 @@ body[data-mode=game] .enemy .row.nw > .grow > .row { flex: 0 1 auto; min-width: 
 }
 .tdhead > b, .tdhead > span.muted { white-space: nowrap; }
 @container (max-width: 760px) { .players .tdhead .tipline { display: none; } }
+
+/* ===== v2.4 : Sélection face-à-face ===== */
+.vs-row { display: grid; grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr); gap: 6px; align-items: stretch; margin: 0 0 6px; }
+.vs-head { margin-bottom: 8px; }
+.vs-head .vs-cell { background: none; border: 0; padding: 0 4px; }
+.vs-cell { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.vs-cell .grow { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.vs-cell.enemy { flex-direction: row-reverse; text-align: right; }
+.vs-cell.enemy .dmg { align-items: flex-end; }
+.vs-cell[data-act] { cursor: pointer; }
+.vs-cell.opp { border-color: var(--bad); box-shadow: inset -3px 0 0 var(--bad); }
+.vs-row.me .vs-cell.ally { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.vs-role { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 1.2rem; color: var(--muted); }
+.vs-role span { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; }
+.vs-cell .dmg { font-size: .72rem; }
+.rbtn { display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 12px; padding: 4px; margin: 4px 0; color: var(--text); font: inherit; cursor: pointer; }
+.rbtn[disabled] { cursor: default; }
+.rbtn:not([disabled]):hover { border-color: var(--accent); background: rgba(200,170,110,.06); }
+.rbtn.done { border-color: var(--good); }
+.rbtn .apply { color: var(--accent2); font-weight: 700; }
+.rbtn.done .apply { color: var(--good); }
+.rbtn.busy { opacity: .6; }
+.pair.rbtn { display: inline-flex; width: auto; padding: 4px 8px; border-color: var(--line); background: var(--panel2); }
+.grid.g2 { grid-template-columns: 1fr 1fr; }
+
+/* ===== v2.4 : En jeu ===== */
+.mmstatic { width: 100%; height: 100%; object-fit: contain; opacity: .9; }
+.mmslot { position: relative; }
+.mmcap { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: .85rem; color: var(--muted); text-shadow: 0 1px 4px #000; }
+.objs .orow { display: grid; grid-template-columns: 30px minmax(0, 1fr) 96px 74px; gap: 8px; align-items: center; padding: 5px 4px; border-top: 1px solid var(--line); }
+.objs .ohead { border-top: 0; padding-top: 0; }
+.objs .oic { font-size: 1.25rem; text-align: center; }
+.objs .onm { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.objs .ost { font-variant-numeric: tabular-nums; }
+.objs .ocd { font: 800 1.15rem ui-monospace, Menlo, Consolas, monospace; color: var(--warn); }
+.objs .orow.up .oic { filter: drop-shadow(0 0 6px var(--good)); }
+.objs .orow.done, .objs .orow.gone, .objs .orow.locked { opacity: .75; }
+.osc { display: inline-flex; gap: 6px; align-items: baseline; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.osc .us { color: #6fa8ff; font-size: 1.05rem; } .osc .them { color: var(--bad); font-size: 1.05rem; }
+
+.vs-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.vs-name .tag { margin: 0; padding: 0 7px; font-size: .68rem; flex: 0 0 auto; }
+.vs-cell.enemy .vs-name { flex-direction: row-reverse; }
+.vs-cell { min-height: 58px; }
+body[data-mode=game] .objs .orow { padding: 3px 4px; }
+body[data-mode=game] .objs .oic { font-size: 1.1rem; }
+.objs .ost { white-space: nowrap; }
+.vs-cell .dmg { width: 100%; }
