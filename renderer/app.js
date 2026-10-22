@@ -39,7 +39,7 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* stockage plein */ } };
 
   /* ---------- État en direct (non enregistré) ---------- */
-  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {}, pinfo: {}, pinfoPending: new Set(), post: null, liveMemo: {} };
+  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {}, pinfo: {}, pinfoPending: new Set(), post: null, liveMemo: {}, key: { state: 'unknown' } };
   const cache = new Map(); /* résultats de statistiques (requêtes vers la base locale) */
   function cached(key, fn) {
     if (cache.has(key)) { const v = cache.get(key); return v === PENDING ? undefined : v; }
@@ -93,7 +93,17 @@
       <div class="modes">${MODES.map(([id, ic, lb]) => `<button class="mode ${S.mode === id ? 'on' : ''}" data-act="mode" data-val="${id}">${ic} <span>${lb}</span>${badge(id)}</button>`).join('')}</div>
       <div class="status">${statusPill()}</div></div>
       ${S.mode === 'prep' ? `<nav class="subtabs">${PREP_TABS.map(([id, ic, lb]) => `<button class="${S.tab === id ? 'on' : ''}" data-act="tab" data-val="${id}">${ic} ${lb}</button>`).join('')}</nav>` : ''}
+      ${keyBanner()}
       ${R.update ? `<div class="updbar"><span>🔄 La version ${esc(R.update.version)} est prête.</span><button data-act="installUpdate">Redémarrer et mettre à jour</button></div>` : ''}`;
+  }
+  /* Clé Riot : expirée, bientôt expirée, renouvellement en cours */
+  const keySoon = () => R.key.state === 'ok' && !R.key.permanent && R.key.savedAt && Date.now() > R.key.savedAt + 23 * 3600000;
+  function keyBanner() {
+    if (!NB || (S.mode === 'game' && R.live)) return '';
+    if (R.key.renewing) return '<div class="keybar info"><span>🔑 Fenêtre Riot ouverte : connecte-toi, coche « Je ne suis pas un robot » puis clique « Regenerate API Key ». Noob LOL récupère la clé tout seul.</span></div>';
+    if (R.key.state === 'expired') return '<div class="keybar"><span>🔑 Ta clé Riot a expiré : Mon compte, le collecteur et les statistiques de fin de partie sont en pause.</span><button data-act="renewKey">🔄 Renouveler ma clé</button></div>';
+    if (keySoon()) return '<div class="keybar warn"><span>🔑 Ta clé de développement Riot expire bientôt (24 h après sa création).</span><button data-act="renewKey">🔄 Renouveler maintenant</button></div>';
+    return '';
   }
   function render(keepScroll) {
     const y = window.scrollY;
@@ -1065,6 +1075,8 @@
       <p class="muted small">Gratuite, elle permet de lire ton compte et d'analyser des parties pour les statistiques. Crée-la sur <a href="https://developer.riotgames.com" data-ext="1">developer.riotgames.com</a> (connexion avec ton compte Riot) et colle-la ici. Une clé de développement expire au bout de 24 h : pour ne plus la renouveler, demande une clé « Personal » sur le même site.</p>
       <div class="row"><input type="password" id="apiKey" class="grow" placeholder="${c.hasApiKey ? '•••••••• (clé enregistrée)' : 'RGAPI-xxxxxxxx-xxxx-…'}" autocomplete="off"><button class="btn small" data-act="saveKey">Enregistrer</button>${c.hasApiKey ? '<button class="btn ghost small" data-act="testKey">Tester</button>' : ''}</div>
       ${R.keyMsg ? `<p class="small">${esc(R.keyMsg)}</p>` : ''}
+      ${c.hasApiKey ? `<div class="row keystate"><span class="small">${R.key.state === 'expired' ? '❌ <b>Clé expirée</b>' : R.key.state === 'ok' ? `✅ Clé valide${R.key.permanent ? ' (clé permanente)' : R.key.savedAt ? ` · enregistrée le ${new Date(R.key.savedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}, expire vers ${new Date(R.key.savedAt + 24 * 3600000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} si c'est une clé de développement` : ''}` : '⏳ Vérification…'}</span></div>` : ''}
+      <div class="row" style="margin-top:6px"><button class="btn hex small" data-act="renewKey">🔄 ${c.hasApiKey ? 'Renouveler ma clé' : 'Obtenir ma clé'} automatiquement</button><span class="muted small">Ouvre le portail Riot : tu te connectes et tu coches le captcha, Noob LOL fait le reste.</span></div>
       <p class="muted small">${c.keyEncrypted ? '🔒 Clé chiffrée par Windows sur ce PC.' : ''} Elle n'est jamais envoyée ailleurs que chez Riot.</p></div>`;
     h += `<div class="card"><h2>👤 Mon compte</h2>
       <label>Serveur</label><select data-cfg="platform">${Object.keys(plats).map((p) => `<option value="${p}" ${c.platform === p ? 'selected' : ''}>${esc(plats[p])}</option>`).join('')}</select>
@@ -1242,6 +1254,7 @@
       }).catch((e) => toast(e.message)); break;
       case 'miniSaveCrop': if (pendingCrop) cfgSet({ minimap: { crop: pendingCrop } }).then(() => toast('Zone enregistrée.')); break;
       case 'installUpdate': NB.installUpdate(); break;
+      case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'reloadData': if (window.caches) window.caches.delete('nooblol-ddragon').finally(() => location.reload()); else location.reload(); break;
       case 'wipe': if (confirmTap(el, 'Tout effacer ? Clique encore')) { localStorage.removeItem(KEY); location.reload(); } break;
       default: break;
@@ -1341,6 +1354,17 @@
       if (fresh && !d.old && R.cfg && R.cfg.autoMode !== false && !R.live) { S.mode = 'game'; S.postTab = 'resume'; }
       if (!busy()) render(true);
     });
+    NB.key.on((k) => {
+      const was = R.key.state; R.key = k;
+      if (k.state === 'expired' && was !== 'expired' && !R.live) speak('Ta clé Riot a expiré. Clique sur Renouveler ma clé.', 'key-expired-' + Math.floor(Date.now() / 3600000));
+      renderTop(); if (S.mode === 'settings' && !busy()) render(true);
+    });
+    NB.key.onRenewed((k) => {
+      R.key = k; R.keyMsg = '✅ Nouvelle clé récupérée, vérifiée et enregistrée.'; R.profile = null; R.profileErr = ''; cache.clear();
+      toast('✅ Nouvelle clé Riot enregistrée'); speak('Nouvelle clé Riot enregistrée.');
+      NB.config.get().then((c) => { R.cfg = c; render(true); });
+    });
+    NB.key.status().then((k) => { R.key = k; renderTop(); }).catch(() => {});
     NB.postgame.get().then((d) => { if (d) { R.post = d; if (S.mode === 'game') render(true); } }).catch(() => {});
     Promise.all([NB.config.get(), NB.info(), NB.lcu.state(), NB.collector.status(), NB.minimap.isOpen(), NB.live.state()]).then(([c, i, l, col, mo, lv]) => {
       R.cfg = c; R.info = i; R.lcu = l || R.lcu; R.col = col; R.miniOpen = mo; prevPhase = R.lcu.phase;

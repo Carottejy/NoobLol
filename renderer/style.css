@@ -511,3 +511,13 @@ body[data-mode=game] .objs .oic { font-size: 1.1rem; }
 @media (max-height: 1150px) and (min-width: 1101px) { body[data-mode=game] .gm-tools .journal { display: none; } }
 .pteam.us, .pteam.them { color: var(--text); }
 .pteam.us .pth b { color: #6fa8ff; } .pteam.them .pth b { color: var(--bad); }
+
+/* Bandeau clé Riot */
+.keybar { display: flex; align-items: center; gap: 10px; max-width: 1240px; margin: 0 auto 6px; padding: 8px 12px; border-radius: 10px; background: #3a1418; border: 1px solid #8a2a33; color: #ffd9dc; font-size: .9rem; }
+.keybar.warn { background: #3a2c10; border-color: #6b5a33; color: var(--accent2); }
+.keybar.info { background: #0e2a33; border-color: var(--hex); color: #d6fffb; }
+.keybar span { flex: 1; }
+.keybar button { border: 0; border-radius: 8px; padding: 7px 12px; font-weight: 700; background: var(--accent); color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
+body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
+.keystate { margin-top: 6px; }
+@media (max-width: 760px) { .keybar { flex-wrap: wrap; margin: 0 8px 6px; } }

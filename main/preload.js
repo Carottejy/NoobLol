@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('noob', {
     displays: () => call('minimap:displays'), source: () => call('minimap:source'), sources: () => call('minimap:sources'), open: () => call('minimap:open'), close: () => call('minimap:close'), isOpen: () => call('minimap:isOpen'),
     onState: on('minimap:state'), onConfig: on('minimap:config'),
   },
+  key: { status: () => call('key:status'), renew: () => call('key:renew'), on: on('keystatus'), onRenewed: on('keyrenewed') },
   players: { info: (ids) => call('players:info', ids) },
   postgame: { get: () => call('postgame:get'), load: (id) => call('postgame:load', id), on: on('postgame') },
   openExternal: (u) => call('open:external', u),

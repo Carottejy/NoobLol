@@ -339,3 +339,36 @@ test('en jeu : prochain objet du kit conseillé', () => {
   assert.strictEqual(Builds.nextItem(A, [6672], D).item, 3031);
   assert.strictEqual(Builds.nextItem(A, [6672, 3031, 3111], D), null, 'déjà des bottes, objet suivant inconnu');
 });
+
+test('clé Riot : détection de l\'expiration et renouvellement assisté', async () => {
+  const { KeyWatch } = require('../main/keyrenew');
+  const { EventEmitter } = require('events');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nlk-'));
+  const cfg = new Config(dir, null);
+  cfg.setApiKey('RGAPI-00000000-0000-0000-0000-000000000000');
+  const OLD = 'RGAPI-00000000-0000-0000-0000-000000000000', NEW = 'RGAPI-12345678-abcd-ef01-2345-6789abcdef01', OTHER = 'RGAPI-ffffffff-ffff-ffff-ffff-ffffffffffff';
+  const api = { checkKey: async (k) => k === NEW };
+  const kw = new KeyWatch({ cfg, api });
+  const states = []; kw.on('change', (i) => states.push(i.state));
+  api.onAuth(false, 403);
+  assert.strictEqual(kw.state, 'expired');
+  await kw.check(); assert.strictEqual(kw.state, 'expired');
+  /* Fausse fenêtre du portail : d'abord l'ancienne clé (expirée), puis une clé invalide, puis la nouvelle */
+  let page = [OLD];
+  class FakeWin extends EventEmitter {
+    constructor() { super(); this.destroyed = false; this.webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler() {}, getURL: () => 'https://developer.riotgames.com/', executeJavaScript: async () => page }); }
+    loadURL() {} isDestroyed() { return this.destroyed; } focus() {} close() { this.destroyed = true; this.emit('closed'); }
+  }
+  let w;
+  const renewed = new Promise((r) => kw.on('renewed', r));
+  kw.openRenew({ BrowserWindow: function () { w = new FakeWin(); return w; }, shell: { openExternal() {} }, parent: null });
+  assert.strictEqual(kw.info().renewing, true);
+  w.webContents.emit('did-finish-load');
+  page = [OTHER, NEW];
+  const info = await renewed;
+  assert.strictEqual(cfg.getApiKey(), NEW); assert.strictEqual(info.state, 'ok'); assert.strictEqual(w.destroyed, true);
+  assert.ok(cfg.data.keySavedAt > 0);
+  /* toujours valide après 25 h → clé permanente */
+  cfg.data.keySavedAt = Date.now() - 26 * 3600000; kw.state = 'unknown'; kw.set('ok');
+  assert.strictEqual(cfg.data.keyPermanent, true);
+});

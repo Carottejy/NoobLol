@@ -33,6 +33,7 @@ class Config {
     delete d.apiKeyEnc; delete d.apiKeyPlain;
     d.hasApiKey = !!this.getApiKey();
     d.keyEncrypted = !!this.data.apiKeyEnc;
+    d.keySavedAt = this.data.keySavedAt || 0; d.keyPermanent = !!this.data.keyPermanent;
     return d;
   }
   set(patch) {
@@ -43,7 +44,7 @@ class Config {
   }
   setApiKey(key) {
     key = String(key || '').trim();
-    this.data.apiKeyEnc = ''; this.data.apiKeyPlain = '';
+    this.data.apiKeyEnc = ''; this.data.apiKeyPlain = ''; this.data.keySavedAt = key ? Date.now() : 0; this.data.keyPermanent = false;
     if (key) {
       if (this.safe && this.safe.isEncryptionAvailable()) this.data.apiKeyEnc = this.safe.encryptString(key).toString('base64');
       else this.data.apiKeyPlain = key;

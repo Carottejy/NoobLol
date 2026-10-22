@@ -80,6 +80,8 @@ class RiotApi {
       return this.request(host, pathname, { priority, retries: retries - 1 });
     }
     if (res.status >= 500 && retries > 0) { this.limiter.block(2000); return this.request(host, pathname, { priority, retries: retries - 1 }); }
+    if (res.status === 401 || res.status === 403) { if (this.onAuth) this.onAuth(false, res.status); }
+    else if (res.ok && this.onAuth) this.onAuth(true, res.status);
     if (!res.ok) throw new RiotError(res.status, errorText(res.status));
     return res.json();
   }
@@ -87,6 +89,15 @@ class RiotApi {
   regionalGet(p, o) { return this.request(this.regional, p, o); }
 
   status() { return this.platformGet('/lol/status/v4/platform-data', { priority: 5 }); }
+  /* Tester une clé sans l'enregistrer (renouvellement) */
+  async checkKey(key) {
+    try {
+      const res = await this.fetch(`https://${this.platform}.api.riotgames.com/lol/status/v4/platform-data`, { headers: { 'X-Riot-Token': key } });
+      if (res.status === 200) return true;
+      if (res.status === 401 || res.status === 403) return false;
+      return null; /* Riot indisponible : on ne conclut rien */
+    } catch (e) { return null; }
+  }
   account(gameName, tagLine) { return this.request(ACCOUNT_REGION[this.regional], `/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`, { priority: 5 }); }
   summoner(puuid) { return this.platformGet(`/lol/summoner/v4/summoners/by-puuid/${puuid}`, { priority: 5 }); }
   leagues(puuid) { return this.platformGet(`/lol/league/v4/entries/by-puuid/${puuid}`, { priority: 5 }); }

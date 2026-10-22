@@ -8,7 +8,7 @@
 Windows peut afficher « Windows a protégé votre ordinateur » (l'appli n'est pas signée par un certificat payant) : **Informations complémentaires → Exécuter quand même**.
 
 ## 2. Premier lancement
-1. **Réglages → Clé API Riot** : connecte-toi sur [developer.riotgames.com](https://developer.riotgames.com) avec ton compte Riot, copie la *Development API Key* et colle-la. Elle expire toutes les 24 h ; pour éviter ça, demande une clé **Personal** (formulaire « Register product » sur le même site, gratuit).
+1. **Réglages → Clé API Riot → « Obtenir ma clé automatiquement »** : le portail Riot s'ouvre dans l'appli. Connecte-toi avec ton compte Riot, coche « Je ne suis pas un robot » et clique « Regenerate API Key » : Noob LOL récupère la clé tout seul. Une clé de développement expire toutes les 24 h ; l'appli te prévient et le même bouton la renouvelle en quelques secondes. Pour ne plus jamais la renouveler, demande une clé **Personal** (« Register product » sur [developer.riotgames.com](https://developer.riotgames.com), gratuit).
 2. **Réglages → Mon compte** : choisis ton serveur (EUW…). Ton Riot ID se remplit tout seul dès que le client LoL est ouvert.
 3. **Réglages → Collecteur** : clique **Démarrer** (et « Démarrer avec l'appli » si tu veux qu'il tourne toujours). Les statistiques se remplissent au fil des heures.
 4. **Réglages → Mini-carte** : règle LoL en **Fenêtré sans bordure** (Paramètres → Vidéo → Mode fenêtre), lance une partie d'entraînement, clique **Prendre une capture** et trace un rectangle autour de la mini-carte, puis **Enregistrer la zone**. Choisis sur quel écran l'afficher.

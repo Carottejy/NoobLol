@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.5.0';
+var APP_VERSION = '2.6.0';
 var APP_RELEASES = [
+  { v: '2.6.0', date: '2026-10-22', notes: [
+    'Clé Riot : détection de l\'expiration (refus de Riot + vérification toutes les 20 min). Un bandeau et une annonce vocale te préviennent, et un rappel apparaît quand une clé de développement approche des 24 h.',
+    'Clé Riot : bouton « Renouveler ma clé ». Il ouvre le portail développeur de Riot dans une fenêtre de l\'appli (connexion mémorisée). Tu coches le captcha et tu cliques « Regenerate API Key » : Noob LOL récupère la nouvelle clé, la vérifie, l\'enregistre et relance le collecteur.',
+    'Une clé encore valide après 25 h est reconnue comme permanente (« Personal ») : plus de rappel.',
+  ]},
   { v: '2.5.0', date: '2026-10-22', notes: [
     'Fin de partie : l\'onglet En jeu affiche toutes les statistiques de la partie (API officielle match-v5 + chronologie), en onglets : Résumé, Ma partie (contre mon adversaire, courbe d\'or, conseils pour progresser), Dégâts, Or et farm, Vision, Builds.',
     'Mon compte : un clic sur une partie récente ouvre toutes ses statistiques.',

@@ -8,10 +8,11 @@ const { RiotApi, PLATFORMS } = require('./riotapi');
 const { StatsDb } = require('./db');
 const { Collector } = require('./collector');
 const { PostGame } = require('./postgame');
+const { KeyWatch } = require('./keyrenew');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let win = null, mini = null, cfg, api, db, collector, post, lastLive = null;
+let win = null, mini = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
 const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
@@ -30,7 +31,7 @@ function createWindow() {
   /* Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli. */
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) { e.preventDefault(); if (/^https:\/\//.test(url)) shell.openExternal(url); } });
-  win.on('closed', () => { win = null; if (mini && !mini.isDestroyed()) mini.close(); });
+  win.on('closed', () => { win = null; if (mini && !mini.isDestroyed()) mini.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
 }
 
 /* ---------- Mini-carte sur un deuxième écran ---------- */
@@ -82,7 +83,9 @@ function handlers() {
     if (patch && patch.platform && patch.platform !== before && collector.running) { collector.stop(); }
     return out;
   });
-  h('config:setKey', async (key) => { cfg.setApiKey(key); if (!key) return { valid: false }; await api.status(); return { valid: true }; });
+  h('config:setKey', async (key) => { cfg.setApiKey(key); if (!key) { keys.set('missing'); return { valid: false }; } await api.status(); return { valid: true }; });
+  h('key:status', () => keys.info());
+  h('key:renew', () => { keys.openRenew({ BrowserWindow, shell, parent: win }); return true; });
   h('config:testKey', async () => { await api.status(); return { valid: true }; });
   h('lcu:state', () => lcu.state);
   h('lcu:applyRunes', (page) => lcu.applyRunes(page));
@@ -139,7 +142,7 @@ function handlers() {
   h('stats:mainRole', (champ) => db.mainRole(champ));
   h('stats:clear', () => { collector.stop(); db.clearStats(); return db.counts(); });
   h('collector:start', () => { collector.start(); return collector.status(); });
-  h('collector:stop', () => { collector.stop(); return collector.status(); });
+  h('collector:stop', () => { colWasRunning = false; collector.stop(); return collector.status(); });
   h('collector:status', () => collector.status());
 
   h('minimap:displays', () => displays());
@@ -168,7 +171,14 @@ app.whenReady().then(async () => {
   api = new RiotApi({ getKey: () => cfg.getApiKey(), getPlatform: () => cfg.data.platform });
   db = await StatsDb.open(path.join(app.getPath('userData'), 'stats.sqlite'));
   collector = new Collector({ api, db, getConfig: () => cfg.data });
-  collector.on('status', (s) => send('collector', s));
+  collector.on('status', (s) => { if (s.running) colWasRunning = true; send('collector', s); });
+  keys = new KeyWatch({ cfg, api });
+  keys.on('change', (k) => send('keystatus', k));
+  keys.on('renewed', (k) => {
+    send('keyrenewed', k);
+    /* Le collecteur s'était arrêté à cause de la clé expirée : on le relance */
+    if (!collector.running && (colWasRunning || cfg.data.collector.autoStart)) collector.start();
+  });
   post = new PostGame({ api, getPlatform: () => cfg.data.platform, dir: app.getPath('userData') });
   post.on('update', (d) => send('postgame', d));
   let postFor = null;
@@ -193,6 +203,7 @@ app.whenReady().then(async () => {
   createWindow();
   lcu.start(); live.start();
   if (cfg.data.collector.autoStart && cfg.getApiKey()) collector.start();
+  keys.startTimer();
   autoUpdate();
 });
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
