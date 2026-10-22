@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('noob', {
   live: { state: () => call('live:state'), on: on('live') },
   riot: { profile: (riotId) => call('riot:profile', riotId), masteries: (puuid) => call('riot:masteries', puuid) },
   stats: {
-    counts: () => call('stats:counts'), champ: (c, r, d) => call('stats:champ', c, r, d), tier: (r, d, m) => call('stats:tier', r, d, m),
+    counts: () => call('stats:counts'), builds: (c, r, d) => call('stats:builds', c, r, d), champ: (c, r, d) => call('stats:champ', c, r, d), tier: (r, d, m) => call('stats:tier', r, d, m),
     counters: (e, r, d) => call('stats:counters', e, r, d), matchup: (c, o, r, d) => call('stats:matchup', c, o, r, d), mainRole: (c) => call('stats:mainRole', c), clear: () => call('stats:clear'),
   },
   collector: { start: () => call('collector:start'), stop: () => call('collector:stop'), status: () => call('collector:status'), on: on('collector') },

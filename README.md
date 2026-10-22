@@ -17,7 +17,7 @@ Compagnon de jeu **League of Legends** pour débutants, en français. Applicatio
 - **Mini-carte** : capture de la zone de l'écran déjà visible (aucune donnée cachée du jeu).
 
 ### Le collecteur de statistiques
-Il récupère des parties classées solo/duo récentes de joueurs **Maître, Grand maître et Challenger** de ton serveur (`league-v4` → `match-v5`), puis enregistre pour chaque joueur : champion, rôle, victoire, adversaire de voie, runes, objets de fin de partie, sorts. Les statistiques (taux de victoire, runes les plus jouées, match-ups…) sont calculées dans une base **SQLite locale** (`%APPDATA%\Noob LOL\stats.sqlite`). Avec une clé de développement (100 requêtes / 2 min), compte environ 2 000 parties par jour si le PC reste allumé.
+Il récupère des parties classées solo/duo récentes de joueurs **Maître, Grand maître et Challenger** de ton serveur (`league-v4` → `match-v5`), puis enregistre pour chaque joueur : champion, rôle, victoire, adversaire de voie, runes, objets de fin de partie, sorts. Les statistiques (taux de victoire, runes les plus jouées, match-ups…) sont calculées dans une base **SQLite locale** (`%APPDATA%\Noob LOL\stats.sqlite`). Il récupère aussi la **chronologie** de chaque partie (`match-v5 timeline`) : ordre des achats, objets de départ, montée des sorts, composition adverse. C'est ce qui permet de conseiller les deux premiers objets contre un adversaire précis et les objets adaptés à l'équipe adverse. Avec une clé de développement (100 requêtes / 2 min, 2 requêtes par partie), compte environ 1 000 parties par jour si le PC reste allumé.
 
 ## Installer
 Voir [INSTALLER.md](INSTALLER.md).

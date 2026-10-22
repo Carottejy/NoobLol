@@ -26,6 +26,9 @@ class StatsDb {
       CREATE INDEX IF NOT EXISTS picks_ro ON picks (role, opp);
       CREATE INDEX IF NOT EXISTS matches_done ON matches (done);
     `);
+    /* v2.2 : chronologie (ordre d'achat, montée des sorts) et composition adverse */
+    const cols = this.all('PRAGMA table_info(picks)').map((c) => c.name);
+    for (const c of ['seq', 'start', 'skills', 'enemies']) if (!cols.includes(c)) this.db.run(`ALTER TABLE picks ADD COLUMN ${c} TEXT`);
   }
   all(sql, params = []) {
     const st = this.db.prepare(sql); st.bind(params);
@@ -65,7 +68,7 @@ class StatsDb {
   }
   pendingMatch() { return this.one('SELECT id FROM matches WHERE done = 0 ORDER BY id DESC LIMIT 1'); }
   /* Enregistre une partie de match-v5. Renvoie le nombre de lignes ajoutées. */
-  addMatch(m, { minDuration = 900 } = {}) {
+  addMatch(m, { minDuration = 900, timeline = null } = {}) {
     const id = m.metadata.matchId, info = m.info;
     const patch = String(info.gameVersion || '').split('.').slice(0, 2).join('.');
     const ok = info.queueId === 420 && (info.gameDuration || 0) >= minDuration && !(info.participants || []).some((p) => p.gameEndedInEarlySurrender);
@@ -73,6 +76,7 @@ class StatsDb {
     this.db.run('BEGIN');
     if (ok) {
       const ps = (info.participants || []).map((p) => Object.assign({}, p, { role: ({ TOP: 'top', JUNGLE: 'jungle', MIDDLE: 'mid', BOTTOM: 'adc', UTILITY: 'support' })[p.teamPosition] || '' }));
+      const tl = timeline ? parseTimeline(timeline) : {};
       for (const p of ps) {
         if (!p.role) continue;
         const opp = ps.find((o) => o.teamId !== p.teamId && o.role === p.role);
@@ -84,8 +88,10 @@ class StatsDb {
         const shards = [sp.offense, sp.flex, sp.defense].filter(Boolean).join(',');
         const items = [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5].filter(Boolean).join(',');
         const spells = [p.summoner1Id, p.summoner2Id].sort((a, b) => a - b).join(',');
-        this.db.run('INSERT OR REPLACE INTO picks (match_id, champ, role, win, opp, runes, shards, items, spells, patch, created) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-          [id, p.championId, p.role, p.win ? 1 : 0, opp ? opp.championId : 0, runes, shards, items, spells, patch, info.gameCreation || 0]);
+        const t = tl[p.participantId] || {};
+        const enemies = ps.filter((o) => o.teamId !== p.teamId).map((o) => o.championId).join(',');
+        this.db.run('INSERT OR REPLACE INTO picks (match_id, champ, role, win, opp, runes, shards, items, spells, patch, created, seq, start, skills, enemies) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [id, p.championId, p.role, p.win ? 1 : 0, opp ? opp.championId : 0, runes, shards, items, spells, patch, info.gameCreation || 0, t.seq || null, t.start || null, t.skills || null, enemies]);
         rows++;
       }
     }
@@ -99,6 +105,7 @@ class StatsDb {
   counts() {
     return {
       picks: (this.one('SELECT COUNT(*) n FROM picks') || {}).n || 0,
+      withTimeline: (this.one('SELECT COUNT(*) n FROM picks WHERE seq IS NOT NULL') || {}).n || 0,
       matches: (this.one('SELECT COUNT(*) n FROM matches WHERE done = 1') || {}).n || 0,
       pending: (this.one('SELECT COUNT(*) n FROM matches WHERE done = 0') || {}).n || 0,
       seeds: (this.one('SELECT COUNT(*) n FROM seeds') || {}).n || 0,
@@ -126,6 +133,10 @@ class StatsDb {
     const vs = this.all('SELECT opp, COUNT(*) games, SUM(win) wins FROM picks WHERE champ = ? AND role = ? AND opp > 0 AND created >= ? GROUP BY opp', [champ, role, t]);
     return { roles, role, games: base.games, wins: base.wins || 0, pickRate: roleTotal ? base.games / (roleTotal / 2) : 0, runes, spells, items, matchups: vs };
   }
+  /* Lignes brutes pour construire runes / kits d'objets dans l'interface (qui connaît les objets). */
+  builds(champ, role, days = 30, limit = 4000) {
+    return this.all('SELECT win, opp, runes, shards, spells, items, seq, start, skills, enemies FROM picks WHERE champ = ? AND role = ? AND created >= ? ORDER BY created DESC LIMIT ?', [champ, role, this.since(days), limit]);
+  }
   tier(role, days = 30, minGames = 20) {
     const t = this.since(days);
     const total = (this.one('SELECT COUNT(*) n FROM picks WHERE role = ? AND created >= ?', [role, t]) || {}).n || 0;
@@ -148,4 +159,24 @@ class StatsDb {
   }
 }
 
-module.exports = { StatsDb, ROLES };
+/* Chronologie d'une partie → pour chaque participant : ordre des achats, achats de départ, ordre de montée des sorts. */
+function parseTimeline(tl) {
+  const out = {};
+  const get = (pid) => out[pid] || (out[pid] = { buys: [], skills: '' });
+  for (const f of ((tl || {}).info || {}).frames || []) {
+    for (const e of f.events || []) {
+      if (!e.participantId) continue;
+      if (e.type === 'ITEM_PURCHASED') get(e.participantId).buys.push({ id: e.itemId, t: e.timestamp });
+      else if (e.type === 'ITEM_UNDO' && e.beforeId) { const b = get(e.participantId).buys; for (let i = b.length - 1; i >= 0; i--) if (b[i].id === e.beforeId) { b.splice(i, 1); break; } }
+      else if (e.type === 'SKILL_LEVEL_UP' && e.levelUpType !== 'EVOLVE' && e.skillSlot >= 1 && e.skillSlot <= 4) { const p = get(e.participantId); if (p.skills.length < 18) p.skills += String(e.skillSlot); }
+    }
+  }
+  const res = {};
+  for (const pid of Object.keys(out)) {
+    const o = out[pid];
+    res[pid] = { seq: o.buys.slice(0, 40).map((b) => b.id).join(','), start: o.buys.filter((b) => b.t < 75000).map((b) => b.id).sort((a, b) => a - b).join(','), skills: o.skills };
+  }
+  return res;
+}
+
+module.exports = { StatsDb, ROLES, parseTimeline };

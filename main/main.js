@@ -104,6 +104,7 @@ function handlers() {
 
   h('stats:counts', () => db.counts());
   h('stats:champ', (champ, role, days) => db.champ(champ, role, days));
+  h('stats:builds', (champ, role, days) => db.builds(champ, role, days));
   h('stats:tier', (role, days, minGames) => db.tier(role, days, minGames));
   h('stats:counters', (enemy, role, days) => db.counters(enemy, role, days));
   h('stats:matchup', (champ, opp, role, days) => db.matchup(champ, opp, role, days));

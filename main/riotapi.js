@@ -98,6 +98,7 @@ class RiotApi {
     return this.regionalGet(`/lol/match/v5/matches/by-puuid/${puuid}/ids?${q}`, { priority });
   }
   match(id, priority = 0) { return this.regionalGet(`/lol/match/v5/matches/${id}`, { priority }); }
+  timeline(id, priority = 0) { return this.regionalGet(`/lol/match/v5/matches/${id}/timeline`, { priority }); }
   activeGame(puuid) { return this.platformGet(`/lol/spectator/v5/active-games/by-summoner/${puuid}`, { priority: 5 }).catch((e) => { if (e.status === 404) return null; throw e; }); }
   apexLeague(tier, queue = 'RANKED_SOLO_5x5') {
     const p = { CHALLENGER: 'challengerleagues', GRANDMASTER: 'grandmasterleagues', MASTER: 'masterleagues' }[tier];

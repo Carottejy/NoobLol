@@ -256,3 +256,12 @@ details.flat { background: none; border: 0; margin: 4px 0; } details.flat > summ
 .dmgbar .phy { background: var(--phy); } .dmgbar .mag { background: var(--mag); }
 .tphy { color: var(--phy); } .tmag { color: var(--mag); }
 @media (max-width: 1150px) { .gametop { grid-template-columns: 1fr; } .mmcard { position: static; } .mmslot { max-height: 60vh; margin: 0 auto; width: auto; height: 60vh; } }
+
+/* Kit d'objets */
+.kit { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.kit .step { border-left: 3px solid var(--line); background: var(--panel2); border-radius: 0 10px 10px 0; padding: 8px; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.kit .step.main { border-left-color: var(--accent); grid-column: span 2; }
+.kit .lab { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.arrow { color: var(--accent2); font-weight: 800; }
+.skillord { font: 800 1.1rem ui-monospace, Menlo, Consolas, monospace; color: var(--accent2); }
+.sit { padding: 6px 0; border-top: 1px solid var(--line); }

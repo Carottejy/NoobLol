@@ -401,14 +401,30 @@
      SÉLECTION DES CHAMPIONS
      Noob LOL lit la sélection et te conseille. C'est toujours toi qui cliques dans le client.
      ===================================================================== */
+  /* Ma lane : choisie dans l'appli > attribuée par le client > déduite du champion (rôle le plus joué) */
+  function detectRole(assigned, champKey) {
+    if (S.select.role) return [S.select.role, 'manual'];
+    if (assigned) return [assigned, 'client'];
+    if (champKey) {
+      const main = NB ? cached('main:' + champKey, () => NB.stats.mainRole(champKey)) : '';
+      const c = byKey(champKey);
+      const guess = main || (c ? beginnerRole(c.id) : '');
+      if (guess) return [guess, 'guess'];
+    }
+    return ['', ''];
+  }
   function selectionData() {
     const cs = R.lcu.champSelect;
     if (cs) {
       const me = cs.myTeam.find((p) => p.isMe) || null;
-      return { live: true, cs, me, myRole: S.select.role || cs.myRole || '', allies: cs.myTeam, enemies: cs.theirTeam.map((p) => p.champ).filter(Boolean), bans: cs.bans, myChamp: me && me.champ ? me.champ : 0, locked: !!(me && me.locked) };
+      const myChamp = me && me.champ ? me.champ : 0;
+      const [myRole, roleSrc] = detectRole(cs.myRole, myChamp);
+      return { live: true, cs, me, myRole, roleSrc, allies: cs.myTeam, enemies: cs.theirTeam.map((p) => p.champ).filter(Boolean), bans: cs.bans, myChamp, locked: !!(me && me.locked) };
     }
     const meC = D.champs && D.champs[S.select.manualMe];
-    return { live: false, cs: null, me: null, myRole: S.select.role || 'mid', allies: [], enemies: S.select.manualEnemies.map((id) => (D.champs && D.champs[id] ? +D.champs[id].key : 0)).filter(Boolean), bans: [], myChamp: meC ? +meC.key : 0, locked: false };
+    const myChamp = meC ? +meC.key : 0;
+    const [myRole, roleSrc] = detectRole('', myChamp);
+    return { live: false, cs: null, me: null, myRole: myRole || 'mid', roleSrc: roleSrc || 'manual', allies: [], enemies: S.select.manualEnemies.map((id) => (D.champs && D.champs[id] ? +D.champs[id].key : 0)).filter(Boolean), bans: [], myChamp, locked: false };
   }
   /* Adversaire de voie : choisi par toi, sinon deviné (rôle le plus joué d'après les statistiques). */
   function laneOpponent(sd) {
@@ -465,7 +481,7 @@
         <p class="muted small">En attendant, tu peux simuler une sélection : choisis ton rôle et les champions adverses ci-dessous.</p></div>`;
     }
     h += `<div class="card"><div class="row"><b>Mon rôle :</b>${ROLES.map((r) => `<button class="chip ${role === r ? 'on' : ''}" data-act="selRole" data-val="${r}">${ROLE_IC[r]} ${ROLE_NAME[r]}</button>`).join('')}
-      ${sd.live && sd.cs.myRole && S.select.role && S.select.role !== sd.cs.myRole ? `<button class="chip" data-act="selRole" data-val="">↩ Rôle attribué (${ROLE_NAME[sd.cs.myRole]})</button>` : ''}</div></div>`;
+      ${S.select.role ? `<button class="chip" data-act="selRole" data-val="">↩ Détection automatique</button>` : (role ? `<span class="muted small">Lane ${ROLE_SRC[sd.roleSrc] || ''}</span>` : '')}</div></div>`;
     h += '<div class="cols">';
     /* Équipes */
     h += '<div>';
@@ -498,18 +514,62 @@
     h += '</div></div>';
     return h;
   }
+  /* ---------- Mon champion : runes et kit d'objets adaptés ---------- */
+  const ROLE_SRC = { client: 'attribuée par le client', manual: 'choisie dans Noob LOL', guess: 'déduite de ton champion' };
+  const wr = (o) => `<span class="${o.wins / o.games >= 0.5 ? 'pos' : 'neg'}">${pct(o.wins, o.games)}</span> <span class="muted">· ${nf(o.games)}</span>`;
+  const itemsRow = (list) => list.map((id) => `<span class="itm" data-act="item" data-val="${id}">${itIcon(id, 'ico')}</span>`).join('');
   function pickPanel(sd, opp) {
     const c = byKey(sd.myChamp); if (!c) return '';
     const role = sd.myRole;
-    const st = NB ? champStats(c.key, role) : null;
-    const mu = NB && opp ? cached(`mu:${c.key}:${opp}:${role}`, () => NB.stats.matchup(+c.key, opp, role, 30)) : null;
-    let h = `<div class="card gold"><div class="row nw">${cIcon(c, 'ico lg')}<div class="grow"><h2 style="margin:0">${esc(c.name)} ${role ? 'en ' + ROLE_NAME[role] : ''}</h2>
-      <span class="muted small">${sd.locked ? 'Champion verrouillé : prépare tes runes et tes sorts.' : 'Tu survoles ce champion.'}</span></div><button class="btn ghost small" data-act="champ" data-val="${esc(c.id)}">Fiche</button></div>`;
-    if (mu && mu.games) h += `<p class="tip" style="margin-top:8px">Contre <b>${esc(byKey(opp).name)}</b> : <b class="${mu.wins / mu.games >= 0.5 ? 'pos' : 'neg'}">${pct(mu.wins, mu.games)}</b> de victoires sur ${mu.games} parties analysées.</p>`;
-    if (st === undefined) h += '<div class="loader small">Calcul…</div>';
-    else if (st && st.games) h += buildBlock(st, { compact: true, items: 5 });
-    else h += `<p class="muted small">${NB ? 'Pas encore de statistiques pour ce champion dans ce rôle.' : ''} Les runes « recommandées » du client sont un bon choix.</p>`;
+    const oc = opp ? byKey(opp) : null;
+    let h = `<div class="card gold"><div class="row nw">${cIcon(c, 'ico lg')}<div class="grow"><h2 style="margin:0">${esc(c.name)} ${role ? 'en ' + ROLE_IC[role] + ' ' + ROLE_NAME[role] : ''}</h2>
+      <span class="muted small">${sd.locked ? '🔒 Champion verrouillé' : '👆 Champion survolé'}${role ? ` · lane ${ROLE_SRC[sd.roleSrc] || ''}` : ''}${oc ? ` · adversaire : <b>${esc(oc.name)}</b>` : ''}</span></div><button class="btn ghost small" data-act="champ" data-val="${esc(c.id)}">Fiche</button></div>`;
+    if (!NB) return h + '<p class="muted small">Les builds viennent des statistiques de l\'application PC.</p></div>';
+    if (!role) return h + '<p class="muted small">Choisis ta lane ci-dessus pour voir les builds.</p></div>';
+    const mu = opp ? cached(`mu:${c.key}:${opp}:${role}`, () => NB.stats.matchup(+c.key, opp, role, 30)) : null;
+    if (mu && mu.games) h += `<p class="tip" style="margin-top:8px">Contre <b>${esc(oc.name)}</b> : <b class="${mu.wins / mu.games >= 0.5 ? 'pos' : 'neg'}">${pct(mu.wins, mu.games)}</b> de victoires sur ${mu.games} parties analysées.</p>`;
+    const rows = cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30));
+    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div>';
+    if (!rows || !rows.length) return h + `<p class="muted small">Pas encore de parties analysées pour ${esc(c.name)} en ${ROLE_NAME[role]}. Les runes « recommandées » du client sont un bon choix. ${R.col && R.col.running ? 'Le collecteur tourne : reviens plus tard.' : 'Démarre le collecteur dans les Réglages.'}</p></div>`;
+    const A = Builds.analyze(rows, D, { opp, enemies: sd.enemies });
+    h += `<div class="kpis"><div><b>${pct(A.wins, A.games)}</b><span>victoires</span></div><div><b>${nf(A.games)}</b><span>parties analysées</span></div><div><b>${oc ? nf(A.vsGames) : '—'}</b><span>${oc ? 'contre ' + esc(oc.name) : 'adversaire inconnu'}</span></div></div></div>`;
+
+    /* Runes */
+    const ctx = (vs, n) => (oc ? (vs ? `<span class="tag gold">contre ${esc(oc.name)} · ${n} parties</span>` : `<span class="tag">général · seulement ${A.vsGames} partie${A.vsGames > 1 ? 's' : ''} contre ${esc(oc.name)}</span>`) : '<span class="tag">général</span>');
+    h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
+    h += A.runes.length ? A.runes.slice(0, 2).map((r, i) => `<div class="small" style="margin-top:8px">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</div>${runePage(r)}`).join('') : '<p class="muted small">Pas de données de runes.</p>';
+    if (A.spells && A.spells.length) h += `<h3>Sorts d'invocateur</h3><div class="row">${A.spells.map((x) => `<span class="pair">${spellPair(x.spells)} <span class="small">${wr(x)}</span></span>`).join('')}</div>`;
+    h += '<p class="muted small" style="margin-top:6px">À recopier dans le client (page de runes et sorts).</p></div>';
+
+    /* Kit d'objets */
+    h += `<div class="card"><div class="row sp"><h2 style="margin:0">🛒 Kit d'objets</h2>${A.timelineGames ? ctx(A.earlyVs, A.earlyGames) : ''}</div>`;
+    if (!A.timelineGames) {
+      const st = champStats(c.key, role);
+      h += '<p class="muted small">L\'ordre d\'achat arrive avec les nouvelles parties analysées (collecteur 2.2). En attendant, les objets les plus présents en fin de partie :</p>';
+      if (st && st.games) h += buildBlock(st, { compact: true, items: 6 }).replace(/<h3>Runes[\s\S]*?(?=<h3>Objets)/, '');
+    } else {
+      h += '<div class="kit">';
+      if (A.start && A.start[0]) h += `<div class="step"><span class="lab">1. Départ</span><div class="row">${itemsRow(A.start[0].items)}</div><span class="small">${wr(A.start[0])}</span></div>`;
+      if (A.core && A.core[0]) h += `<div class="step main"><span class="lab">2. Deux premiers objets${oc && A.earlyVs ? ' contre ' + esc(oc.name) : ''}</span><div class="row">${itIcon(A.core[0].items[0], 'ico lg')}<span class="arrow">→</span>${itIcon(A.core[0].items[1], 'ico lg')}</div><span class="small">${wr(A.core[0])}</span></div>`;
+      if (A.boots && A.boots[0]) h += `<div class="step"><span class="lab">Bottes</span><div class="row">${itemsRow([A.boots[0].item])}</div><span class="small">${wr(A.boots[0])}</span></div>`;
+      if (A.later && A.later.length) h += `<div class="step"><span class="lab">3. Ensuite, selon la partie</span><div class="row">${itemsRow(A.later.slice(0, 5).map((x) => x.item))}</div><span class="small muted">classés pour cette équipe adverse</span></div>`;
+      h += '</div>';
+      if (A.core && A.core.length > 1) h += `<details class="flat"><summary class="small">Autres débuts possibles</summary>${A.core.slice(1).map((x) => `<div class="row" style="margin:4px 0">${itIcon(x.items[0])}<span class="arrow">→</span>${itIcon(x.items[1])}<span class="small">${wr(x)}</span></div>`).join('')}</details>`;
+      if (A.skills) h += `<h3>Ordre des sorts</h3><div class="row"><span class="skillord">${esc(A.skills.order)}</span>${A.skills.first ? `<span class="small muted">niveaux 1-3 : ${esc(A.skills.first)}</span>` : ''}<span class="small muted">(${Math.round(A.skills.share * 100)} % des joueurs)</span></div>`;
+    }
     h += '</div>';
+
+    /* Contre cette équipe */
+    if (A.team) {
+      const T = A.team;
+      h += `<div class="card"><h2>🛡️ Contre cette équipe</h2><div class="row" style="margin-bottom:6px">${sd.enemies.map((k) => cIcon(byKey(k), 'ico sm')).join('')}<span class="grow"></span>${dmgBar(1 - T.ap)}</div>
+        <div class="chips small">${T.tanks.length ? `<span class="tag">🛡️ ${T.tanks.length} tank${T.tanks.length > 1 ? 's' : ''}</span>` : ''}${T.healers.length ? `<span class="tag">💚 ${T.healers.length} soigneur${T.healers.length > 1 ? 's' : ''}</span>` : ''}${T.n < 5 ? `<span class="tag">${T.n}/5 champions connus</span>` : ''}</div>`;
+      const sit = A.situational || [];
+      if (!A.timelineGames) h += '<p class="muted small">Les objets adaptés arrivent avec les parties analysées par le collecteur 2.2.</p>';
+      else if (!sit.length) h += '<p class="small">Composition équilibrée : garde le kit standard.</p>';
+      else h += sit.map((x) => `<div class="sit"><div class="small"><b>${esc(x.why)}</b></div>${x.items.length ? `<div class="row">${x.items.map((o) => `<span class="itm" data-act="item" data-val="${o.item}">${itIcon(o.item, 'ico')}<span class="small">${Math.round(o.share * 100)} %</span></span>`).join('')}<span class="small muted">→ à placer en 3e ou 4e objet</span></div>` : `<div class="small muted">Pense à ${esc(x.hint)}.</div>`}</div>`).join('');
+      h += '<p class="muted small" style="margin-top:6px">% = part des joueurs qui le construisent face à des équipes qui ressemblent à celle-ci.</p></div>';
+    }
     const f = needFull(c.id);
     if (f) h += tipsCards(f, 'ally');
     return h;
@@ -781,7 +841,7 @@
     h += '</div><div>';
     const running = col.running;
     h += `<div class="card"><h2>📊 Collecteur de statistiques</h2>
-      <p class="muted small">Il récupère des parties classées récentes de joueurs Maître, Grand maître et Challenger de ton serveur (API officielle de Riot) et calcule runes, objets, sorts et match-ups par champion et par rôle. Tout est stocké sur ton PC. Avec une clé de développement : environ 2 000 parties par jour si le PC reste allumé.</p>
+      <p class="muted small">Il récupère des parties classées récentes de joueurs Maître, Grand maître et Challenger de ton serveur (API officielle de Riot) et calcule runes, objets, sorts et match-ups par champion et par rôle. Tout est stocké sur ton PC. Avec une clé de développement : environ 1 000 parties par jour si le PC reste allumé (2 requêtes par partie : résultat + chronologie des achats).</p>
       <div class="kpis"><div><b>${nf(col.matches)}</b><span>parties analysées</span></div><div><b>${nf(col.picks)}</b><span>lignes champion</span></div><div><b>${nf(col.pending)}</b><span>en attente</span></div><div><b>${nf(col.seeds)}</b><span>joueurs suivis</span></div></div>
       <p class="small">${running ? '🟢 En cours…' : '⏸️ À l\'arrêt'}${col.lastError ? ` · <span class="neg">${esc(col.lastError)}</span>` : ''}</p>
       <div class="row"><button class="btn ${running ? 'danger' : ''} small" data-act="${running ? 'colStop' : 'colStart'}" ${c.hasApiKey ? '' : 'disabled'}>${running ? '⏸️ Arrêter' : '▶ Démarrer'}</button>

@@ -41,7 +41,12 @@ class Collector extends EventEmitter {
     const pending = this.db.pendingMatch();
     if (pending) {
       const m = await this.api.match(pending.id).catch((e) => { if (e.status === 404) return null; throw e; });
-      if (m) { const n = this.db.addMatch(m); this.added += n; } else this.db.run('UPDATE matches SET done = 1 WHERE id = ?', [pending.id]);
+      if (m) {
+        /* Chronologie : seulement pour les parties qui seront gardées (classée solo, > 15 min). */
+        let tl = null;
+        if (cfg.collector.timeline !== false && m.info && m.info.queueId === 420 && (m.info.gameDuration || 0) >= 900) tl = await Promise.resolve().then(() => this.api.timeline(pending.id)).catch((e) => { if (e && (e.status === 401 || e.status === 403)) throw e; return null; });
+        const n = this.db.addMatch(m, { timeline: tl }); this.added += n;
+      } else this.db.run('UPDATE matches SET done = 1 WHERE id = ?', [pending.id]);
       this.session++;
       return;
     }

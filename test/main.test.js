@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const https = require('https');
 const { execSync } = require('child_process');
-const { StatsDb } = require('../main/db');
+const { StatsDb, parseTimeline } = require('../main/db');
 const { Collector } = require('../main/collector');
 const { RiotApi, RateLimiter } = require('../main/riotapi');
 const { parseLockfile, parseCommandLine, simplifySession, LcuWatcher } = require('../main/lcu');
@@ -16,7 +16,7 @@ const { Config } = require('../main/config');
 const POS = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY'];
 function fakeMatch(id, champsBlue, champsRed, blueWins, opts = {}) {
   const part = (champ, i, teamId, win) => ({
-    puuid: `p${teamId}${i}`, championId: champ, championName: 'C' + champ, teamId, teamPosition: POS[i], win,
+    puuid: `p${teamId}${i}`, participantId: (teamId === 100 ? 1 : 6) + i, championId: champ, championName: 'C' + champ, teamId, teamPosition: POS[i], win,
     perks: { statPerks: { offense: 5008, flex: 5008, defense: 5011 }, styles: [{ description: 'primaryStyle', style: 8100, selections: [{ perk: 8112 }, { perk: 8126 }, { perk: 8138 }, { perk: 8135 }] }, { description: 'subStyle', style: 8300, selections: [{ perk: 8304 }, { perk: 8347 }] }] },
     item0: 3071, item1: 3006, item2: 0, item3: 1036, item4: 0, item5: 0, item6: 3340, summoner1Id: 14, summoner2Id: 4,
   });
@@ -173,4 +173,84 @@ test('client LoL : connexion HTTPS locale via lockfile', async (t) => {
   w.stop(); srv.close();
   assert.strictEqual(st.connected, true); assert.strictEqual(st.phase, 'ChampSelect');
   assert.strictEqual(st.summoner.gameName, 'Carotte'); assert.strictEqual(st.champSelect.myRole, 'support');
+});
+
+test('chronologie : ordre d\'achat, annulation, départ, sorts, équipe adverse', async () => {
+  const ev = (type, pid, t, x) => Object.assign({ type, participantId: pid, timestamp: t }, x);
+  const tl = { info: { frames: [
+    { events: [ev('ITEM_PURCHASED', 1, 20000, { itemId: 1055 }), ev('ITEM_PURCHASED', 1, 21000, { itemId: 2003 }), ev('ITEM_PURCHASED', 1, 22000, { itemId: 1036 }), ev('ITEM_UNDO', 1, 23000, { beforeId: 1036, afterId: 0 }),
+      ev('SKILL_LEVEL_UP', 1, 90000, { skillSlot: 1, levelUpType: 'NORMAL' }), ev('SKILL_LEVEL_UP', 1, 200000, { skillSlot: 3, levelUpType: 'NORMAL' }), ev('SKILL_LEVEL_UP', 1, 300000, { skillSlot: 1, levelUpType: 'NORMAL' }), ev('SKILL_LEVEL_UP', 1, 300500, { skillSlot: 4, levelUpType: 'EVOLVE' })] },
+    { events: [ev('ITEM_PURCHASED', 1, 500000, { itemId: 1001 }), ev('ITEM_PURCHASED', 1, 600000, { itemId: 3071 }), ev('ITEM_PURCHASED', 6, 610000, { itemId: 3006 }), { type: 'WARD_PLACED', timestamp: 1 }] },
+  ] } };
+  const p = parseTimeline(tl);
+  assert.deepStrictEqual(p[1], { seq: '1055,2003,1001,3071', start: '1055,2003', skills: '131' });
+  assert.strictEqual(p[6].seq, '3006');
+  const db = await StatsDb.open(null);
+  db.addMatch(fakeMatch('EUW1_T', [1, 2, 3, 4, 5], [6, 7, 8, 9, 10], true), { timeline: tl });
+  const rows = db.builds(1, 'top');
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].seq, '1055,2003,1001,3071'); assert.strictEqual(rows[0].start, '1055,2003'); assert.strictEqual(rows[0].skills, '131');
+  assert.strictEqual(rows[0].enemies, '6,7,8,9,10'); assert.strictEqual(rows[0].opp, 6);
+  assert.strictEqual(db.counts().withTimeline, 2);
+});
+
+test('base de stats : mise à niveau d\'une ancienne base (sans colonnes de chronologie)', async () => {
+  const initSqlJs = require('sql.js');
+  const SQL = await initSqlJs();
+  const old = new SQL.Database();
+  old.run('CREATE TABLE picks (match_id TEXT, champ INTEGER, role TEXT, win INTEGER, opp INTEGER, runes TEXT, shards TEXT, items TEXT, spells TEXT, patch TEXT, created INTEGER, PRIMARY KEY (match_id, champ))');
+  old.run("INSERT INTO picks VALUES ('X', 1, 'top', 1, 2, '', '', '', '', '16.21', ?)", [Date.now()]);
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'nlm-')), 'stats.sqlite');
+  fs.writeFileSync(file, Buffer.from(old.export()));
+  const db = await StatsDb.open(file);
+  const r = db.builds(1, 'top');
+  assert.strictEqual(r.length, 1); assert.strictEqual(r[0].seq, null);
+});
+
+test('collecteur : récupère la chronologie des parties gardées seulement', async () => {
+  const db = await StatsDb.open(null);
+  const tlCalls = [];
+  const api = { platform: 'euw1', calls: 0, apexLeague: async () => ({ entries: [{ puuid: 'A' }] }), matchIds: async () => ['M1', 'M2'],
+    match: async (id) => fakeMatch(id, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10], true, id === 'M2' ? { duration: 300 } : {}),
+    timeline: async (id) => { tlCalls.push(id); return { info: { frames: [{ events: [{ type: 'ITEM_PURCHASED', participantId: 1, timestamp: 10, itemId: 1055 }] }] } }; } };
+  const col = new Collector({ api, db, getConfig: () => ({ collector: { tiers: ['CHALLENGER'], days: 14, timeline: true } }) });
+  col.running = true;
+  for (let i = 0; i < 4; i++) await col.step();
+  assert.deepStrictEqual(tlCalls, ['M1']);
+  assert.strictEqual(db.builds(1, 'top')[0].seq, '1055');
+});
+
+test('recommandations : runes et 2 premiers objets contre l\'adversaire, objets selon l\'équipe', () => {
+  const Builds = require('../renderer/builds.js');
+  const item = (name, total, tags, extra = {}) => Object.assign({ name, gold: { total }, tags, description: '' }, extra);
+  const D = {
+    items: { 1055: item('Lame de Doran', 450, ['Damage', 'Lane']), 2003: item('Potion', 50, ['Consumable']), 1001: item('Bottes', 300, ['Boots'], { into: ['3006'] }),
+      3006: item('Jambières', 1100, ['Boots']), 3111: item('Sandales', 1100, ['Boots']), 6672: item('Kraken', 3100, ['Damage']), 3031: item('Lame d\'infini', 3450, ['CriticalStrike']),
+      3036: item('Salutations', 3000, ['ArmorPenetration']), 3156: item('Gueule', 2900, ['SpellBlock', 'Damage']), 3033: item('Mortel rappel', 3000, ['ArmorPenetration'], { description: 'Applique <status>Blessures graves</status>' }) },
+    champs: {}, byKey: {},
+  };
+  const champ = (id, key, attack, magic, tags) => { D.champs[id] = D.byKey[key] = { id, key: String(key), name: id, info: { attack, magic }, tags }; };
+  champ('Jinx', 222, 9, 2, ['Marksman']); champ('Zed', 238, 9, 1, ['Assassin']); champ('Lux', 99, 2, 9, ['Mage']); champ('Syndra', 134, 2, 9, ['Mage']);
+  champ('Soraka', 16, 2, 8, ['Support']); champ('Malphite', 54, 5, 7, ['Tank']); champ('Leona', 89, 4, 3, ['Tank', 'Support']); champ('Ahri', 103, 3, 8, ['Mage']);
+  const row = (o) => Object.assign({ win: 1, opp: 0, runes: '8000:8008,9111,9104,8014|8100:8139,8135', shards: '5005,5008,5011', spells: '4,7', items: '', seq: '1055,2003,1001,6672,3006,3031,3036', start: '1055,2003', skills: '131213141323', enemies: '238,99,134,54,89' }, o);
+  const rows = [];
+  for (let i = 0; i < 20; i++) rows.push(row({ win: i % 2, opp: 99 }));
+  for (let i = 0; i < 10; i++) rows.push(row({ win: i < 7 ? 1 : 0, opp: 134, runes: '8000:8010,9111,9104,8299|8400:8444,8451', seq: '1055,2003,1001,3031,3111,6672,3156', enemies: '134,99,103,16,54' }));
+  /* contre Syndra : runes et 2 premiers objets spécifiques */
+  const A = Builds.analyze(rows, D, { opp: 134, enemies: [134, 99, 103, 16, 54] });
+  assert.strictEqual(A.games, 30); assert.strictEqual(A.vsGames, 10); assert.strictEqual(A.useVs, true);
+  assert.ok(A.runes[0].runes.startsWith('8000:8010'));
+  assert.deepStrictEqual(A.core[0].items, [3031, 6672]); assert.strictEqual(A.earlyVs, true);
+  assert.strictEqual(A.boots[0].item, 3111);
+  assert.deepStrictEqual(A.start[0].items, [1055, 2003]);
+  assert.strictEqual(A.skills.order, 'Q > E > W'); assert.strictEqual(A.skills.first, 'Q E Q');
+  /* équipe très magique + soigneuse : objets de résistance magique et anti-soins */
+  const ids = A.situational.map((x) => x.id);
+  assert.ok(ids.includes('mr') && ids.includes('heal'), ids.join(','));
+  assert.strictEqual(A.situational.find((x) => x.id === 'mr').items[0].item, 3156);
+  assert.strictEqual(A.situational.find((x) => x.id === 'heal').items.length, 0, 'aucun anti-soins construit → conseil générique');
+  /* adversaire peu joué : retour au général */
+  const B = Builds.analyze(rows, D, { opp: 238, enemies: [238, 89] });
+  assert.strictEqual(B.useVs, false); assert.deepStrictEqual(B.core[0].items, [6672, 3031]);
+  assert.ok(B.situational.some((x) => x.id === 'armor'));
 });
