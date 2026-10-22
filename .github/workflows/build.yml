@@ -30,26 +30,24 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - name: Fabriquer et publier la Release
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
-        shell: bash
-        run: |
-          set -o pipefail
-          npx electron-builder --win --publish always 2>&1 | tee build.log || { echo "::error title=electron-builder::$(tail -c 3500 build.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Rendre la Release publique
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
-        shell: bash
-        run: gh release edit "v$(node -p "require('./package.json').version")" --draft=false --latest -R "$GITHUB_REPOSITORY"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Fabriquer sans publier
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') && !inputs.publish }}
+      - name: Fabriquer l'installeur
         shell: bash
         run: |
           set -o pipefail
           npx electron-builder --win --publish never 2>&1 | tee build.log || { echo "::error title=electron-builder::$(tail -c 3500 build.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
+      - name: Publier la Release (installeur + fichier de mise à jour)
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+        shell: bash
+        run: |
+          V="v$(node -p "require('./package.json').version")"
+          NOTES="$(node -e "global.window={};eval(require('fs').readFileSync('renderer/version.js','utf8'));const r=APP_RELEASES[0];console.log(r.notes.map(n=>'- '+n).join('\n'))")"
+          if gh release view "$V" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$V" dist/*.exe dist/*.blockmap dist/latest.yml --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create "$V" dist/*.exe dist/*.blockmap dist/latest.yml --title "Noob LOL $V" --notes "$NOTES" --latest --target "$GITHUB_SHA" -R "$GITHUB_REPOSITORY"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: Noob-LOL-installeur
