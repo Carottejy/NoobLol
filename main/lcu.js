@@ -50,7 +50,8 @@ function simplifySession(s) {
   if (!s) return null;
   const me = s.localPlayerCellId;
   const pick = (p) => ({ cellId: p.cellId, champ: p.championId || p.championPickIntent || 0, locked: !!p.championId, intent: !p.championId && !!p.championPickIntent,
-    role: POS[p.assignedPosition] || '', spells: [p.spell1Id || 0, p.spell2Id || 0], isMe: p.cellId === me });
+    role: POS[p.assignedPosition] || '', spells: [p.spell1Id || 0, p.spell2Id || 0], isMe: p.cellId === me,
+    puuid: p.puuid && !/^0+(-0+)*$/.test(p.puuid) ? p.puuid : '', name: p.gameName || '', tag: p.tagLine || '' });
   const bans = [].concat(((s.bans || {}).myTeamBans) || [], ((s.bans || {}).theirTeamBans) || []);
   (s.actions || []).flat().forEach((a) => { if (a.type === 'ban' && a.completed && a.championId) bans.push(a.championId); });
   /* Champion actuellement survolé par moi (avant validation) */
@@ -64,6 +65,13 @@ function simplifySession(s) {
     timer: s.timer ? { phase: s.timer.phase, left: Math.round((s.timer.adjustedTimeLeftInPhase || 0) / 1000), at: Date.now() } : null,
     myRole: mine ? mine.role : '', benchEnabled: !!s.benchEnabled, isCustom: !!s.isCustomGame,
   };
+}
+
+/* Session de partie (gameflow) : équipes avec puuid et champion */
+function simplifyGame(gs) {
+  const gd = gs.gameData || {};
+  const map = (arr, team) => (arr || []).map((p) => ({ puuid: p.puuid || '', champ: p.championId || 0, team, name: p.gameName || p.summonerName || '', tag: p.tagLine || '' }));
+  return { gameId: gd.gameId || 0, queueId: (gd.queue || {}).id || 0, players: map(gd.teamOne, 'ORDER').concat(map(gd.teamTwo, 'CHAOS')), ended: false };
 }
 
 class LcuWatcher extends EventEmitter {
@@ -117,6 +125,14 @@ class LcuWatcher extends EventEmitter {
     return this.req('PATCH', '/lol-champ-select/v1/session/my-selection', { spell1Id: a, spell2Id: b });
   }
 
+  /* Rang et niveau d'un joueur, lus dans le client (aucune clé Riot nécessaire) */
+  async playerInfo(puuid) {
+    const [rk, sm] = await Promise.all([this.get(`/lol-ranked/v1/ranked-stats/${puuid}`).catch(() => null), this.get(`/lol-summoner/v2/summoners/puuid/${puuid}`).catch(() => null)]);
+    if (!rk && !sm) return null;
+    const q = (k) => { const x = ((rk || {}).queueMap || {})[k]; return x && x.tier && x.tier !== 'NONE' ? { tier: x.tier, division: x.division && x.division !== 'NA' ? x.division : '', lp: x.leaguePoints || 0, wins: x.wins || 0, losses: x.losses || 0 } : null; };
+    return { level: sm ? sm.summonerLevel : null, name: sm ? sm.gameName : '', tag: sm ? sm.tagLine : '', solo: q('RANKED_SOLO_5x5'), flex: q('RANKED_FLEX_SR') };
+  }
+
   async loop() {
     let delay = 3000;
     try {
@@ -135,6 +151,13 @@ class LcuWatcher extends EventEmitter {
           this.state.champSelect = simplifySession(await this.get('/lol-champ-select/v1/session').catch(() => null));
           delay = 1000;
         } else this.state.champSelect = null;
+        /* Partie lancée : identifiant de la partie et joueurs (puuid) pour les rangs et les stats de fin de partie */
+        if (/GameStart|InProgress|Reconnect/.test(this.state.phase) && (changed || !this.state.game)) {
+          const gs = await this.get('/lol-gameflow/v1/session').catch(() => null);
+          if (gs && gs.gameData) this.state.game = simplifyGame(gs);
+        }
+        if (this.state.phase === 'ChampSelect' || this.state.phase === 'Lobby') this.state.game = this.state.game && this.state.game.ended ? this.state.game : null;
+        if (/WaitingForStats|PreEndOfGame|EndOfGame/.test(this.state.phase) && this.state.game) this.state.game.ended = true;
         this.emitState();
       }
     } catch (e) {
@@ -146,4 +169,4 @@ class LcuWatcher extends EventEmitter {
   }
 }
 
-module.exports = { LcuWatcher, localGet, localRequest, parseLockfile, parseCommandLine, simplifySession };
+module.exports = { LcuWatcher, localGet, localRequest, parseLockfile, parseCommandLine, simplifySession, simplifyGame };

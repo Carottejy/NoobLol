@@ -62,12 +62,15 @@ var Builds = (() => {
     const cur = teamProfile(enemies, D);
     res.team = cur;
 
-    /* Runes : contre l'adversaire si possible */
+    /* Poids d'une partie analysée : adversaire de voie identique (×4) et équipe adverse qui ressemble à l'actuelle */
+    const W = (r) => (opp && r.opp === opp ? 4 : 1) * (0.25 + similarity(r, cur, enemies, D));
+    res.adapted = !!(opp || cur);
+    /* Runes : parmi les parties contre l'adversaire si possible, classées selon la composition adverse */
     const runeRows = useVs ? vs : rows;
-    res.runes = count(runeRows.filter((r) => r.runes), (r) => r.runes + '#' + (r.shards || '')).slice(0, 3)
+    res.runes = count(runeRows.filter((r) => r.runes), (r) => r.runes + '#' + (r.shards || ''), W).slice(0, 3)
       .map((o) => ({ runes: o.key.split('#')[0], shards: o.key.split('#')[1], games: o.games, wins: o.wins }));
     res.runesVs = useVs;
-    res.spells = count(useVs ? vs : rows, (r) => r.spells).slice(0, 2).map((o) => ({ spells: o.key, games: o.games, wins: o.wins }));
+    res.spells = count(useVs ? vs : rows, (r) => r.spells, W).slice(0, 2).map((o) => ({ spells: o.key, games: o.games, wins: o.wins }));
 
     /* Kit d'objets (nécessite la chronologie) */
     const tl = rows.filter((r) => r.seq);
@@ -77,9 +80,9 @@ var Builds = (() => {
       const early = tlVs.length >= MIN_VS ? tlVs : tl;
       res.earlyVs = early === tlVs;
       res.earlyGames = early.length;
-      res.start = count(early.filter((r) => r.start), (r) => r.start).slice(0, 2).map((o) => ({ items: ids(o.key), games: o.games, wins: o.wins }));
-      res.boots = count(early, (r) => firstBoots(r, D)).slice(0, 2).map((o) => ({ item: +o.key, games: o.games, wins: o.wins }));
-      res.core = count(early, (r) => { const l = legendaries(r, D); return l.length >= 2 ? l[0] + '>' + l[1] : null; }).slice(0, 3)
+      res.start = count(early.filter((r) => r.start), (r) => r.start, W).slice(0, 2).map((o) => ({ items: ids(o.key), games: o.games, wins: o.wins }));
+      res.boots = count(early, (r) => firstBoots(r, D), W).slice(0, 2).map((o) => ({ item: +o.key, games: o.games, wins: o.wins }));
+      res.core = count(early, (r) => { const l = legendaries(r, D); return l.length >= 2 ? l[0] + '>' + l[1] : null; }, W).slice(0, 3)
         .map((o) => ({ items: o.key.split('>').map(Number), games: o.games, wins: o.wins }));
       /* 3e objet et suivants : pondérés par la ressemblance avec l'équipe adverse actuelle */
       const sim = (r) => 0.25 + similarity(r, cur, enemies, D);
@@ -196,6 +199,83 @@ var Builds = (() => {
     return { rows, turret: S.turret, inhib: S.inhib, drakeTypes: S.drake.types, time: t };
   }
 
-  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, ROLES5 };
+  /* ---------- En jeu : prochain objet à acheter d'après le kit conseillé ---------- */
+  function nextItem(A, owned, D) {
+    if (!A || !A.core || !A.core[0]) return null;
+    const have = new Set((owned || []).map(Number));
+    const plan = [].concat(A.core[0].items, A.boots && A.boots[0] ? [A.boots[0].item] : [], (A.situational || []).flatMap((x) => (x.items || []).map((o) => o.item)), (A.later || []).map((x) => x.item));
+    const seen = new Set();
+    for (const id of plan) {
+      if (seen.has(id)) continue; seen.add(id);
+      if (have.has(id)) continue;
+      const it = D.items[String(id)];
+      if (!it) continue;
+      /* Bottes déjà améliorées ? on passe */
+      if (isBoots(it) && [...have].some((h) => isBoots(D.items[String(h)]))) continue;
+      return { item: id, name: it.name, cost: it.gold.total };
+    }
+    return null;
+  }
+
+  /* ---------- Fin de partie : analyse complète d'une partie match-v5 (+ chronologie) ---------- */
+  const POS_ORDER = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
+  function postgame(match, timeline, puuid) {
+    const info = match.info || {};
+    let dur = info.gameDuration || 0;
+    if (!info.gameEndTimestamp && dur > 100000) dur = Math.round(dur / 1000);
+    const min = Math.max(1, dur / 60);
+    const ps = (info.participants || []).map((p) => Object.assign({}, p, {
+      cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
+      items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5].filter(Boolean), trinket: p.item6 || 0,
+      name: p.riotIdGameName || p.summonerName || '', tag: p.riotIdTagline || '',
+    }));
+    const me = ps.find((p) => p.puuid === puuid) || null;
+    const myTeamId = me ? me.teamId : 100;
+    const teamIds = [myTeamId, myTeamId === 100 ? 200 : 100];
+    const teams = teamIds.map((id) => {
+      const pl = ps.filter((p) => p.teamId === id).sort((a, b) => (POS_ORDER[a.teamPosition] ?? 9) - (POS_ORDER[b.teamPosition] ?? 9));
+      const t = (info.teams || []).find((x) => x.teamId === id) || {};
+      const sum = (k) => pl.reduce((s2, p) => s2 + (p[k] || 0), 0);
+      return { id, win: !!t.win, players: pl, kills: sum('kills'), deaths: sum('deaths'), assists: sum('assists'), gold: sum('goldEarned'), damage: sum('totalDamageDealtToChampions'), vision: sum('visionScore'), objectives: t.objectives || {} };
+    });
+    for (const t of teams) for (const p of t.players) {
+      p.kp = t.kills ? (p.kills + p.assists) / t.kills : 0;
+      p.dmgShare = t.damage ? (p.totalDamageDealtToChampions || 0) / t.damage : 0;
+      p.csm = p.cs / min; p.gpm = (p.goldEarned || 0) / min; p.dpm = (p.totalDamageDealtToChampions || 0) / min;
+      p.kda = (p.kills + p.assists) / Math.max(1, p.deaths);
+    }
+    const opp = me ? ps.find((p) => p.teamId !== myTeamId && p.teamPosition && p.teamPosition === me.teamPosition) : null;
+    /* Courbes : différence d'or entre équipes, minute par minute ; moi contre mon adversaire */
+    const curve = []; const meVs = { gold: [], cs: [] };
+    for (const f of ((timeline || {}).info || {}).frames || []) {
+      const pf = f.participantFrames || {};
+      let a = 0, b = 0;
+      for (const p of ps) { const x = pf[p.participantId]; if (!x) continue; if (p.teamId === myTeamId) a += x.totalGold || 0; else b += x.totalGold || 0; }
+      curve.push(a - b);
+      if (me && opp && pf[me.participantId] && pf[opp.participantId]) {
+        const m = pf[me.participantId], o = pf[opp.participantId];
+        meVs.gold.push((m.totalGold || 0) - (o.totalGold || 0));
+        meVs.cs.push(((m.minionsKilled || 0) + (m.jungleMinionsKilled || 0)) - ((o.minionsKilled || 0) + (o.jungleMinionsKilled || 0)));
+      }
+    }
+    const at = (arr, m) => (arr.length > m ? arr[m] : null);
+    /* Conseils simples pour progresser */
+    const tips = [];
+    if (me) {
+      const role = me.teamPosition;
+      if (role !== 'UTILITY' && me.csm < 6) tips.push(`Farm : ${me.csm.toFixed(1).replace('.', ',')} sbires/min. Vise 6 à 7 : entraîne le dernier coup dans l'Outil d'entraînement.`);
+      if (me.deaths >= 7) tips.push(`${me.deaths} morts : avant d'avancer, regarde la mini-carte et où sont les ennemis. Recule quand tu ne les vois pas.`);
+      if (me.kp < 0.4 && teams[0].kills >= 10) tips.push(`Participation aux kills : ${Math.round(me.kp * 100)} %. Rejoins ton équipe pour les combats et les objectifs.`);
+      if ((me.visionWardsBoughtInGame || 0) === 0 && dur > 900) tips.push('Aucune balise de contrôle achetée : prends-en une à chaque retour à la base (75 po).');
+      if (me.visionScore / min < (role === 'UTILITY' ? 1.5 : 0.6)) tips.push(`Score de vision faible (${me.visionScore}) : utilise ton trinket dès qu'il est rechargé.`);
+      if (at(meVs.cs, 10) != null && at(meVs.cs, 10) <= -15) tips.push(`À 10 min, tu avais ${-at(meVs.cs, 10)} sbires de retard sur ton adversaire.`);
+      if (!tips.length) tips.push('Belle partie, rien de flagrant à corriger. Continue comme ça !');
+    }
+    return { matchId: (match.metadata || {}).matchId, queue: info.queueId, dur, created: info.gameCreation, me, opp, teams, curve, meVs,
+      at10: { gold: at(meVs.gold, 10), cs: at(meVs.cs, 10) }, at15: { gold: at(meVs.gold, 15), cs: at(meVs.cs, 15) }, tips,
+      best: { damage: ps.slice().sort((a, b) => (b.totalDamageDealtToChampions || 0) - (a.totalDamageDealtToChampions || 0))[0], vision: ps.slice().sort((a, b) => b.visionScore - a.visionScore)[0], kda: ps.slice().sort((a, b) => b.kda - a.kda)[0] } };
+  }
+
+  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, ROLES5, nextItem, postgame };
 })();
 if (typeof module !== 'undefined') module.exports = Builds;

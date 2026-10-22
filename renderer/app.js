@@ -19,7 +19,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true }, tipN: 0,
+    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0,
   });
   function load() {
     try {
@@ -39,7 +39,7 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* stockage plein */ } };
 
   /* ---------- État en direct (non enregistré) ---------- */
-  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {} };
+  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {}, pinfo: {}, pinfoPending: new Set(), post: null, liveMemo: {} };
   const cache = new Map(); /* résultats de statistiques (requêtes vers la base locale) */
   function cached(key, fn) {
     if (cache.has(key)) { const v = cache.get(key); return v === PENDING ? undefined : v; }
@@ -183,7 +183,7 @@
       <div class="stat-row" style="margin-top:10px">${rank(solo, 'Classée solo/duo')}${rank(flex, 'Classée flexible')}</div></div>`;
     h += `<div class="cols"><div class="card"><h2>🏅 Mes meilleures maîtrises</h2><div class="grid-ic">${(P.mastery || []).map((m) => { const c = byKey(m.championId); return c ? tile(c, `<div class="price">Niv. ${m.championLevel} · ${nf(Math.round(m.championPoints / 1000))}k</div>`) : ''; }).join('')}</div></div>`;
     h += `<div class="card"><h2>🕹️ Mes dernières parties</h2>${(P.matches || []).length ? P.matches.map((m) => { const c = byKey(m.champ);
-      return `<div class="match ${m.remake ? '' : m.win ? 'win' : 'loss'}">${cIcon(c)}<div class="grow"><b>${m.remake ? 'Annulée' : m.win ? 'Victoire' : 'Défaite'}</b> <span class="muted small">${esc(QUEUE[m.queue] || 'Mode ' + m.queue)} · ${fmt(m.duration)}${MATCH_ROLE[m.role] ? ' · ' + ROLE_NAME[MATCH_ROLE[m.role]] : ''}</span>
+      return `<div class="match ${m.remake ? '' : m.win ? 'win' : 'loss'}" data-act="openMatch" data-val="${esc(m.id)}" title="Voir toutes les statistiques de la partie">${cIcon(c)}<div class="grow"><b>${m.remake ? 'Annulée' : m.win ? 'Victoire' : 'Défaite'}</b> <span class="muted small">${esc(QUEUE[m.queue] || 'Mode ' + m.queue)} · ${fmt(m.duration)}${MATCH_ROLE[m.role] ? ' · ' + ROLE_NAME[MATCH_ROLE[m.role]] : ''}</span>
         <div class="small">${m.k} / ${m.d} / ${m.a} · ${m.cs} CS (${(m.cs / Math.max(1, m.duration / 60)).toFixed(1).replace('.', ',')}/min) · vision ${m.vision}</div></div><div class="items">${m.items.map((i) => (i ? itIcon(i) : '<span class="ico sm ph"></span>')).join('')}</div></div>`; }).join('') : '<p class="muted">Aucune partie récente.</p>'}</div></div>`;
     return h;
   }
@@ -425,6 +425,7 @@
       allies = cs.myTeam.map((p) => Object.assign({}, p));
       enemyKeys = cs.theirTeam.map((p) => p.champ).filter(Boolean);
       cs.theirTeam.forEach((p) => { if (p.champ && p.role) enemyFixed[p.champ] = p.role; });
+      wantInfo(cs.myTeam.map((p) => p.puuid).concat(cs.theirTeam.map((p) => p.puuid)));
       bans = cs.bans;
     } else {
       const meC = D.champs && D.champs[S.select.manualMe];
@@ -444,7 +445,8 @@
     const roleSrc = S.select.role ? 'manual' : me && me.role ? 'client' : myRole ? 'guess' : '';
     if (!live && !myRole) myRole = 'mid';
     allies.forEach((p) => { p.r = p.role || (p.champ ? allyRoles[p.champ] : '') || ''; });
-    return { live, cs, me, myRole, roleSrc, allies, enemies: enemyKeys, enemyRoles, enemyFixed, bans, myChamp, locked: !!(me && me.locked) };
+    const enemyPuuid = {}; if (cs) cs.theirTeam.forEach((p) => { if (p.champ) enemyPuuid[p.champ] = p.puuid || ''; });
+    return { live, cs, me, myRole, roleSrc, allies, enemies: enemyKeys, enemyRoles, enemyFixed, enemyPuuid, bans, myChamp, locked: !!(me && me.locked) };
   }
   /* Adversaire de voie : celui que tu as désigné, sinon l'ennemi dont le rôle estimé est le tien */
   function laneOpponent(sd) {
@@ -463,7 +465,7 @@
     eLeft.forEach((k) => { const row = rows.find((x) => !x.enemy); if (row) row.enemy = k; });
     const teamAd = (keys) => { const cs2 = keys.map(byKey).filter(Boolean); return cs2.length ? cs2.reduce((s2, c) => s2 + champAd(c), 0) / cs2.length : null; };
     const aAd = teamAd(sd.allies.map((p) => p.champ).filter(Boolean)), eAd = teamAd(sd.enemies);
-    const cell = (c, cls, extra, attrs) => `<div class="vs-cell ${cls}" ${attrs || ''}>${cIcon(c, 'ico')}<div class="grow"><div class="vs-name"><b class="ell">${c ? esc(c.name) : '…'}</b>${extra || ''}</div>${c ? dmgBar(champAd(c)) : ''}</div></div>`;
+    const cell = (c, cls, extra, attrs, rank) => `<div class="vs-cell ${cls}" ${attrs || ''}>${cIcon(c, 'ico')}<div class="grow"><div class="vs-name"><b class="ell">${c ? esc(c.name) : '…'}</b>${extra || ''}</div>${rank ? `<div class="vs-rank">${rank}</div>` : ''}${c ? dmgBar(champAd(c)) : ''}</div></div>`;
     let h = `<div class="card vs"><div class="vs-row vs-head"><div class="vs-cell ally"><div class="grow"><b>🟦 Mon équipe</b>${aAd != null ? dmgBar(aAd) : ''}</div></div><div class="vs-role"></div><div class="vs-cell enemy"><div class="grow"><b>🟥 Adversaires</b>${eAd != null ? dmgBar(eAd) : ''}</div></div></div>`;
     h += rows.map((x) => {
       const a = x.ally, ac = a ? byKey(a.champ) : null, ec = x.enemy ? byKey(x.enemy) : null;
@@ -471,7 +473,9 @@
       const aTag = a ? `${a.isMe ? '<span class="tag gold">Toi</span>' : ''}${a.intent ? '<span class="muted small">intention</span>' : ''}${a.champ && !a.locked && !a.intent && sd.live ? '<span class="muted small">survol</span>' : ''}` : '';
       const guessed = ec && !sd.enemyFixed[x.enemy];
       const eTag = `${ec && +ec.key === opp ? '<span class="tag gold">adversaire</span>' : ''}${guessed ? '<span class="muted small" title="Rôle estimé d\'après les statistiques et la classe du champion">estimé</span>' : ''}`;
-      return `<div class="vs-row ${mine ? 'me' : ''}">${cell(ac, 'ally', aTag)}<div class="vs-role" title="${ROLE_NAME[x.r]}">${ROLE_IC[x.r]}<span>${ROLE_NAME[x.r]}</span></div>${cell(ec, 'enemy' + (ec && +ec.key === opp ? ' opp' : ''), eTag, ec ? `data-act="selOpp" data-val="${ec.key}" title="Désigner comme adversaire de voie"` : '')}</div>`;
+      const aRank = a && sd.live ? `${a.name ? `<span class="muted ell">${esc(a.name)}</span>` : ''}${rankTag(a.puuid)}` : '';
+      const eRank = ec && sd.live ? rankTag(sd.enemyPuuid[x.enemy], !sd.enemyPuuid[x.enemy]) : '';
+      return `<div class="vs-row ${mine ? 'me' : ''}">${cell(ac, 'ally', aTag, '', aRank)}<div class="vs-role" title="${ROLE_NAME[x.r]}">${ROLE_IC[x.r]}<span>${ROLE_NAME[x.r]}</span></div>${cell(ec, 'enemy' + (ec && +ec.key === opp ? ' opp' : ''), eTag, ec ? `data-act="selOpp" data-val="${ec.key}" title="Désigner comme adversaire de voie"` : '', eRank)}</div>`;
     }).join('');
     if (sd.bans.length) h += `<div class="row" style="margin-top:8px"><span class="muted small">🚫 Bannis :</span>${sd.bans.map((k) => cIcon(byKey(k), 'ico sm ban')).join('')}</div>`;
     return h + '</div>';
@@ -507,6 +511,7 @@
     const sd = selectionData();
     const role = sd.myRole;
     const opp = laneOpponent(sd);
+    if (sd.live && sd.myChamp) S.lastPick = { champ: sd.myChamp, role, opp, enemies: sd.enemies };
     let h = '';
     if (sd.live) {
       const t = sd.cs.timer;
@@ -567,6 +572,7 @@
 
     /* Runes */
     const ctx = (vs, n) => (oc ? (vs ? `<span class="tag gold">contre ${esc(oc.name)} · ${n} parties</span>` : `<span class="tag">général · seulement ${A.vsGames} partie${A.vsGames > 1 ? 's' : ''} contre ${esc(oc.name)}</span>`) : '<span class="tag">général</span>');
+    if (A.adapted) h = h.replace('</div></div>', '</div></div>') + `<p class="tip adapt">🎯 Runes et objets adaptés ${oc ? `au match-up contre <b>${esc(oc.name)}</b>` : ''}${oc && A.team ? ' et ' : ''}${A.team ? 'à la composition de l\'équipe adverse' : ''}.</p>`;
     h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes et sorts</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
     const canApply = !!(NB && sd.live);
     R.selPages = A.runes.slice(0, 3).map((r) => runePayload(r, c, role));
@@ -631,7 +637,7 @@
     const sig = enemies.map((p) => p.champ).join(',');
     if (g.sig !== sig || (g.lastTime && L.time + 5 < g.lastTime)) {
       /* Nouvelle partie détectée */
-      S.game = newGame(); S.game.sig = sig;
+      S.game = newGame(); S.game.sig = sig; Voice.said.clear(); R.prevObj = {}; R.pinfo = {};
       S.game.enemies = enemies.slice(0, 5).map((p) => ({ champ: D.champs && D.champs[p.champ] ? p.champ : '', s: [p.spells[0] || '', p.spells[1] || ''], until: [0, 0], haste: 0 }));
       while (S.game.enemies.length < 5) S.game.enemies.push(newEnemy());
     }
@@ -644,6 +650,10 @@
       G.seenEv.push(e.id);
       const team = nameTeam[e.killer] || nameTeam[String(e.killer).split('#')[0]];
       const who = !team ? '' : (L.me && team === L.me.team ? 'Nous' : 'Eux');
+      let side = who === 'Nous' ? 'us' : who === 'Eux' ? 'them' : '';
+      if (e.name === 'InhibKilled') { const m = String(e.inhib).match(/_T([12])_/); if (m) side = ((m[1] === '1' ? 'ORDER' : 'CHAOS') === (L.me ? L.me.team : 'ORDER')) ? 'them' : 'us'; }
+      if (e.name === 'Ace') side = e.acingTeam ? (e.acingTeam === (L.me && L.me.team === 'ORDER' ? 'ORDER' : 'CHAOS') ? 'us' : 'them') : side;
+      announceEvent(e, L, side);
       const ago = Math.max(0, L.time - e.t);
       const startT = (id) => { G.timers[id] = now() + (RESPAWN[id] - ago) * 1000; };
       if (e.name === 'DragonKill') { if (/elder/i.test(e.dragon)) { startT('elder'); logEv(e.t, `🔥 Dragon ancestral pris par ${who || '?'}`); } else { startT('drake'); logEv(e.t, `🐉 Dragon ${dragonName(e.dragon)} pris par ${who || '?'}${e.stolen ? ' (volé !)' : ''}`); } }
@@ -656,10 +666,11 @@
       else if (e.name === 'Ace') logEv(e.t, '💀 Équipe entière éliminée');
     }
     if (G.seenEv.length > 400) G.seenEv = G.seenEv.slice(-300);
-    /* Alarme quand un objectif apparaît */
+    /* Annonces vocales (objectifs, mort, or pour le prochain objet) */
     try {
+      announce(L, G);
       const O = Builds.objectives(L, L.me ? L.me.team : 'ORDER');
-      for (const r of O.rows) { const prev = R.prevObj[r.id]; if (prev === 'spawn' && r.state === 'up') { alarm(); toast(`🔔 ${r.name} : disponible !`); } R.prevObj[r.id] = r.state; }
+      for (const r of O.rows) R.prevObj[r.id] = r.state;
     } catch (e) { /* ignoré */ }
     renderTop();
     if (S.mode === 'game' && !busy()) render(true); else save();
@@ -668,6 +679,122 @@
   function logEv(t, txt) { S.game.log.unshift({ t, txt }); S.game.log = S.game.log.slice(0, 30); }
 
   function teamValue(players) { return players.reduce((sum, p) => sum + p.items.reduce((s, i) => s + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0), 0); }
+  /* ---------- Rangs et niveaux des joueurs ---------- */
+  function wantInfo(puuids) {
+    if (!NB) return;
+    const miss = (puuids || []).filter((id) => id && !(id in R.pinfo) && !R.pinfoPending.has(id));
+    if (!miss.length) return;
+    miss.forEach((id) => R.pinfoPending.add(id));
+    NB.players.info(miss).then((res) => { miss.forEach((id) => { R.pinfo[id] = (res || {})[id] || null; }); })
+      .catch(() => { miss.forEach((id) => { R.pinfo[id] = null; }); })
+      .finally(() => { miss.forEach((id) => R.pinfoPending.delete(id)); soon(); });
+  }
+  const APEX = ['MASTER', 'GRANDMASTER', 'CHALLENGER'];
+  function rankTag(puuid, hidden) {
+    if (hidden) return '<span class="rk unr" title="Les adversaires sont masqués pendant la sélection classée">masqué</span>';
+    if (!puuid) return '';
+    const i = R.pinfo[puuid];
+    if (i === undefined) return '<span class="rk unr">…</span>';
+    if (!i) return '';
+    const q = i.solo || i.flex;
+    const r = q ? `<span class="rk t-${q.tier.toLowerCase()}" title="${q === i.solo ? 'Classée solo/duo' : 'Classée flexible'} · ${q.lp} LP · ${q.wins} V / ${q.losses} D">${TIER[q.tier] || q.tier}${q.division ? ' ' + q.division : ''}${APEX.includes(q.tier) ? ' ' + q.lp + ' LP' : ''}</span>` : '<span class="rk unr">Non classé</span>';
+    return r + (i.level ? `<span class="slv">niv. ${i.level}</span>` : '');
+  }
+
+  /* ---------- Annonces vocales (synthèse vocale du système, en français) ---------- */
+  const Voice = { said: new Set() };
+  function frVoices() { try { return window.speechSynthesis.getVoices().filter((v) => /^fr/i.test(v.lang)); } catch (e) { return []; } }
+  function speak(text, key) {
+    if (!S.opt.voice || !window.speechSynthesis) return;
+    if (key) { if (Voice.said.has(key)) return; Voice.said.add(key); }
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'fr-FR';
+      const all = window.speechSynthesis.getVoices();
+      const v = all.find((x) => x.name === S.opt.voiceName) || frVoices()[0];
+      if (v) u.voice = v;
+      u.rate = S.opt.voiceRate || 1.05; u.volume = (S.opt.voiceVol == null ? 90 : S.opt.voiceVol) / 100;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* synthèse vocale indisponible */ }
+  }
+  if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => { if (S.mode === 'settings' && !busy()) render(true); };
+  const OBJ_SAY = { drake: ['le dragon', 'Le dragon'], grubs: ['les larves du Néant', 'Les larves du Néant'], herald: ['le Héraut', 'Le Héraut'], baron: ['le Nashor', 'Le Nashor'], elder: ['le dragon ancestral', 'Le dragon ancestral'] };
+  /* Ce qui se passe en jeu → phrases courtes et précises */
+  function announce(L, G) {
+    if (!S.opt.voice) return;
+    const myTeam = L.me ? L.me.team : 'ORDER';
+    const O = Builds.objectives(L, myTeam);
+    for (const r of O.rows) {
+      const nm = OBJ_SAY[r.id];
+      if (r.state === 'spawn' && r.in <= 31 && r.in > 20) speak(`${nm[1]} dans 30 secondes.`, `warn-${r.id}-${Math.round(L.time + r.in)}`);
+      if (R.prevObj[r.id] === 'spawn' && r.state === 'up') speak(`${nm[1]} ${r.id === 'grubs' ? 'sont disponibles' : 'est disponible'}.`, `up-${r.id}-${Math.round(L.time)}`);
+    }
+    /* Mort : temps de réapparition */
+    const meP = L.me ? L.players.find((p) => p.name === L.me.name) : null;
+    if (meP && meP.dead && meP.respawn > 8) speak(`Tu es mort. Réapparition dans ${Math.round(meP.respawn)} secondes. Regarde la carte en attendant.`, `death-${meP.d}`);
+    /* Or suffisant pour le prochain objet du build */
+    const lb = liveBuild(L);
+    if (lb && lb.next && L.me && L.me.gold >= lb.next.cost && !(meP && meP.dead)) speak(`Tu as assez d'or pour ${lb.next.name}. Rentre à la base si tu peux.`, `gold-${lb.next.item}`);
+  }
+  function announceEvent(e, L, side) {
+    if (!S.opt.voice || L.time - e.t > 15) return;
+    const us = side === 'us';
+    const key = 'ev-' + e.id;
+    if (e.name === 'DragonKill') {
+      if (/elder/i.test(e.dragon)) speak(us ? 'Nous avons pris le dragon ancestral !' : 'L\'ennemi a pris le dragon ancestral. Évitez les combats.', key);
+      else speak(`${us ? 'Nous avons pris' : 'L\'ennemi a pris'} le dragon ${dragonName(e.dragon)}${e.stolen ? ', volé' : ''}.`, key);
+    } else if (e.name === 'BaronKill') speak(us ? 'Nous avons le Nashor. Poussez les voies !' : 'L\'ennemi a le Nashor. Défendez vos tours.', key);
+    else if (e.name === 'HeraldKill') speak(us ? 'Nous avons pris le Héraut.' : 'L\'ennemi a pris le Héraut.', key);
+    else if (e.name === 'HordeKill') speak(us ? 'Nous prenons les larves du Néant.' : 'L\'ennemi prend les larves du Néant.', 'horde-' + Math.floor(e.t / 30));
+    else if (e.name === 'InhibKilled') speak(us ? 'Inhibiteur ennemi détruit !' : 'Notre inhibiteur est tombé. Attention aux super-sbires.', key);
+    else if (e.name === 'Ace') speak(us ? 'Toute l\'équipe adverse est morte. Prenez un objectif !' : 'Toute notre équipe est morte. Défendez la base.', key);
+    else if (e.name === 'FirstBlood') speak('Premier sang.', key);
+  }
+
+  /* ---------- Mon build pendant la partie ---------- */
+  const LIVE_POS = { top: 'top', jungle: 'jungle', middle: 'mid', bottom: 'adc', utility: 'support' };
+  function liveBuild(L) {
+    if (!NB || !L || !L.me || !D.champs) return null;
+    const meP = L.players.find((p) => p.name === L.me.name);
+    const c = D.champs[L.me.champ];
+    if (!c || !meP) return null;
+    const lp = S.lastPick && S.lastPick.champ === +c.key ? S.lastPick : null;
+    const role = LIVE_POS[meP.position] || (lp && lp.role) || '';
+    if (!role) return { c, role: '' };
+    const enemies = L.players.filter((p) => p.team !== L.me.team);
+    const oppP = enemies.find((p) => LIVE_POS[p.position] === role);
+    const opp = oppP && D.champs[oppP.champ] ? +D.champs[oppP.champ].key : (lp && lp.opp) || 0;
+    const ekeys = enemies.map((p) => (D.champs[p.champ] ? +D.champs[p.champ].key : 0)).filter(Boolean);
+    const rows = cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30));
+    if (!rows) return { c, role, opp, loading: rows === undefined };
+    const mk = `${c.key}:${role}:${opp}:${ekeys.join(',')}:${rows.length}`;
+    if (R.liveMemo.k !== mk) R.liveMemo = { k: mk, A: Builds.analyze(rows, D, { opp, enemies: ekeys }) };
+    const A = R.liveMemo.A;
+    const owned = meP.items.map((i) => i.id);
+    return { c, role, opp, A, owned, next: Builds.nextItem(A, owned, D) };
+  }
+  function buildCard(L) {
+    const b = liveBuild(L);
+    if (!b) return '';
+    const oc = b.opp ? byKey(b.opp) : null;
+    let h = `<div class="card mybuild"><div class="row sp nw"><h2 style="margin:0">🛒 Mon build</h2><span class="small muted ell">${esc(b.c.name)}${b.role ? ' · ' + ROLE_NAME[b.role] : ''}${oc ? ' contre ' + esc(oc.name) : ''}</span></div>`;
+    if (!b.role) return h + '<p class="muted small">Rôle inconnu pour cette partie.</p></div>';
+    if (b.loading) return h + '<div class="loader small">Calcul…</div></div>';
+    if (!b.A || !b.A.games) return h + '<p class="muted small">Pas encore de parties analysées pour ce champion dans ce rôle (collecteur).</p></div>';
+    const A = b.A, own = new Set(b.owned.map(Number));
+    const ic = (id, big) => `<span class="bi ${own.has(+id) ? 'own' : ''}">${itIcon(id, big ? 'ico' : 'ico sm')}${own.has(+id) ? '<i>✓</i>' : ''}</span>`;
+    if (b.next) {
+      const miss = b.next.cost - (L.me.gold || 0);
+      h += `<div class="next">${itIcon(b.next.item, 'ico lg')}<div class="grow"><span class="small muted">Prochain objet</span><b>${esc(b.next.name)}</b><span class="small ${miss <= 0 ? 'pos' : 'muted'}">${miss <= 0 ? '✅ Tu as assez d\'or' : `il manque ${nf(miss)} po`}</span></div></div>`;
+    }
+    if (A.core && A.core[0]) h += `<div class="brow"><span class="small muted">Début</span>${ic(A.core[0].items[0], true)}<span class="arrow">→</span>${ic(A.core[0].items[1], true)}${A.boots && A.boots[0] ? `<span class="rsep"></span>${ic(A.boots[0].item, true)}` : ''}</div>`;
+    const sit = (A.situational || []).filter((x) => x.items.length);
+    if (sit.length) h += sit.map((x) => `<div class="brow"><span class="small muted ell" title="${esc(x.why)}">${esc(x.why.split('(')[0].trim())}</span>${x.items.map((o) => ic(o.item)).join('')}</div>`).join('');
+    else if (A.later && A.later.length) h += `<div class="brow"><span class="small muted">Ensuite</span>${A.later.slice(0, 4).map((x) => ic(x.item)).join('')}</div>`;
+    if (A.skills) h += `<div class="brow"><span class="small muted">Sorts</span><span class="skillord">${esc(A.skills.order)}</span></div>`;
+    return h + '</div>';
+  }
+
   /* ---------- Profil de dégâts AD / AP ----------
      Estimé d'après les objets (valeur en or des statistiques offensives), mélangé au profil du champion
      tant que le joueur a peu d'objets. */
@@ -695,13 +822,16 @@
     const val = teams.map(teamValue);
     const kills = teams.map((t) => t.reduce((s, p) => s + p.k, 0));
     const diff = val[0] - val[1];
+    const gp = (R.lcu.game && R.lcu.game.players) || [];
+    const puuidOf = (p) => { const c = D.champs[p.champ]; const g = c && gp.find((x) => x.team === p.team && +x.champ === +c.key); return g ? g.puuid : ''; };
+    wantInfo(L.players.map(puuidOf));
     const row = (p) => {
       const c = D.champs[p.champ]; const pr = dmgProfile(p);
       const items = p.items.filter((i) => i.slot < 6).sort((a, b) => a.slot - b.slot);
       const trinket = p.items.find((i) => i.slot === 6);
       return `<div class="prow ${p.dead ? 'dead' : ''} ${L.me && p.name === L.me.name ? 'me' : ''}">
         <div class="pic">${cIcon(c, 'ico')}<span class="lvl">${p.level}</span>${p.dead ? `<span class="resp">${Math.ceil(p.respawn)}</span>` : ''}</div>
-        <div class="pname"><b>${esc(c ? c.name : p.champName)}</b><span class="muted small">${esc(p.gameName)}</span></div>
+        <div class="pname"><b>${esc(c ? c.name : p.champName)}</b><span class="small pmeta"><span class="muted">${esc(p.gameName)}</span>${rankTag(puuidOf(p))}</span></div>
         <div class="kda"><b>${p.k}/<span class="neg">${p.d}</span>/${p.a}</b><span class="muted small">${p.cs} CS</span></div>
         <div class="build">${[0, 1, 2, 3, 4, 5].map((k) => (items[k] ? itIcon(items[k].id) : '<span class="ico sm ph"></span>')).join('')}${trinket ? itIcon(trinket.id, 'ico sm trk') : ''}</div>
         ${dmgBar(pr.ad)}</div>`;
@@ -786,20 +916,106 @@
   function viewGame() {
     const nd = needData();
     const L = R.live;
+    if (!L && R.post && R.post.status && !nd) return viewPost();
     const showMap = S.opt.miniEmbed && NB;
     const mapCard = showMap ? `<div class="gm-map card"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
     if (nd) return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${nd}</div></div>`;
-    const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted idle">${NB ? 'Aucune partie en cours. Dès que la partie démarre, Noob LOL bascule ici tout seul et affiche les 10 joueurs avec leurs kills, morts, assistances, objets et leur profil AD / AP.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
+    const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted idle">${NB ? 'Aucune partie en cours. Dès que la partie démarre, Noob LOL bascule ici tout seul et affiche les 10 joueurs avec leur rang, leur niveau, leurs kills, morts, assistances, objets et leur profil AD / AP. À la fin de la partie, toutes les statistiques s\'affichent ici.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
     let side = '';
     if (L) {
       const me = L.me && L.me.stats ? L.me : null; const c = me ? D.champs[me.champ] : null;
       side += `<div class="card gm-strip"><span class="clock">${fmt(L.time)}</span>${me ? `<div class="gm-me">${cIcon(c, 'ico')}<div class="grow"><b>${esc(c ? c.name : '')} · niv. ${me.level}</b><span class="muted small">❤️ ${me.stats.hp}/${me.stats.maxHp} · ⚔️ ${me.stats.ad} · 🔮 ${me.stats.ap} · 🛡️ ${me.stats.armor}/${me.stats.mr} · 👟 ${me.stats.ms}</span></div><span class="gold-big">${nf(me.gold)} 🪙</span></div>` : ''}</div>`;
     }
     side += players;
-    const journal = S.game.log.length && L ? `<div class="card"><h2>📜 Journal</h2><div class="log">${S.game.log.slice(0, 14).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>` : '';
-    side += journal ? `<div class="gm-tools"><div>${objectivesCard(L)}</div><div>${journal}</div></div>` : objectivesCard(L);
+    const journal = S.game.log.length && L ? `<div class="card journal"><h2>📜 Journal</h2><div class="log">${S.game.log.slice(0, 14).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>` : '';
+    const build = L ? buildCard(L) : '';
+    side += (build || journal) ? `<div class="gm-tools"><div>${objectivesCard(L)}</div><div>${build}${journal}</div></div>` : objectivesCard(L);
     return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${side}</div></div>`;
   }
+
+  /* =====================================================================
+     FIN DE PARTIE : toutes les statistiques, en onglets
+     ===================================================================== */
+  const POST_TABS = [['resume', '🏁', 'Résumé'], ['moi', '🙋', 'Ma partie'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds']];
+  const k1 = (n) => (n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(n || 0)));
+  function curveSvg(vals, { title = '', unit = 'po' } = {}) {
+    if (!vals || vals.length < 2) return '<p class="muted small">Courbe indisponible.</p>';
+    const W = 640, H = 170, P = 26;
+    const max = Math.max(1000, ...vals.map((v) => Math.abs(v)));
+    const x = (i) => P + (i * (W - 2 * P)) / (vals.length - 1), y = (v) => H / 2 - (v / max) * (H / 2 - 14);
+    const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const ticks = []; for (let m = 0; m < vals.length; m += 5) ticks.push(`<text x="${x(m)}" y="${H - 2}" class="tk">${m}'</text><line x1="${x(m)}" x2="${x(m)}" y1="10" y2="${H - 14}" class="gl"/>`);
+    return `<figure class="curve"><figcaption class="small muted">${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(title)}">
+      <defs><clipPath id="cup"><rect x="0" y="0" width="${W}" height="${H / 2}"/></clipPath><clipPath id="cdn"><rect x="0" y="${H / 2}" width="${W}" height="${H / 2}"/></clipPath></defs>
+      ${ticks.join('')}<line x1="${P}" x2="${W - P}" y1="${H / 2}" y2="${H / 2}" class="zero"/>
+      <polygon points="${x(0)},${H / 2} ${pts} ${x(vals.length - 1)},${H / 2}" class="aup" clip-path="url(#cup)"/><polygon points="${x(0)},${H / 2} ${pts} ${x(vals.length - 1)},${H / 2}" class="adn" clip-path="url(#cdn)"/>
+      <polyline points="${pts}" class="ln"/><text x="${P}" y="12" class="tk">+${k1(max)} ${unit}</text><text x="${P}" y="${H - 16}" class="tk">−${k1(max)} ${unit}</text></svg></figure>`;
+  }
+  const bar = (v, max, cls) => `<div class="hbar"><i class="${cls || ''}" style="width:${max ? Math.max(1, (100 * v) / max) : 0}%"></i></div>`;
+  function viewPost() {
+    const P = R.post;
+    const head = (sub) => `<div class="row sp"><h1>📊 ${P.old ? 'Partie' : 'Dernière partie'}</h1>${sub || ''}</div>`;
+    if (P.status !== 'ready' || !P.match) {
+      let h = head(P.status === 'waiting' ? '<span class="pill on">⏳ Riot publie les statistiques complètes (1 à 3 min)…</span>' : '');
+      if (P.status === 'live-only') h += `<div class="card"><p class="muted">${P.reason === 'nokey' ? 'Ajoute ta clé Riot (Réglages) pour obtenir toutes les statistiques de fin de partie.' : esc(P.reason || 'Statistiques complètes indisponibles pour cette partie.')} Voici l'état final de la partie :</p></div>`;
+      if (P.live) h += playersPanel(P.live);
+      else h += '<div class="loader">Récupération…</div>';
+      return h;
+    }
+    const puuid = P.puuid || (R.lcu.summoner && R.lcu.summoner.puuid) || '';
+    const G = Builds.postgame(P.match, P.timeline, puuid);
+    wantInfo(G.teams.flatMap((t) => t.players.map((p) => p.puuid)));
+    const me = G.me, us = G.teams[0], them = G.teams[1];
+    const tab = POST_TABS.some((t) => t[0] === S.postTab) ? S.postTab : 'resume';
+    const meC = me ? byKey(me.championId) : null;
+    let h = `<div class="post-hero ${us.win ? 'win' : 'loss'}" style="${meC ? `background-image:url('${Dd.img.splash(meC.id)}')` : ''}"><div>
+      <h1>${us.win ? '🏆 Victoire' : '💀 Défaite'}</h1><p>${esc(QUEUE[G.queue] || 'Partie')} · ${fmt(G.dur)}${me ? ` · ${esc(meC ? meC.name : me.championName)} ${me.kills}/${me.deaths}/${me.assists}` : ''}</p>
+      <div class="post-score"><b class="us">${us.kills}</b><span>kills</span><b class="them">${them.kills}</b></div></div></div>`;
+    h += `<nav class="ptabs">${POST_TABS.map(([id, ic, lb]) => `<button class="${tab === id ? 'on' : ''}" data-act="postTab" data-val="${id}">${ic} ${lb}</button>`).join('')}</nav>`;
+    const name = (p) => { const c = byKey(p.championId); return `<div class="pp">${cIcon(c, 'ico sm')}<div class="grow"><b class="ell">${esc(c ? c.name : p.championName)}</b><span class="small pmeta"><span class="muted ell">${esc(p.name)}</span>${rankTag(p.puuid)}</span></div></div>`; };
+    const teamBlock = (t, i, cols, cells) => `<div class="pteam ${i ? 'them' : 'us'}"><div class="pth"><b>${i ? '🟥 Adversaires' : '🟦 Mon équipe'}</b> <span class="tag ${t.win ? 'gold' : ''}">${t.win ? 'Victoire' : 'Défaite'}</span></div>
+      <div class="ptable" style="--cols:${cols}">${t.players.map((p) => `<div class="prow2 ${p.puuid === puuid ? 'me' : ''}">${name(p)}${cells(p, t)}</div>`).join('')}</div></div>`;
+    if (tab === 'resume') {
+      const obj = (k) => [us.objectives[k] ? us.objectives[k].kills : 0, them.objectives[k] ? them.objectives[k].kills : 0];
+      const OBJS = [['🐉', 'Dragons', 'dragon'], ['🪲', 'Larves', 'horde'], ['🦀', 'Héraut', 'riftHerald'], ['👾', 'Nashor', 'baron'], ['🏰', 'Tours', 'tower'], ['💎', 'Inhibiteurs', 'inhibitor']];
+      h += `<div class="cols"><div class="card"><h2>Équipes</h2><div class="vsstats">
+        ${[['Kills', us.kills, them.kills], ['Or', k1(us.gold), k1(them.gold)], ['Dégâts aux champions', k1(us.damage), k1(them.damage)], ['Vision', us.vision, them.vision]].map(([l, a, b]) => `<div><b class="us">${a}</b><span>${l}</span><b class="them">${b}</b></div>`).join('')}
+        ${OBJS.map(([ic, l, k]) => { const [a, b] = obj(k); return `<div><b class="us">${a}</b><span>${ic} ${l}</span><b class="them">${b}</b></div>`; }).join('')}</div></div>
+        <div class="card"><h2>⭐ Les meilleurs</h2>${[['Plus de dégâts', G.best.damage, (p) => k1(p.totalDamageDealtToChampions)], ['Meilleur KDA', G.best.kda, (p) => `${p.kills}/${p.deaths}/${p.assists}`], ['Meilleure vision', G.best.vision, (p) => p.visionScore]].map(([l, p, f]) => `<div class="best">${name(p)}<span class="small muted">${l}</span><b>${f(p)}</b></div>`).join('')}</div></div>`;
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '64px 52px 58px 1fr', (p) => `<b>${p.kills}/<span class="neg">${p.deaths}</span>/${p.assists}</b><span>${p.cs}</span><span>${k1(p.goldEarned)}</span><div class="items">${p.items.map((x) => itIcon(x)).join('')}</div>`)}</div>`).join('')}</div>`;
+    } else if (tab === 'moi') {
+      if (!me) h += '<div class="card"><p class="muted">Joueur introuvable dans cette partie.</p></div>';
+      else {
+        const oc = G.opp ? byKey(G.opp.championId) : null;
+        const kp = (v) => `${Math.round(v * 100)} %`;
+        const sg = (v) => (v == null ? '—' : `<b class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${nf(v)}</b>`);
+        h += `<div class="kpis big">${[['KDA', me.kda.toFixed(2).replace('.', ',')], ['Participation', kp(me.kp)], ['Sbires/min', me.csm.toFixed(1).replace('.', ',')], ['Or/min', Math.round(me.gpm)], ['Part des dégâts', kp(me.dmgShare)], ['Vision', me.visionScore]].map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+        h += '<div class="cols"><div>';
+        h += `<div class="card"><h2>🎯 Contre ${oc ? esc(oc.name) : 'mon adversaire'}</h2>${G.opp ? `<div class="vsstats"><div><b class="us">${sg(G.at10.gold)}</b><span>Or à 10 min</span><b class="them"></b></div><div><b class="us">${sg(G.at10.cs)}</b><span>Sbires à 10 min</span><b></b></div><div><b class="us">${sg(G.at15.gold)}</b><span>Or à 15 min</span><b></b></div><div><b class="us">${sg(G.at15.cs)}</b><span>Sbires à 15 min</span><b></b></div></div>${curveSvg(G.meVs.gold, { title: 'Différence d\'or avec ton adversaire de voie, minute par minute' })}` : '<p class="muted">Pas d\'adversaire de voie identifié.</p>'}</div>`;
+        h += '</div><div>';
+        h += `<div class="card gold"><h2>💡 Pour progresser</h2><ul class="tips">${G.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
+        h += `<div class="card"><h2>📋 Détails</h2><div class="kv">${[['Dégâts aux champions', nf(me.totalDamageDealtToChampions)], ['Dégâts subis', nf(me.totalDamageTaken)], ['Dégâts atténués', nf(me.damageSelfMitigated)], ['Dégâts aux objectifs', nf(me.damageDealtToObjectives)], ['Soins', nf(me.totalHeal)], ['Boucliers sur alliés', nf(me.totalDamageShieldedOnTeammates)], ['Contrôle infligé (s)', nf(me.timeCCingOthers)], ['Plus grosse série', me.largestKillingSpree || 0], ['Multi-kill max', me.largestMultiKill || 0], ['Temps mort', fmt(me.totalTimeSpentDead || 0)], ['Balises posées', me.wardsPlaced || 0], ['Balises détruites', me.wardsKilled || 0]].map(([l, v]) => `<div><span>${l}</span><b>${v}</b></div>`).join('')}</div></div>`;
+        h += '</div></div>';
+      }
+    } else if (tab === 'degats') {
+      const mx = Math.max(...G.teams.flatMap((t) => t.players.map((p) => Math.max(p.totalDamageDealtToChampions || 0, p.totalDamageTaken || 0))));
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '1fr 1fr', (p) => `<div class="dcell"><span class="small">Infligés <b>${k1(p.totalDamageDealtToChampions)}</b> (${Math.round(p.dmgShare * 100)} %)</span><div class="hbar stack"><i class="phy" style="width:${(100 * (p.physicalDamageDealtToChampions || 0)) / mx}%"></i><i class="mag" style="width:${(100 * (p.magicDamageDealtToChampions || 0)) / mx}%"></i><i class="tru" style="width:${(100 * (p.trueDamageDealtToChampions || 0)) / mx}%"></i></div></div><div class="dcell"><span class="small">Subis <b>${k1(p.totalDamageTaken)}</b> · atténués ${k1(p.damageSelfMitigated)}</span>${bar(p.totalDamageTaken || 0, mx, 'tak')}</div>`)}</div>`).join('')}</div>
+        <p class="muted small legend"><i class="phy"></i> physiques <i class="mag"></i> magiques <i class="tru"></i> bruts</p>`;
+    } else if (tab === 'or') {
+      h += `<div class="card">${curveSvg(G.curve, { title: 'Différence d\'or entre les équipes (au-dessus de la ligne : mon équipe devant)' })}</div>`;
+      const mx = Math.max(...G.teams.flatMap((t) => t.players.map((p) => p.goldEarned || 0)));
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '1fr 70px 70px', (p) => `<div class="dcell"><span class="small"><b>${nf(p.goldEarned)}</b> po · ${Math.round(p.gpm)}/min</span>${bar(p.goldEarned || 0, mx, 'gld')}</div><span><b>${p.cs}</b> CS</span><span>${p.csm.toFixed(1).replace('.', ',')}/min</span>`)}</div>`).join('')}</div>`;
+    } else if (tab === 'vision') {
+      const mx = Math.max(...G.teams.flatMap((t) => t.players.map((p) => p.visionScore || 0)));
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '1fr 60px 60px 60px', (p) => `<div class="dcell"><span class="small">Score <b>${p.visionScore}</b></span>${bar(p.visionScore || 0, mx, 'vis')}</div><span title="Balises posées">📍 ${p.wardsPlaced || 0}</span><span title="Balises détruites">❌ ${p.wardsKilled || 0}</span><span title="Balises de contrôle achetées">🔴 ${p.visionWardsBoughtInGame || 0}</span>`)}</div>`).join('')}</div>
+        <p class="muted small">📍 balises posées · ❌ balises ennemies détruites · 🔴 balises de contrôle achetées</p>`;
+    } else if (tab === 'builds') {
+      const runes = (p) => { const st = (p.perks || {}).styles || []; const k = st[0] && st[0].selections && st[0].selections[0] ? D.runeById[st[0].selections[0].perk] : null; const sub = st[1] ? D.treeById[st[1].style] : null; return `${k ? `<img class="rimg" title="${esc(k.name)}" alt="" src="${Dd.img.rune(k)}">` : ''}${sub ? `<img class="rimg tree" title="${esc(sub.name)}" alt="" src="${Dd.img.rune(sub)}">` : ''}`; };
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '64px 62px 1fr', (p) => `<span class="row nw">${runes(p)}</span><span class="row nw">${spellPair([p.summoner1Id, p.summoner2Id].join(','))}</span><div class="items">${p.items.map((x) => itIcon(x)).join('')}${p.trinket ? itIcon(p.trinket, 'ico sm trk') : ''}</div>`)}</div>`).join('')}</div>`;
+    }
+    return head() + h;
+  }
+
   function chatLine() {
     const parts = [];
     S.game.enemies.forEach((e) => [0, 1].forEach((k) => {
@@ -829,7 +1045,8 @@
   setInterval(tick, 500);
   let actx = null;
   function alarm() {
-    if (!S.opt.sound) return;
+    return; /* remplacé par les annonces vocales */
+    // eslint-disable-next-line no-unreachable
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
       [0, 0.22].forEach((d) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sine'; o.frequency.value = 880; g.gain.setValueAtTime(0.0001, actx.currentTime + d); g.gain.exponentialRampToValueAtTime(0.25, actx.currentTime + d + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + d + 0.18); o.connect(g).connect(actx.destination); o.start(actx.currentTime + d); o.stop(actx.currentTime + d + 0.2); });
@@ -865,6 +1082,7 @@
       <p class="small">${running ? '🟢 En cours…' : '⏸️ À l\'arrêt'}${col.lastError ? ` · <span class="neg">${esc(col.lastError)}</span>` : ''}</p>
       <div class="row"><button class="btn ${running ? 'danger' : ''} small" data-act="${running ? 'colStop' : 'colStart'}" ${c.hasApiKey ? '' : 'disabled'}>${running ? '⏸️ Arrêter' : '▶ Démarrer'}</button>
       <button class="chip ${(c.collector || {}).autoStart ? 'on' : ''}" data-act="colAuto">Démarrer avec l'appli</button><button class="btn ghost small" data-act="colClear">Vider les statistiques</button></div></div>`;
+    h += voiceSettings();
     h += miniSettings();
     h += '</div></div>';
     return h;
@@ -875,6 +1093,16 @@
       <details class="flat"><summary class="small">📝 Notes de version</summary>${APP_RELEASES.map((r) => `<h3>${esc(r.v)} <span class="muted small">${esc(r.date)}</span></h3><ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</details>
       <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button><button class="btn danger small" data-act="wipe">Effacer mes favoris et notes</button></div>
       <p class="muted small" style="margin-top:8px">Noob LOL n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ou de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.</p></div>`;
+  }
+  function voiceSettings() {
+    const vs = frVoices();
+    return `<div class="card"><h2>🔊 Annonces vocales en jeu</h2>
+      <p class="muted small">Une voix t'annonce les objectifs (30 s avant et à l'apparition), les objectifs pris par chaque équipe, les inhibiteurs, ta mort et ton temps de réapparition, et quand tu as assez d'or pour ton prochain objet.</p>
+      <div class="chips"><button class="chip ${S.opt.voice ? 'on' : ''}" data-act="opt" data-val="voice">${S.opt.voice ? '🔊 Activées' : '🔇 Désactivées'}</button><button class="chip" data-act="voiceTest">▶ Tester</button></div>
+      <div class="row" style="margin-top:8px"><div class="grow"><label>Voix</label><select data-voice="1">${vs.length ? vs.map((v) => `<option value="${esc(v.name)}" ${v.name === S.opt.voiceName ? 'selected' : ''}>${esc(v.name)}</option>`).join('') : '<option value="">Voix française par défaut</option>'}</select></div></div>
+      <div class="row" style="margin-top:8px"><span class="small muted">Vitesse</span>${[0.9, 1.05, 1.25].map((r) => `<button class="chip ${S.opt.voiceRate === r ? 'on' : ''}" data-act="voiceRate" data-val="${r}">${r < 1 ? 'Lente' : r > 1.1 ? 'Rapide' : 'Normale'}</button>`).join('')}
+      <span class="small muted">Volume</span>${[50, 75, 100].map((r) => `<button class="chip ${S.opt.voiceVol === r ? 'on' : ''}" data-act="voiceVol" data-val="${r}">${r} %</button>`).join('')}</div>
+      ${!vs.length ? '<p class="small warn">Aucune voix française trouvée : ajoute-en une dans Windows (Paramètres → Heure et langue → Voix).</p>' : ''}</div>`;
   }
   function miniSettings() {
     const c = R.cfg || {}, m = c.minimap || {};
@@ -887,7 +1115,7 @@
       <div class="grow"><label>Afficher sur</label><select data-cfg="minimap.displayId">${ds.map((d) => `<option value="${d.id}" ${String(m.displayId || (ds.find((x) => !x.primary) || ds[0] || {}).id) === String(d.id) ? 'selected' : ''}>${esc(d.label)} ${d.bounds.width}×${d.bounds.height}${d.primary ? ' (principal)' : ''}</option>`).join('')}</select></div></div>
       ${ds.length < 2 ? '<p class="small warn">Un seul écran détecté : la mini-carte s\'ouvrira dans une fenêtre.</p>' : ''}
       <h3>Zone de la mini-carte</h3><p class="muted small">Prends une capture pendant une partie (ou l'Outil d'entraînement), puis trace un rectangle autour de la mini-carte.</p>
-      <div class="chips" style="margin:6px 0"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed">🗺️ Mini-carte dans l'écran « En jeu »</button><button class="chip ${S.opt.sound ? 'on' : ''}" data-act="opt" data-val="sound">🔔 Son quand un objectif apparaît</button></div>
+      <div class="chips" style="margin:6px 0"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed">🗺️ Mini-carte dans l'écran « En jeu »</button></div>
       <div class="row"><button class="btn ghost small" data-act="miniShot">📸 Prendre une capture</button><button class="btn ghost small" data-act="miniReset">Position par défaut</button><button class="chip ${m.alwaysOnTop ? 'on' : ''}" data-act="miniTop">Toujours au premier plan</button></div>`;
     if (R.shot) h += `<div class="cropper" id="cropper"><img src="${R.shot}" alt="Capture" draggable="false"><div class="crop" id="cropBox" style="left:${crop.x * 100}%;top:${crop.y * 100}%;width:${crop.w * 100}%;height:${crop.h * 100}%"></div></div>
       <div class="row"><button class="btn small" data-act="miniSaveCrop">Enregistrer la zone</button><span class="muted small">Glisse sur l'image pour tracer la zone.</span></div>`;
@@ -942,6 +1170,11 @@
       case 'rune': S.rune.sel = S.rune.sel === +v ? null : +v; render(true); break;
       case 'profileReload': cache.clear(); loadProfile(true); render(true); break;
       case 'selRole': S.select.role = v; render(true); break;
+      case 'postTab': S.postTab = v; render(true); break;
+      case 'openMatch': toast('Chargement de la partie…'); NB.postgame.load(v).then((d) => { R.post = d; S.mode = 'game'; S.postTab = 'resume'; render(); }).catch((e) => toast('❌ ' + e.message)); break;
+      case 'voiceTest': speak('Le Nashor est disponible. Tu as assez d\'or pour Lame d\'infini.'); break;
+      case 'voiceRate': S.opt.voiceRate = +v; render(true); speak('Vitesse de la voix.'); break;
+      case 'voiceVol': S.opt.voiceVol = +v; render(true); speak('Volume.'); break;
       case 'selOpp': S.select.opp = S.select.opp === v ? '' : v; render(true); break;
       case 'applyRunes': {
         const pg = R.selPages[+el.dataset.i]; if (!pg) break;
@@ -980,7 +1213,7 @@
         (navigator.clipboard ? navigator.clipboard.writeText(line) : Promise.reject()).then(() => toast('Copié : ' + line)).catch(() => toast(line));
         break;
       }
-      case 'opt': S.opt[v] = !S.opt[v]; if (v === 'sound' && S.opt.sound) { unlockAudio(); alarm(); } render(true); break;
+      case 'opt': S.opt[v] = !S.opt[v]; if (v === 'voice' && S.opt.voice) speak('Annonces vocales activées.'); render(true); break;
       /* Réglages */
       case 'saveKey': {
         const k = (document.getElementById('apiKey') || {}).value || '';
@@ -1064,6 +1297,7 @@
       cfgSet(patch);
       return;
     }
+    if (el.dataset.voice) { S.opt.voiceName = el.value; save(); speak('Voix sélectionnée.'); return; }
     if (el.dataset.sel) {
       if (el.dataset.sel === 'me') S.select.manualMe = el.value; else S.select.manualEnemies[+el.dataset.i] = el.value;
       el.blur(); render(true); return;
@@ -1101,6 +1335,13 @@
     NB.collector.on((s) => { const grew = R.col && s.picks !== R.col.picks; R.col = s; if (grew && s.picks % 50 < 10) cache.clear(); if (S.mode === 'settings' && !busy()) render(true); });
     NB.minimap.onState((open) => { R.miniOpen = open; if (!busy()) render(true); });
     NB.onUpdate((u) => { R.update = u; renderTop(); });
+    NB.postgame.on((d) => {
+      const fresh = !R.post || R.post.at !== d.at;
+      R.post = d;
+      if (fresh && !d.old && R.cfg && R.cfg.autoMode !== false && !R.live) { S.mode = 'game'; S.postTab = 'resume'; }
+      if (!busy()) render(true);
+    });
+    NB.postgame.get().then((d) => { if (d) { R.post = d; if (S.mode === 'game') render(true); } }).catch(() => {});
     Promise.all([NB.config.get(), NB.info(), NB.lcu.state(), NB.collector.status(), NB.minimap.isOpen(), NB.live.state()]).then(([c, i, l, col, mo, lv]) => {
       R.cfg = c; R.info = i; R.lcu = l || R.lcu; R.col = col; R.miniOpen = mo; prevPhase = R.lcu.phase;
       if (lv) onLive(lv);

@@ -7,10 +7,12 @@ const { LiveWatcher } = require('./live');
 const { RiotApi, PLATFORMS } = require('./riotapi');
 const { StatsDb } = require('./db');
 const { Collector } = require('./collector');
+const { PostGame } = require('./postgame');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let win = null, mini = null, cfg, api, db, collector;
+let win = null, mini = null, cfg, api, db, collector, post, lastLive = null;
+const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
 const RENDERER = path.join(__dirname, '..', 'renderer');
@@ -104,6 +106,29 @@ function handlers() {
   });
   h('riot:masteries', async (puuid) => api.masteries(puuid, 30));
 
+  /* Rangs et niveaux : d'abord le client LoL (sans clé), sinon l'API Riot */
+  h('players:info', async (puuids) => {
+    const out = {};
+    for (const id of (puuids || []).filter(Boolean).slice(0, 10)) {
+      const c = infoCache.get(id);
+      if (c && Date.now() - c.at < 20 * 60000) { out[id] = c.v; continue; }
+      let v = null;
+      if (lcu.creds) v = await lcu.playerInfo(id).catch(() => null);
+      if (!v && cfg.getApiKey()) {
+        try {
+          const [sm, lg] = await Promise.all([api.summoner(id), api.leagues(id)]);
+          const q = (k) => { const x = (lg || []).find((e) => e.queueType === k); return x ? { tier: x.tier, division: ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(x.tier) ? '' : x.rank, lp: x.leaguePoints, wins: x.wins, losses: x.losses } : null; };
+          v = { level: sm.summonerLevel, solo: q('RANKED_SOLO_5x5'), flex: q('RANKED_FLEX_SR') };
+        } catch (e) { v = null; }
+      }
+      if (v) infoCache.set(id, { at: Date.now(), v });
+      out[id] = v;
+    }
+    return out;
+  });
+  h('postgame:get', () => post.data);
+  h('postgame:load', (matchId) => post.load(matchId, lcu.state.summoner ? lcu.state.summoner.puuid : ''));
+
   h('stats:counts', () => db.counts());
   h('stats:champ', (champ, role, days) => db.champ(champ, role, days));
   h('stats:roleDist', (champs) => db.roleDist(champs));
@@ -144,8 +169,23 @@ app.whenReady().then(async () => {
   db = await StatsDb.open(path.join(app.getPath('userData'), 'stats.sqlite'));
   collector = new Collector({ api, db, getConfig: () => cfg.data });
   collector.on('status', (s) => send('collector', s));
-  lcu.on('state', (s) => send('lcu', s));
-  live.on('data', (d) => send('live', d));
+  post = new PostGame({ api, getPlatform: () => cfg.data.platform, dir: app.getPath('userData') });
+  post.on('update', (d) => send('postgame', d));
+  let postFor = null;
+  lcu.on('state', (s) => {
+    send('lcu', s);
+    /* Fin de partie : statistiques complètes */
+    if (s.game && s.game.ended && s.game.gameId && postFor !== s.game.gameId) {
+      postFor = s.game.gameId;
+      post.start({ gameId: s.game.gameId, live: lastLive, puuid: s.summoner ? s.summoner.puuid : '', hasKey: !!cfg.getApiKey() });
+    }
+  });
+  live.on('data', (d) => {
+    if (d) lastLive = d;
+    /* Le jeu se ferme sans que le client l'ait signalé (ex. client non détecté) : on garde au moins le dernier état */
+    else if (lastLive && !lcu.state.connected) { post.start({ gameId: 0, live: lastLive, puuid: '', hasKey: false }); }
+    send('live', d);
+  });
   /* Capture d'écran (mini-carte) autorisée uniquement pour nos propres pages. */
   session.defaultSession.setPermissionRequestHandler((wc, perm, cb, details) => cb(perm === 'media' && String(details.requestingUrl || wc.getURL()).startsWith('file://')));
   session.defaultSession.setPermissionCheckHandler((wc, perm, origin) => perm === 'media' && String(origin || '').startsWith('file://'));

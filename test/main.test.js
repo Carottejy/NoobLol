@@ -292,3 +292,50 @@ test('objectifs : temps avant apparition, scores, âme, tours et inhibiteurs', (
   assert.strictEqual(row(o, 'baron').in, 160); assert.strictEqual(row(o, 'baron').score.them, 1);
   assert.strictEqual(row(o, 'herald').state, 'gone'); assert.deepStrictEqual(o.inhib, { us: 0, them: 1 });
 });
+
+test('fin de partie : attend la publication par Riot puis récupère partie + chronologie', async () => {
+  const { PostGame } = require('../main/postgame');
+  let n = 0;
+  const api = { match: async (id) => { n++; if (n < 3) throw Object.assign(new Error('404'), { status: 404 }); return { metadata: { matchId: id }, info: {} }; }, timeline: async () => ({ info: { frames: [] } }) };
+  const pg = new PostGame({ api, getPlatform: () => 'euw1', dir: null, wait: 5, tries: 5 });
+  const states = []; pg.on('update', (d) => states.push(d.status));
+  await pg.start({ gameId: 123, live: { time: 1800 }, puuid: 'P', hasKey: true });
+  assert.deepStrictEqual(states, ['waiting', 'ready']);
+  assert.strictEqual(pg.data.matchId, 'EUW1_123'); assert.ok(pg.data.timeline); assert.strictEqual(pg.data.live.time, 1800);
+  const pg2 = new PostGame({ api, getPlatform: () => 'euw1', dir: null, wait: 5, tries: 2 });
+  await pg2.start({ gameId: 9, live: { time: 60 }, hasKey: false });
+  assert.strictEqual(pg2.data.status, 'live-only'); assert.strictEqual(pg2.data.reason, 'nokey');
+});
+
+test('client LoL : session de partie (équipes, puuid) et rangs', async () => {
+  const { simplifyGame, LcuWatcher } = require('../main/lcu');
+  const g = simplifyGame({ gameData: { gameId: 77, queue: { id: 420 }, teamOne: [{ puuid: 'a', championId: 1, gameName: 'Moi', tagLine: 'EUW' }], teamTwo: [{ puuid: 'b', championId: 2, summonerName: 'Eux' }] } });
+  assert.strictEqual(g.gameId, 77); assert.strictEqual(g.players[1].team, 'CHAOS'); assert.strictEqual(g.players[1].name, 'Eux');
+  const w = new LcuWatcher(() => null);
+  w.get = async (p) => (p.includes('ranked-stats') ? { queueMap: { RANKED_SOLO_5x5: { tier: 'GOLD', division: 'II', leaguePoints: 45, wins: 10, losses: 8 }, RANKED_FLEX_SR: { tier: 'NONE', division: 'NA' } } } : { summonerLevel: 187, gameName: 'Moi', tagLine: 'EUW' });
+  const info = await w.playerInfo('a');
+  assert.deepStrictEqual(info.solo, { tier: 'GOLD', division: 'II', lp: 45, wins: 10, losses: 8 }); assert.strictEqual(info.flex, null); assert.strictEqual(info.level, 187);
+});
+
+test('fin de partie : analyse (équipes, parts de dégâts, courbe d\'or, moi contre mon adversaire, conseils)', () => {
+  const Builds = require('../renderer/builds.js');
+  const P = (id, team, pos, k, d, a, cs, gold, dmg, vis, puuid) => ({ participantId: id, teamId: team, teamPosition: pos, kills: k, deaths: d, assists: a, totalMinionsKilled: cs, neutralMinionsKilled: 0, goldEarned: gold, totalDamageDealtToChampions: dmg, visionScore: vis, visionWardsBoughtInGame: 0, puuid: puuid || 'x' + id, riotIdGameName: 'J' + id, item0: 1055 });
+  const match = { metadata: { matchId: 'EUW1_1' }, info: { gameDuration: 1800, gameEndTimestamp: 1, queueId: 420, teams: [{ teamId: 100, win: true, objectives: { dragon: { kills: 3 } } }, { teamId: 200, win: false, objectives: { dragon: { kills: 1 } } }],
+    participants: [P(1, 100, 'MIDDLE', 5, 8, 4, 120, 10000, 20000, 10, 'ME'), P(2, 100, 'TOP', 5, 2, 2, 200, 11000, 20000, 15), P(6, 200, 'MIDDLE', 3, 4, 2, 250, 12000, 15000, 20), P(7, 200, 'TOP', 1, 5, 1, 180, 9000, 10000, 8)] } };
+  const tl = { info: { frames: Array.from({ length: 12 }, (_, m) => ({ participantFrames: { 1: { totalGold: 500 + m * 300, minionsKilled: m * 4 }, 2: { totalGold: 500 + m * 350, minionsKilled: m * 7 }, 6: { totalGold: 500 + m * 380, minionsKilled: m * 7 }, 7: { totalGold: 500 + m * 300, minionsKilled: m * 6 } } })) } };
+  const G = Builds.postgame(match, tl, 'ME');
+  assert.strictEqual(G.me.participantId, 1); assert.strictEqual(G.opp.participantId, 6);
+  assert.strictEqual(G.teams[0].win, true); assert.strictEqual(G.teams[0].kills, 10); assert.strictEqual(G.me.dmgShare, 0.5); assert.strictEqual(G.me.kp, 0.9);
+  assert.strictEqual(G.curve.length, 12); assert.strictEqual(G.curve[10], (650 * 10) - (680 * 10) + 0);
+  assert.strictEqual(G.at10.cs, -30); assert.strictEqual(G.at10.gold, -800);
+  assert.ok(G.tips.some((t) => t.startsWith('Farm')) && G.tips.some((t) => t.includes('8 morts')) && G.tips.some((t) => t.includes('30 sbires')));
+});
+
+test('en jeu : prochain objet du kit conseillé', () => {
+  const Builds = require('../renderer/builds.js');
+  const D = { items: { 3031: { name: 'Lame d\'infini', gold: { total: 3450 }, tags: [] }, 6672: { name: 'Kraken', gold: { total: 3100 }, tags: [] }, 3006: { name: 'Jambières', gold: { total: 1100 }, tags: ['Boots'] }, 3111: { name: 'Sandales', gold: { total: 1100 }, tags: ['Boots'] } } };
+  const A = { core: [{ items: [6672, 3031] }], boots: [{ item: 3006 }], later: [{ item: 3036 }] };
+  assert.strictEqual(Builds.nextItem(A, [], D).item, 6672);
+  assert.strictEqual(Builds.nextItem(A, [6672], D).item, 3031);
+  assert.strictEqual(Builds.nextItem(A, [6672, 3031, 3111], D), null, 'déjà des bottes, objet suivant inconnu');
+});

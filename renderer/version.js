@@ -1,6 +1,15 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.4.0';
+var APP_VERSION = '2.5.0';
 var APP_RELEASES = [
+  { v: '2.5.0', date: '2026-10-22', notes: [
+    'Fin de partie : l\'onglet En jeu affiche toutes les statistiques de la partie (API officielle match-v5 + chronologie), en onglets : Résumé, Ma partie (contre mon adversaire, courbe d\'or, conseils pour progresser), Dégâts, Or et farm, Vision, Builds.',
+    'Mon compte : un clic sur une partie récente ouvre toutes ses statistiques.',
+    'Rang et niveau des joueurs à côté de leur nom, en sélection (ton équipe ; les adversaires restent masqués en classée) et en jeu (les 10 joueurs).',
+    'Sélection : runes, sorts et kit d\'objets classés selon le match-up et la composition de l\'équipe adverse.',
+    'En jeu : carte « Mon build » avec le prochain objet à acheter et l\'or qui manque, les objets de début, les objets adaptés à l\'équipe adverse et l\'ordre des sorts.',
+    'En jeu : annonces vocales à la place des alarmes (objectifs 30 s avant et à l\'apparition, objectifs pris, inhibiteurs, équipe éliminée, ta mort et ton temps de réapparition, or suffisant pour ton prochain objet). Réglages : voix, vitesse, volume, test.',
+    'Toute l\'application s\'adapte à la taille de la fenêtre (grand écran, portable, fenêtre étroite).',
+  ]},
   { v: '2.4.0', date: '2026-10-22', notes: [
     'Sélection : face-à-face par rôle (top, jungle, mid, support, adc) entre ton équipe et l\'équipe adverse. Les rôles adverses sont estimés d\'après les statistiques et la classe des champions. Un clic sur un ennemi le désigne comme ton adversaire de voie.',
     'Sélection : pourcentage AD / AP de chaque champion et de chaque équipe.',
