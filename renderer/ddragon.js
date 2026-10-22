@@ -5,7 +5,7 @@ var Dd = (() => {
   const BASE = 'https://ddragon.leagueoflegends.com';
   const LANG = 'fr_FR';
   const VKEY = 'nooblol.ddVersion';
-  const st = { version: null, champs: null, champList: [], items: null, itemList: [], runes: null, summs: null, summList: [], full: {}, error: null, loading: null };
+  const st = { version: null, champs: null, champList: [], byKey: {}, runeById: {}, treeById: {}, summByKey: {}, items: null, itemList: [], runes: null, summs: null, summList: [], full: {}, error: null, loading: null };
 
   const getJSON = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   const cdn = (path) => `${BASE}/cdn/${st.version}/${path}`;
@@ -40,6 +40,7 @@ var Dd = (() => {
       ]);
       st.champs = ch.data;
       st.champList = Object.values(ch.data).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+      st.champList.forEach((c) => { st.byKey[c.key] = c; });
       st.items = it.data;
       Object.keys(it.data).forEach((id) => { it.data[id].id = id; });
       /* Boutique de la Faille : achetable, en magasin, pas réservé à un champion, sans doublon de nom. */
@@ -48,7 +49,9 @@ var Dd = (() => {
         .sort((a, b) => a.gold.total - b.gold.total || a.name.localeCompare(b.name, 'fr'))
         .filter((x) => { const k = x.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
       st.runes = ru;
+      ru.forEach((t) => { st.treeById[t.id] = t; t.slots.forEach((sl) => sl.runes.forEach((r) => { st.runeById[r.id] = r; })); });
       st.summs = su.data;
+      Object.values(su.data).forEach((x) => { st.summByKey[x.key] = x; });
       st.summList = Object.values(su.data).filter((s) => (s.modes || []).includes('CLASSIC')).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
       st.error = null;
       return st;

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob: mediastream:">
+  <title>Noob LOL — Mini-carte</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: #f0e6d2; font: 15px system-ui, sans-serif; }
+    canvas { display: block; margin: 0 auto; }
+    #msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+    #bar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity .2s; -webkit-app-region: no-drag; }
+    body:hover #bar { opacity: 1; }
+    #drag { position: absolute; top: 0; left: 0; right: 120px; height: 34px; -webkit-app-region: drag; }
+    button { background: rgba(20,34,56,.9); color: #f0e6d2; border: 1px solid #c8aa6e; border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; }
+  </style>
+</head>
+<body>
+  <div id="drag"></div>
+  <canvas id="cv"></canvas>
+  <div id="msg">Connexion à l'écran du jeu…</div>
+  <div id="bar"><button id="full" title="Plein écran">⛶</button><button id="close" title="Fermer">✕</button></div>
+  <video id="v" muted autoplay playsinline style="display:none"></video>
+  <script src="minimap.js"></script>
+</body>
+</html>

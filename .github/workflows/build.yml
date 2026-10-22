@@ -1,0 +1,36 @@
+# Fabrique l'installeur Windows de Noob LOL.
+# - Pousser un tag « v2.0.0 » (par ex.) publie une Release GitHub : les PC équipés se mettent à jour tout seuls.
+# - « Run workflow » (onglet Actions) fabrique l'installeur sans le publier (téléchargeable dans les artefacts).
+name: Installeur Windows
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Publier la version (tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fabriquer sans publier
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: npx electron-builder --win --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Noob-LOL-installeur
+          path: dist/*.exe
