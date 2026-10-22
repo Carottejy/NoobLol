@@ -521,3 +521,21 @@ body[data-mode=game] .objs .oic { font-size: 1.1rem; }
 body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 .keystate { margin-top: 6px; }
 @media (max-width: 760px) { .keybar { flex-wrap: wrap; margin: 0 8px 6px; } }
+
+/* ===== Mes builds ===== */
+.mb-row { display: flex; align-items: center; gap: 10px; padding: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; margin: 0 0 6px; }
+.mb-row .grow { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.mb-prev { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.mb-act .chip { min-height: 32px; padding: 4px 9px; }
+.rprev { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.rprev .rimg { width: 24px; height: 24px; } .rprev .rimg.big { width: 32px; height: 32px; } .rprev .rimg.tree { width: 18px; height: 18px; }
+.mb-mini { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+.mb-mini:hover { background: rgba(200,170,110,.06); }
+.ed-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.edsec { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin: 0 0 6px; cursor: pointer; background: var(--panel2); }
+.edsec.on { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.edit-it { position: relative; display: inline-flex; }
+.eia { position: absolute; top: -6px; right: -6px; display: none; gap: 2px; }
+.edit-it:hover .eia, .edsec.on .eia { display: flex; }
+.eia button { width: 18px; height: 18px; border-radius: 50%; border: 0; background: #111c2e; color: var(--text); font-size: .62rem; cursor: pointer; padding: 0; line-height: 18px; box-shadow: 0 0 0 1px var(--line); }
+@media (max-width: 760px) { .ed-grid { grid-template-columns: 1fr; } .mb-row { flex-wrap: wrap; } .mb-act { margin-left: auto; } }

@@ -19,7 +19,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0,
+    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], ed: null,
   });
   function load() {
     try {
@@ -28,6 +28,7 @@
       const d = defaults();
       Object.assign(d, raw);
       ['cf', 'itf', 'rune', 'opt', 'view', 'select'].forEach((k) => { d[k] = Object.assign(defaults()[k], raw[k] || {}); });
+      if (!Array.isArray(d.myRunes)) d.myRunes = []; if (!Array.isArray(d.myItems)) d.myItems = [];
       d.game = Object.assign(newGame(), raw.game || {});
       if (!Array.isArray(d.game.enemies) || d.game.enemies.length !== 5) d.game.enemies = newGame().enemies;
       return d;
@@ -78,7 +79,7 @@
 
   /* ---------- Rendu principal ---------- */
   const MODES = [['prep', '📚', 'Préparation'], ['select', '🎯', 'Sélection'], ['game', '⚔️', 'En jeu'], ['settings', '⚙️', 'Réglages']];
-  const PREP_TABS = [['home', '🏠', 'Accueil'], ['account', '👤', 'Mon compte'], ['champs', '🦸', 'Champions'], ['meta', '📈', 'Méta'], ['items', '🛒', 'Objets'], ['runes', '✨', 'Runes'], ['guide', '📖', 'Guide'], ['lex', '💬', 'Lexique']];
+  const PREP_TABS = [['home', '🏠', 'Accueil'], ['account', '👤', 'Mon compte'], ['champs', '🦸', 'Champions'], ['meta', '📈', 'Méta'], ['items', '🛒', 'Objets'], ['runes', '✨', 'Runes'], ['builds', '🧰', 'Mes builds'], ['guide', '📖', 'Guide'], ['lex', '💬', 'Lexique']];
   function statusPill() {
     if (!NB) return '<span class="pill off">Version navigateur : connexion au jeu indisponible</span>';
     const L = R.lcu;
@@ -113,7 +114,7 @@
     if (S.mode === 'select') v = viewSelect;
     else if (S.mode === 'game') v = viewGame;
     else if (S.mode === 'settings') v = viewSettings;
-    else v = { home: viewHome, account: viewAccount, champs: viewChamps, meta: viewMeta, items: viewItems, runes: viewRunes, guide: viewGuide, lex: viewLex }[S.tab] || viewHome;
+    else v = { home: viewHome, account: viewAccount, champs: viewChamps, meta: viewMeta, items: viewItems, runes: viewRunes, builds: viewMyBuilds, guide: viewGuide, lex: viewLex }[S.tab] || viewHome;
     $app.innerHTML = v();
     mmSync();
     window.scrollTo(0, keepScroll ? y : 0);
@@ -238,6 +239,7 @@
       <div class="meters" style="margin-top:10px">
         ${[['Attaque', c.info.attack], ['Défense', c.info.defense], ['Magie', c.info.magic], ['Difficulté', c.info.difficulty]].map(([l, v]) => `<span class="muted">${l}</span><div class="bar"><i style="width:${(v || 0) * 10}%"></i></div>`).join('')}
       </div><p class="muted small" style="margin-top:8px">${DIFF[diffOf(c)][1]} Difficulté : ${DIFF[diffOf(c)][0]} (${c.info.difficulty}/10)</p></div>`;
+    h += myBuildsOnChamp(c);
     h += statsBlock(c, S.champRole[id] || '');
     h += `<div class="card"><h2>📝 Mes notes</h2><textarea placeholder="Combos, objets qui marchent, erreurs à éviter…" data-note="${esc(id)}">${esc(S.notes[id] || '')}</textarea><p class="muted small">Enregistré automatiquement sur ce PC.</p></div>`;
     h += '</div><div>';
@@ -319,6 +321,117 @@
     h += buildBlock(st);
     h += matchupLists(st);
     return h + `<p class="muted small" style="margin-top:8px">Calculé sur les parties classées solo/duo des 30 derniers jours collectées par ton PC.</p></div>`;
+  }
+
+  /* =====================================================================
+     MES BUILDS : pages de runes et builds d'objets personnels
+     Chaque build est associé à un champion et à un ou plusieurs rôles (aucun rôle = tous).
+     Pages de runes → proposées à la sélection (application en un clic).
+     Builds d'objets → utilisés en partie (prochain objet, annonce vocale).
+     ===================================================================== */
+  const SHARD_ROWS = [[5008, 5005, 5007], [5008, 5010, 5001], [5011, 5013, 5001]];
+  const SHARD_ROW_NAME = ['Attaque', 'Flexible', 'Défense'];
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const newRunePage = (champ) => ({ id: uid(), name: '', champ: champ || '', roles: [], primary: 0, perks: [0, 0, 0, 0], sub: 0, subPerks: [], shards: [5008, 5008, 5011], spells: [4, 0], at: Date.now() });
+  const newItemBuild = (champ) => ({ id: uid(), name: '', champ: champ || '', roles: [], start: [], core: [], boots: 0, situational: [], at: Date.now() });
+  const runeComplete = (p) => !!(p.primary && p.perks.every(Boolean) && p.sub && p.subPerks.length === 2 && p.shards.every(Boolean));
+  const forChamp = (list, champId, role) => list.filter((b) => b.champ === champId && (!role || !b.roles.length || b.roles.includes(role)));
+  const rolesLabel = (b) => (b.roles.length ? b.roles.map((r) => ROLE_IC[r] + ' ' + ROLE_NAME[r]).join(', ') : 'Tous les rôles');
+  function myRunePayload(p) {
+    const c = D.champs[p.champ];
+    return { key: 'my-' + p.id, name: `Noob LOL ${p.name || (c ? c.name : '')}`.trim().slice(0, 50), primaryStyleId: p.primary, subStyleId: p.sub, selectedPerkIds: [...p.perks, ...p.subPerks.map((x) => x.perk), ...p.shards].map(Number) };
+  }
+  function myRunePreview(p) {
+    const ic = (id, big) => { const x = D.runeById[id]; return x ? `<img class="rimg ${big ? 'big' : ''}" title="${esc(x.name)}" alt="" src="${Dd.img.rune(x)}">` : ''; };
+    const tr = (id) => { const t = D.treeById[id]; return t ? `<img class="rimg tree" title="${esc(t.name)}" alt="" src="${Dd.img.rune(t)}">` : ''; };
+    return `<span class="rprev">${tr(p.primary)}${ic(p.perks[0], true)}${p.perks.slice(1).map((x) => ic(x)).join('')}${p.sub ? '<span class="rsep"></span>' + tr(p.sub) + p.subPerks.map((x) => ic(x.perk)).join('') : ''}</span>`;
+  }
+  const spellsOf = (p) => (p.spells || []).filter(Boolean);
+  /* Plan d'achat d'un build perso, au format attendu par Builds.nextItem */
+  const itemPlan = (b) => ({ core: [{ items: b.core.slice() }], boots: b.boots ? [{ item: b.boots }] : [], situational: [], later: b.situational.map((i) => ({ item: i })) });
+
+  function viewMyBuilds() {
+    const nd = needData(); if (nd) return '<h1>Mes builds</h1>' + nd;
+    if (S.ed) return S.ed.kind === 'runes' ? editRunes() : editItems();
+    const group = (list, kind) => {
+      if (!list.length) return `<p class="muted">${kind === 'runes' ? 'Aucune page pour l\'instant. Crée tes pages : elles seront proposées en premier pendant la sélection, et un clic les appliquera dans le client.' : 'Aucun build pour l\'instant. Crée tes builds : en partie, Noob LOL t\'indiquera ton prochain objet et t\'annoncera quand tu as assez d\'or.'}</p>`;
+      return list.slice().sort((a, b) => ((D.champs[a.champ] || {}).name || '').localeCompare((D.champs[b.champ] || {}).name || '', 'fr') || b.at - a.at).map((b) => {
+        const c = D.champs[b.champ];
+        const prev = kind === 'runes' ? myRunePreview(b) + (spellsOf(b).length ? `<span class="rsep"></span>${spellPair(spellsOf(b).map((x) => x).join(','))}` : '') : `<span class="row nw" style="gap:2px">${b.start.map((i) => itIcon(i)).join('')}${b.start.length ? '<span class="rsep"></span>' : ''}${b.core.map((i) => itIcon(i)).join('')}${b.boots ? '<span class="rsep"></span>' + itIcon(b.boots) : ''}</span>`;
+        return `<div class="mb-row">${cIcon(c, 'ico')}<div class="grow"><b class="ell">${esc(b.name || (c ? c.name : '?'))}</b><span class="small muted ell">${esc(c ? c.name : 'Champion ?')} · ${rolesLabel(b)}${kind === 'runes' && !runeComplete(b) ? ' · ⚠️ incomplète' : ''}</span><div class="mb-prev">${prev}</div></div>
+          <div class="row nw mb-act"><button class="chip" data-act="edOpen" data-kind="${kind}" data-val="${b.id}" title="Modifier">✏️</button><button class="chip" data-act="edDup" data-kind="${kind}" data-val="${b.id}" title="Dupliquer">⧉</button><button class="chip" data-act="edDel" data-kind="${kind}" data-val="${b.id}" title="Supprimer">🗑️</button></div></div>`;
+      }).join('');
+    };
+    return `<h1>🧰 Mes builds</h1><p class="muted">Tes propres pages de runes et builds d'objets, rangés par champion et par rôle (sans rôle coché = valable pour tous les rôles).</p>
+      <div class="cols"><div class="card"><div class="row sp nw"><h2 style="margin:0">✨ Mes pages de runes</h2><button class="btn small" data-act="edNew" data-kind="runes">＋ Nouvelle page</button></div><p class="small muted">Proposées en premier pendant la sélection · un clic les applique dans le client (avec tes sorts d'invocateur).</p>${group(S.myRunes, 'runes')}</div>
+      <div class="card"><div class="row sp nw"><h2 style="margin:0">🛒 Mes builds d'objets</h2><button class="btn small" data-act="edNew" data-kind="items">＋ Nouveau build</button></div><p class="small muted">Utilisés en partie à la place du build conseillé : prochain objet, objets déjà achetés cochés, annonce vocale.</p>${group(S.myItems, 'items')}</div></div>`;
+  }
+  function edHeader(title) {
+    const d = S.ed.draft;
+    return `<div class="row sp"><h1>${title}</h1><div class="row"><button class="btn ghost small" data-act="edCancel">Annuler</button><button class="btn small" data-act="edSave">💾 Enregistrer</button></div></div>
+      <div class="card"><div class="ed-grid"><div><label>Nom du build</label><input type="text" data-ed="name" value="${esc(d.name)}" placeholder="ex. Ahri burst, Ahri contre assassin…" maxlength="40"></div>
+      <div><label>Champion</label><select data-ed="champ"><option value="">— Choisir —</option>${D.champList.map((x) => `<option value="${esc(x.id)}" ${x.id === d.champ ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div></div>
+      <label style="margin-top:8px">Rôles <span class="muted">(aucun = tous les rôles)</span></label><div class="chips">${ROLES.map((r) => `<button class="chip ${d.roles.includes(r) ? 'on' : ''}" data-act="edRole" data-val="${r}">${ROLE_IC[r]} ${ROLE_NAME[r]}</button>`).join('')}</div></div>`;
+  }
+  function editRunes() {
+    const d = S.ed.draft;
+    const runeBtn = (r, on, act, extra = '') => `<button class="rune ${on ? 'sel' : ''}" data-act="${act}" data-val="${r.id}" ${extra}><img alt="" src="${Dd.img.rune(r)}"><span>${esc(r.name)}</span></button>`;
+    const P = D.treeById[d.primary], Sb = D.treeById[d.sub];
+    let h = edHeader('✨ Page de runes');
+    h += `<div class="cols"><div class="card"><h2>Voie principale</h2><div class="chips">${D.runes.map((t) => `<button class="chip ${d.primary === t.id ? 'on' : ''}" data-act="edTree" data-val="${t.id}"><img alt="" src="${Dd.img.rune(t)}" style="width:18px;height:18px;vertical-align:-4px"> ${esc(t.name)}</button>`).join('')}</div>
+      ${P ? P.slots.map((sl, i) => `<div class="muted small" style="margin-top:8px">${i ? 'Ligne ' + i : 'Rune clé'}</div><div class="rune-row">${sl.runes.map((r) => runeBtn(r, d.perks[i] === r.id, 'edPerk', `data-row="${i}"`)).join('')}</div>`).join('') : '<p class="muted small">Choisis une voie.</p>'}</div>`;
+    h += `<div><div class="card"><h2>Voie secondaire <span class="muted small">(2 runes de lignes différentes)</span></h2><div class="chips">${D.runes.filter((t) => t.id !== d.primary).map((t) => `<button class="chip ${d.sub === t.id ? 'on' : ''}" data-act="edSub" data-val="${t.id}"><img alt="" src="${Dd.img.rune(t)}" style="width:18px;height:18px;vertical-align:-4px"> ${esc(t.name)}</button>`).join('')}</div>
+      ${Sb ? Sb.slots.slice(1).map((sl, i) => `<div class="muted small" style="margin-top:8px">Ligne ${i + 1}</div><div class="rune-row">${sl.runes.map((r) => runeBtn(r, d.subPerks.some((x) => x.perk === r.id), 'edSubPerk', `data-row="${i + 1}"`)).join('')}</div>`).join('') : '<p class="muted small">Choisis une voie secondaire.</p>'}</div>
+      <div class="card"><h2>Fragments</h2>${SHARD_ROWS.map((row, i) => `<div class="row" style="margin:4px 0"><span class="small muted" style="width:70px">${SHARD_ROW_NAME[i]}</span>${row.map((sh) => `<button class="chip ${d.shards[i] === sh ? 'on' : ''}" data-act="edShard" data-row="${i}" data-val="${sh}">${esc(SHARD[sh])}</button>`).join('')}</div>`).join('')}</div>
+      <div class="card"><h2>Sorts d'invocateur <span class="muted small">(2)</span></h2><div class="chips">${D.summList.map((x) => `<button class="chip ${d.spells.includes(+x.key) ? 'on' : ''}" data-act="edSpell" data-val="${x.key}"><img alt="" src="${Dd.img.spell(x)}" style="width:18px;height:18px;vertical-align:-4px;border-radius:4px"> ${esc(x.name)}</button>`).join('')}</div></div>
+      <div class="card"><h2>Aperçu</h2>${myRunePreview(d)}<p class="small ${runeComplete(d) ? 'pos' : 'warn'}" style="margin-top:6px">${runeComplete(d) ? '✅ Page complète' : '⚠️ Page incomplète : rune clé, 3 runes principales, 2 secondaires et 3 fragments nécessaires pour l\'appliquer.'}</p></div></div></div>`;
+    return h;
+  }
+  const ED_SECS = [['start', '1. Départ'], ['core', '2. Objets principaux (dans l\'ordre)'], ['boots', 'Bottes'], ['situational', '3. Situationnels']];
+  function edItemGrid() {
+    const e = S.ed, q = norm(e.itQ || '');
+    const boots = e.sec === 'boots';
+    const list = D.itemList.filter((it) => {
+      if (boots) return Builds.isBoots(it);
+      if (q && !norm(it.name).includes(q) && !(it.colloq && norm(it.colloq).includes(q))) return false;
+      if (e.sec === 'start') return it.gold.total <= 600;
+      if (e.itTag === '_final') return Builds.isLegendary(it);
+      return !e.itTag || (it.tags || []).includes(e.itTag);
+    });
+    return list.length ? `<div class="grid-ic">${list.map((it) => `<button class="tile" data-act="edAdd" data-val="${it.id}"><img loading="lazy" alt="" src="${Dd.img.item(it)}">${esc(it.name)}<div class="price">${it.gold.total} 🪙</div></button>`).join('')}</div>` : '<div class="empty">Aucun objet.</div>';
+  }
+  function editItems() {
+    const d = S.ed.draft, e = S.ed;
+    let h = edHeader('🛒 Build d\'objets');
+    const lists = { start: d.start, core: d.core, boots: d.boots ? [d.boots] : [], situational: d.situational };
+    const cost = d.core.reduce((s2, i) => s2 + ((D.items[String(i)] || { gold: { total: 0 } }).gold.total), 0) + (d.boots ? (D.items[String(d.boots)] || { gold: { total: 0 } }).gold.total : 0);
+    h += '<div class="cols"><div class="card"><h2>Mon build</h2>';
+    h += ED_SECS.map(([k, lb]) => `<div class="edsec ${e.sec === k ? 'on' : ''}" data-act="edSec" data-val="${k}"><div class="row sp nw"><b class="small">${lb}</b><span class="small muted">${e.sec === k ? '◀ clique un objet à droite' : 'choisir'}</span></div>
+      <div class="row" style="gap:6px;margin-top:4px">${lists[k].length ? lists[k].map((id, i) => `<span class="edit-it">${itIcon(id, 'ico')}<span class="eia">${k !== 'boots' && i > 0 ? `<button data-act="edMv" data-sec="${k}" data-i="${i}" data-val="-1" title="Avancer">◀</button>` : ''}<button data-act="edRm" data-sec="${k}" data-i="${i}" title="Retirer">✕</button></span></span>`).join('') : '<span class="muted small">—</span>'}</div></div>`).join('');
+    h += `<p class="small muted" style="margin-top:8px">Coût des objets principaux + bottes : <b>${nf(cost)}</b> po. En partie, Noob LOL suit cet ordre : principaux, bottes, puis situationnels.</p></div>`;
+    h += `<div class="card"><h2>Ajouter des objets <span class="muted small">→ ${esc((ED_SECS.find((x) => x[0] === e.sec) || ['', ''])[1])}</span></h2>
+      ${e.sec !== 'boots' ? `<input type="search" data-ed="itQ" placeholder="🔎 Rechercher un objet…" value="${esc(e.itQ || '')}" autocomplete="off">` : ''}
+      ${e.sec === 'core' || e.sec === 'situational' ? `<div class="chips" style="margin:6px 0">${ITAG.filter(([t]) => t !== '_start' && t !== 'Consumable' && t !== 'Boots').map(([t, l]) => `<button class="chip ${(e.itTag || '') === t ? 'on' : ''}" data-act="edTag" data-val="${t}">${l}</button>`).join('')}</div>` : ''}
+      <div id="edgrid" style="margin-top:8px">${edItemGrid()}</div></div></div>`;
+    return h;
+  }
+  /* Bloc « Mes builds » sur la fiche d'un champion */
+  function myBuildsOnChamp(c) {
+    const r = forChamp(S.myRunes, c.id), it = forChamp(S.myItems, c.id);
+    return `<div class="card"><div class="row sp nw"><h2 style="margin:0">🧰 Mes builds</h2><div class="row nw"><button class="chip" data-act="edNew" data-kind="runes" data-champ="${esc(c.id)}">＋ Runes</button><button class="chip" data-act="edNew" data-kind="items" data-champ="${esc(c.id)}">＋ Objets</button></div></div>
+      ${r.length + it.length ? r.map((b) => `<div class="mb-mini" data-act="edOpen" data-kind="runes" data-val="${b.id}">✨ <b>${esc(b.name || 'Page de runes')}</b> <span class="small muted">${rolesLabel(b)}</span> ${myRunePreview(b)}</div>`).join('') + it.map((b) => `<div class="mb-mini" data-act="edOpen" data-kind="items" data-val="${b.id}">🛒 <b>${esc(b.name || 'Build')}</b> <span class="small muted">${rolesLabel(b)}</span> <span class="row nw" style="gap:2px">${b.core.map((i) => itIcon(i)).join('')}</span></div>`).join('') : '<p class="small muted">Aucun build perso pour ce champion.</p>'}</div>`;
+  }
+  /* Bloc « Mes builds » pendant la sélection */
+  function myBuildsSelect(sd) {
+    const c = byKey(sd.myChamp); if (!c) return '';
+    const r = forChamp(S.myRunes, c.id, sd.myRole), it = forChamp(S.myItems, c.id, sd.myRole);
+    if (!r.length && !it.length) return '';
+    const canApply = !!(NB && sd.live);
+    let h = `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">⭐ Mes builds · ${esc(c.name)}</h2><span class="small muted">${sd.myRole ? ROLE_NAME[sd.myRole] : ''}</span></div>`;
+    h += r.map((b) => { const done = R.applied.runes === 'my-' + b.id; const ok = runeComplete(b);
+      return `<button class="rbtn ${done ? 'done' : ''}" ${canApply && ok ? `data-act="applyMyRunes" data-val="${b.id}"` : 'disabled'}><div class="row sp nw"><span class="small"><b>${esc(b.name || 'Ma page')}</b> · ${rolesLabel(b)}</span><span class="small apply">${done ? '✅ Appliquée' : !ok ? '⚠️ incomplète' : canApply ? '⤴ Appliquer runes' + (spellsOf(b).length === 2 ? ' + sorts' : '') : ''}</span></div><div class="rpage">${myRunePreview(b)}${spellsOf(b).length ? '<span class="rsep"></span>' + spellPair(spellsOf(b).join(',')) : ''}</div></button>`; }).join('');
+    if (it.length) h += `<p class="small" style="margin-top:6px">🛒 En partie, Noob LOL suivra ton build <b>${esc(it[0].name || 'perso')}</b> : ${it[0].core.map((i) => itIcon(i)).join('')}</p>`;
+    return h + '</div>';
   }
 
   /* ---------- Méta (tier list maison) ---------- */
@@ -548,7 +661,7 @@
       h += '</div>';
     }
     h += '</div><div>';
-    if (sd.myChamp) h += pickPanel(sd, opp);
+    if (sd.myChamp) h += myBuildsSelect(sd) + pickPanel(sd, opp);
     else h += '<div class="card"><p class="muted">Survole ou choisis ton champion dans le client : ses runes, sorts et objets conseillés apparaîtront ici.</p></div>';
     h += '</div></div>';
     return h;
@@ -770,6 +883,9 @@
     if (!c || !meP) return null;
     const lp = S.lastPick && S.lastPick.champ === +c.key ? S.lastPick : null;
     const role = LIVE_POS[meP.position] || (lp && lp.role) || '';
+    const owned0 = meP.items.map((i) => i.id);
+    const personal = forChamp(S.myItems, c.id, role).sort((a, b) => (b.roles.includes(role) ? 1 : 0) - (a.roles.includes(role) ? 1 : 0))[0];
+    if (personal) return { c, role, personal, owned: owned0, next: Builds.nextItem(itemPlan(personal), owned0, D) };
     if (!role) return { c, role: '' };
     const enemies = L.players.filter((p) => p.team !== L.me.team);
     const oppP = enemies.find((p) => LIVE_POS[p.position] === role);
@@ -788,6 +904,16 @@
     if (!b) return '';
     const oc = b.opp ? byKey(b.opp) : null;
     let h = `<div class="card mybuild"><div class="row sp nw"><h2 style="margin:0">🛒 Mon build</h2><span class="small muted ell">${esc(b.c.name)}${b.role ? ' · ' + ROLE_NAME[b.role] : ''}${oc ? ' contre ' + esc(oc.name) : ''}</span></div>`;
+    if (b.personal) {
+      const P = b.personal, own = new Set(b.owned.map(Number));
+      const ic = (id, big) => `<span class="bi ${own.has(+id) ? 'own' : ''}">${itIcon(id, big ? 'ico' : 'ico sm')}${own.has(+id) ? '<i>✓</i>' : ''}</span>`;
+      h = h.replace('🛒 Mon build</h2>', `⭐ ${esc(P.name || 'Mon build perso')}</h2>`);
+      if (b.next) { const miss = b.next.cost - (L.me.gold || 0); h += `<div class="next">${itIcon(b.next.item, 'ico lg')}<div class="grow"><span class="small muted">Prochain objet</span><b>${esc(b.next.name)}</b><span class="small ${miss <= 0 ? 'pos' : 'muted'}">${miss <= 0 ? '✅ Tu as assez d\'or' : `il manque ${nf(miss)} po`}</span></div></div>`; }
+      else h += '<p class="small pos">✅ Build terminé !</p>';
+      if (P.core.length) h += `<div class="brow"><span class="small muted">Principaux</span>${P.core.map((i) => ic(i, true)).join('<span class="arrow">→</span>')}${P.boots ? `<span class="rsep"></span>${ic(P.boots, true)}` : ''}</div>`;
+      if (P.situational.length) h += `<div class="brow"><span class="small muted">Situationnels</span>${P.situational.map((i) => ic(i)).join('')}</div>`;
+      return h + '</div>';
+    }
     if (!b.role) return h + '<p class="muted small">Rôle inconnu pour cette partie.</p></div>';
     if (b.loading) return h + '<div class="loader small">Calcul…</div></div>';
     if (!b.A || !b.A.games) return h + '<p class="muted small">Pas encore de parties analysées pour ce champion dans ce rôle (collecteur).</p></div>';
@@ -1103,7 +1229,7 @@
     return `<div class="card"><h2>ℹ️ Noob LOL</h2><p>Version <b>${esc((R.info && R.info.version) || APP_VERSION)}</b>${D.version ? ` · données du patch <b>${esc(D.version)}</b>` : ''}</p>
       <p class="muted small">Données des champions, objets et runes : Data Dragon (Riot Games). Compte et statistiques : API officielle de Riot. En jeu : API officielle « Live Client Data ». Les mises à jour de l'appli s'installent toutes seules.</p>
       <details class="flat"><summary class="small">📝 Notes de version</summary>${APP_RELEASES.map((r) => `<h3>${esc(r.v)} <span class="muted small">${esc(r.date)}</span></h3><ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</details>
-      <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button><button class="btn danger small" data-act="wipe">Effacer mes favoris et notes</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button><button class="btn danger small" data-act="wipe">Effacer favoris et notes (garde mes builds)</button></div>
       <p class="muted small" style="margin-top:8px">Noob LOL n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ou de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.</p></div>`;
   }
   function voiceSettings() {
@@ -1183,6 +1309,63 @@
       case 'profileReload': cache.clear(); loadProfile(true); render(true); break;
       case 'selRole': S.select.role = v; render(true); break;
       case 'postTab': S.postTab = v; render(true); break;
+      /* ---- Mes builds ---- */
+      case 'edNew': { const k = el.dataset.kind; S.ed = { kind: k, isNew: true, sec: 'core', itQ: '', itTag: '', draft: k === 'runes' ? newRunePage(el.dataset.champ) : newItemBuild(el.dataset.champ) }; S.mode = 'prep'; S.tab = 'builds'; S.view = { champ: null, item: null }; render(); break; }
+      case 'edOpen': case 'edDup': {
+        const k = el.dataset.kind, list = k === 'runes' ? S.myRunes : S.myItems, b = list.find((x) => x.id === v); if (!b) break;
+        const draft = JSON.parse(JSON.stringify(b)); if (a === 'edDup') { draft.id = uid(); draft.name = (draft.name || '') + ' (copie)'; draft.at = Date.now(); }
+        S.ed = { kind: k, isNew: a === 'edDup', sec: 'core', itQ: '', itTag: '', draft }; S.mode = 'prep'; S.tab = 'builds'; S.view = { champ: null, item: null }; render(); break;
+      }
+      case 'edDel': if (confirmTap(el, 'Sûr ?')) { if (el.dataset.kind === 'runes') S.myRunes = S.myRunes.filter((x) => x.id !== v); else S.myItems = S.myItems.filter((x) => x.id !== v); render(true); } break;
+      case 'edCancel': S.ed = null; render(); break;
+      case 'edSave': {
+        const d = S.ed.draft;
+        if (!d.champ) { toast('Choisis un champion.'); break; }
+        const list = S.ed.kind === 'runes' ? S.myRunes : S.myItems;
+        if (S.ed.kind === 'items' && !d.core.length && !d.start.length && !d.boots) { toast('Ajoute au moins un objet.'); break; }
+        d.at = Date.now();
+        const i = list.findIndex((x) => x.id === d.id); if (i >= 0) list[i] = d; else list.push(d);
+        toast(S.ed.kind === 'runes' && !runeComplete(d) ? '💾 Enregistrée (incomplète : elle ne pourra pas être appliquée)' : '💾 Build enregistré');
+        S.ed = null; render(); break;
+      }
+      case 'edRole': { const r = S.ed.draft.roles; S.ed.draft.roles = r.includes(v) ? r.filter((x) => x !== v) : r.concat(v); render(true); break; }
+      case 'edTree': { const d = S.ed.draft; if (d.primary !== +v) { d.primary = +v; d.perks = [0, 0, 0, 0]; if (d.sub === +v) { d.sub = 0; d.subPerks = []; } } render(true); break; }
+      case 'edPerk': S.ed.draft.perks[+el.dataset.row] = +v; render(true); break;
+      case 'edSub': { const d = S.ed.draft; if (d.sub !== +v) { d.sub = +v; d.subPerks = []; } render(true); break; }
+      case 'edSubPerk': {
+        const d = S.ed.draft, row = +el.dataset.row, perk = +v;
+        if (d.subPerks.some((x) => x.perk === perk)) d.subPerks = d.subPerks.filter((x) => x.perk !== perk);
+        else { d.subPerks = d.subPerks.filter((x) => x.row !== row); d.subPerks.push({ row, perk }); if (d.subPerks.length > 2) d.subPerks.shift(); }
+        render(true); break;
+      }
+      case 'edShard': S.ed.draft.shards[+el.dataset.row] = +v; render(true); break;
+      case 'edSpell': { const d = S.ed.draft, k = +v; d.spells = d.spells.filter(Boolean); if (d.spells.includes(k)) d.spells = d.spells.filter((x) => x !== k); else { d.spells.push(k); if (d.spells.length > 2) d.spells.shift(); } while (d.spells.length < 2) d.spells.push(0); render(true); break; }
+      case 'edSec': if (!ev.target.closest('button')) { S.ed.sec = v; S.ed.itQ = ''; render(true); } break;
+      case 'edTag': S.ed.itTag = v; render(true); break;
+      case 'edAdd': {
+        const d = S.ed.draft, id = +v, sec = S.ed.sec;
+        if (sec === 'boots') d.boots = id;
+        else if (sec === 'start') { if (d.start.length < 4) d.start.push(id); }
+        else { const L2 = d[sec]; if (!L2.includes(id) && L2.length < 8) L2.push(id); }
+        render(true); break;
+      }
+      case 'edRm': { const d = S.ed.draft, sec = el.dataset.sec, i = +el.dataset.i; if (sec === 'boots') d.boots = 0; else d[sec].splice(i, 1); render(true); break; }
+      case 'edMv': { const L2 = S.ed.draft[el.dataset.sec], i = +el.dataset.i; if (i > 0) [L2[i - 1], L2[i]] = [L2[i], L2[i - 1]]; render(true); break; }
+      case 'applyMyRunes': {
+        const b = S.myRunes.find((x) => x.id === v); if (!b) break;
+        el.classList.add('busy');
+        const sp = spellsOf(b);
+        NB.lcu.applyRunes(myRunePayload(b)).then(() => {
+          R.applied.runes = 'my-' + b.id;
+          if (sp.length === 2) {
+            let [x, y] = sp; const me = (R.lcu.champSelect && R.lcu.champSelect.myTeam.find((p) => p.isMe)) || {}; const cur = me.spells || [];
+            if (y === 4 && cur[1] !== 4) [x, y] = [y, x]; if (x === 4 && cur[1] === 4) [x, y] = [y, x];
+            return NB.lcu.applySpells([x, y]).then(() => { R.applied.spells = [x, y].sort((m, n) => m - n).join(','); toast('✅ Ta page de runes et tes sorts sont appliqués dans le client'); });
+          }
+          toast('✅ Ta page de runes est appliquée dans le client');
+        }).catch((e) => toast('❌ ' + e.message)).finally(() => render(true));
+        break;
+      }
       case 'openMatch': toast('Chargement de la partie…'); NB.postgame.load(v).then((d) => { R.post = d; S.mode = 'game'; S.postTab = 'resume'; render(); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'voiceTest': speak('Le Nashor est disponible. Tu as assez d\'or pour Lame d\'infini.'); break;
       case 'voiceRate': S.opt.voiceRate = +v; render(true); speak('Vitesse de la voix.'); break;
@@ -1256,7 +1439,7 @@
       case 'installUpdate': NB.installUpdate(); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'reloadData': if (window.caches) window.caches.delete('nooblol-ddragon').finally(() => location.reload()); else location.reload(); break;
-      case 'wipe': if (confirmTap(el, 'Tout effacer ? Clique encore')) { localStorage.removeItem(KEY); location.reload(); } break;
+      case 'wipe': if (confirmTap(el, 'Tout effacer ? Clique encore')) { const keep = { myRunes: S.myRunes, myItems: S.myItems }; localStorage.setItem(KEY, JSON.stringify(Object.assign(defaults(), keep))); location.reload(); } break;
       default: break;
     }
   });
@@ -1288,6 +1471,10 @@
 
   document.addEventListener('input', (ev) => {
     const el = ev.target;
+    if (el.dataset.ed && S.ed) {
+      if (el.dataset.ed === 'name') { S.ed.draft.name = el.value; return; }
+      if (el.dataset.ed === 'itQ') { S.ed.itQ = el.value; const g = document.getElementById('edgrid'); if (g) g.innerHTML = edItemGrid(); return; }
+    }
     if (el.dataset.in) {
       const [o, k] = el.dataset.in.split('.');
       if (k) S[o][k] = el.value; else S[o] = el.value;
@@ -1310,6 +1497,7 @@
       cfgSet(patch);
       return;
     }
+    if (el.dataset.ed === 'champ' && S.ed) { S.ed.draft.champ = el.value; el.blur(); render(true); return; }
     if (el.dataset.voice) { S.opt.voiceName = el.value; save(); speak('Voix sélectionnée.'); return; }
     if (el.dataset.sel) {
       if (el.dataset.sel === 'me') S.select.manualMe = el.value; else S.select.manualEnemies[+el.dataset.i] = el.value;

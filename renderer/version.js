@@ -1,6 +1,12 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.6.0';
+var APP_VERSION = '2.7.0';
 var APP_RELEASES = [
+  { v: '2.7.0', date: '2026-10-23', notes: [
+    'Préparation : nouvel onglet « Mes builds » pour créer tes propres pages de runes (voie principale, secondaire, fragments, sorts d\'invocateur) et tes builds d\'objets (départ, objets principaux dans l\'ordre, bottes, situationnels). Chaque build est associé à un champion et à un ou plusieurs rôles.',
+    'Sélection : tes pages de runes pour ton champion et ton rôle apparaissent en premier ; un clic les applique dans le client avec tes sorts d\'invocateur.',
+    'En jeu : ton build d\'objets perso remplace le build conseillé (prochain objet, or manquant, objets déjà achetés cochés, annonce vocale).',
+    'Fiche champion : tes builds pour ce champion, avec création rapide.',
+  ]},
   { v: '2.6.0', date: '2026-10-22', notes: [
     'Clé Riot : détection de l\'expiration (refus de Riot + vérification toutes les 20 min). Un bandeau et une annonce vocale te préviennent, et un rappel apparaît quand une clé de développement approche des 24 h.',
     'Clé Riot : bouton « Renouveler ma clé ». Il ouvre le portail développeur de Riot dans une fenêtre de l\'appli (connexion mémorisée). Tu coches le captcha et tu cliques « Regenerate API Key » : Noob LOL récupère la nouvelle clé, la vérifie, l\'enregistre et relance le collecteur.',

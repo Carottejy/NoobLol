@@ -4,7 +4,7 @@ Compagnon de jeu **League of Legends** pour débutants, en français. Applicatio
 
 | Partie | Ce qu'elle fait |
 |---|---|
-| 📚 **Préparation** | Accueil, **Mon compte** (rang, maîtrises, dernières parties), **Champions** (sorts, conseils pour jouer et contrer, statistiques Noob LOL : runes, sorts, objets, match-ups), **Méta** (tier list maison par rôle), **Objets**, **Runes**, **Guide** débutant, **Lexique**. |
+| 📚 **Préparation** | Accueil, **Mon compte** (rang, maîtrises, dernières parties), **Champions** (sorts, conseils pour jouer et contrer, statistiques Noob LOL : runes, sorts, objets, match-ups), **Méta** (tier list maison par rôle), **Objets**, **Runes**, **Mes builds** (tes pages de runes et builds d'objets par champion et par rôle), **Guide** débutant, **Lexique**. |
 | 🎯 **Sélection** | S'ouvre toute seule quand la sélection commence : équipes et bannissements en direct, ton rôle, ton adversaire de voie (deviné ou choisi), **champions conseillés** (statistiques + tes maîtrises + champions faciles), **runes, sorts et objets** du champion survolé, conseils pour contrer l'adversaire. *C'est toujours toi qui cliques dans le client.* |
 | ⚔️ **En jeu** | S'ouvre toute seule au lancement de la partie, sans aucun bouton : mini-carte en direct, les 10 joueurs (rang, niveau, K/D/A, objets, AD/AP), objectifs avec temps avant apparition et score, **Mon build** (prochain objet, or manquant), **annonces vocales**. À la fin de la partie : **toutes les statistiques en onglets** (Résumé, Ma partie, Dégâts, Or et farm, Vision, Builds). |
 | ⚙️ **Réglages** | Clé Riot (chiffrée par Windows), serveur, Riot ID, collecteur de statistiques, réglage de la mini-carte. |
