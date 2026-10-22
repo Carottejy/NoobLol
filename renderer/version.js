@@ -1,6 +1,12 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.2.0';
+var APP_VERSION = '2.3.0';
 var APP_RELEASES = [
+  { v: '2.3.0', date: '2026-10-22', notes: [
+    'En jeu : nouvelle mise en page plein écran. La page utilise toute la largeur, la mini-carte est carrée et calée sur la hauteur de la fenêtre, tout le reste est à droite et tient sans défiler en 1080p.',
+    'En jeu : bandeau compact (horloge, ton champion, or, boutons mini-carte / écran 2 / son), sorts adverses et objectifs côte à côte, timers sur une ligne.',
+    'En jeu : s\'adapte à la taille de la fenêtre (1440p, 1080p, portable, demi-écran : la mini-carte passe au-dessus).',
+    'Réglages : estimation corrigée du collecteur (environ 1 500 parties par heure avec une clé de développement).',
+  ]},
   { v: '2.2.0', date: '2026-10-22', notes: [
     'Sélection : détection de ton champion (survolé ou verrouillé) et de ta lane (attribuée par le client, sinon déduite de ton champion).',
     'Sélection : runes et sorts conseillés, contre ton adversaire de voie quand il y a assez de parties, sinon en général.',

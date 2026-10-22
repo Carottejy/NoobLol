@@ -97,6 +97,7 @@
   }
   function render(keepScroll) {
     const y = window.scrollY;
+    document.body.dataset.mode = S.mode;
     renderTop();
     let v;
     if (S.mode === 'select') v = viewSelect;
@@ -670,8 +671,8 @@
     const teamDmg = (t) => (t.length ? t.reduce((s, p) => s + dmgProfile(p).ad, 0) / t.length : 0.5);
     const advice = (v) => (v >= 0.62 ? 'surtout physique : l\'<b>armure</b> est rentable' : v <= 0.38 ? 'surtout magique : la <b>résistance magique</b> est rentable' : 'mixte : équilibre armure et résistance magique');
     return `<div class="card players"><div class="row sp"><h2 style="margin:0">👥 Joueurs</h2><span class="small">Kills <b>${kills[0]}</b> – <b>${kills[1]}</b> · Objets <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${nf(diff)}</b> po</span></div>
-      ${teams.map((t, i) => { const td = teamDmg(t); return `<div class="tdhead"><b>${i ? '🟥 Adversaires' : '🟦 Mon équipe'}</b><span class="muted small">${nf(val[i])} po d'objets</span>${dmgBar(td)}</div>
-        ${i ? `<p class="small tipline">Dégâts adverses ${advice(td)}.</p>` : ''}${t.map(row).join('')}`; }).join('')}
+      ${teams.map((t, i) => { const td = teamDmg(t); return `<div class="tdhead"><b>${i ? '🟥 Adversaires' : '🟦 Mon équipe'}</b><span class="muted small">${nf(val[i])} po</span>${i ? `<span class="small tipline ell">→ ${advice(td)}</span>` : ''}${dmgBar(td)}</div>
+        ${t.map(row).join('')}`; }).join('')}
       <p class="muted small">AD / AP estimé d'après les objets achetés (et le profil du champion en début de partie).</p></div>`;
   }
 
@@ -722,65 +723,62 @@
     else mmStop();
   }
 
+  /* Écran « En jeu » pensé pour le plein écran : mini-carte carrée à gauche (taille calée sur la hauteur),
+     tout le reste à droite en colonnes qui se réorganisent selon la largeur disponible. */
   function viewGame() {
     const nd = needData();
     const g = S.game, L = R.live;
-    let h = `<div class="row sp"><h1>⚔️ En jeu</h1>${NB ? `<div class="row"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed">🗺️ Mini-carte dans la fenêtre</button><button class="btn ${R.miniOpen ? 'danger' : 'hex'} small" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}">🖥️ ${R.miniOpen ? 'Fermer l\'écran 2' : 'Mini-carte sur l\'écran 2'}</button></div>` : ''}</div>`;
-    const mapCard = S.opt.miniEmbed && NB ? `<div class="card mmcard"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
-    if (nd) return h + `<div class="gametop ${mapCard ? '' : 'nomap'}">${mapCard}<div>${nd}</div></div>`;
-    h += `<div class="gametop ${mapCard ? '' : 'nomap'}">${mapCard}
-      <div>${L ? playersPanel(L) : `<div class="card"><h2>👥 Joueurs</h2><p class="muted">${NB ? 'Aucune partie détectée. Pendant une partie, les 10 joueurs s\'affichent ici avec leurs kills, morts, assistances, objets et leur profil de dégâts AD / AP (données officielles « Live Client Data » de Riot).' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`}</div></div>`;
-    h += '<div class="cols"><div>';
-    /* Horloge */
-    h += `<div class="card gold"><div class="row sp"><h2 style="margin:0">🕒 Horloge de jeu</h2>${L ? '<span class="pill live">● Synchronisée avec le jeu</span>' : ''}</div>`;
-    if (g.start) {
-      h += `<div class="clock" data-clock>${fmt(gameSec())}</div>`;
-      if (!L) h += `<div class="row"><input type="text" placeholder="Corriger (ex. 12:30)" id="clockFix" class="grow" style="min-height:40px"><button class="btn ghost small" data-act="clockFix">Caler</button><button class="btn danger small" data-act="newGame">Nouvelle partie</button></div>`;
-    } else {
-      h += `<p class="muted">${NB ? 'Pendant une partie, l\'horloge se synchronise toute seule avec le jeu.' : ''} Sans le jeu, lance-la à 0:00 ou entre l'heure affichée en jeu.</p>
-        <div class="row"><button class="btn" data-act="clockStart">▶ Lancer à 0:00</button><input type="text" placeholder="ou heure actuelle, ex. 3:45" id="clockFix" class="grow" style="min-height:44px"><button class="btn ghost" data-act="clockFix">OK</button></div>`;
-    }
-    h += '</div>';
+    const showMap = S.opt.miniEmbed && NB;
+    const tools = NB ? `<div class="row nw gm-btns"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed" title="Mini-carte dans la fenêtre">🗺️ <span class="hide-s">Mini-carte</span></button><button class="chip ${R.miniOpen ? 'on' : ''}" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}" title="Mini-carte sur l'écran 2">🖥️ <span class="hide-s">Écran 2</span></button><button class="chip ${S.opt.sound ? 'on' : ''}" data-act="opt" data-val="sound" title="Alarme sonore">🔔</button></div>` : '';
+    const mapCard = showMap ? `<div class="gm-map card"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
+    if (nd) return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${tools}${nd}</div></div>`;
+
+    /* Bandeau : horloge + mon champion */
+    let strip = `<div class="card gm-strip"><div class="gm-clock">${g.start ? `<span class="clock" data-clock>${fmt(gameSec())}</span>` : '<span class="clock off">--:--</span>'}${L ? '<span class="pill live">● En direct</span>' : ''}</div>`;
     if (L && L.me && L.me.stats) {
       const st = L.me.stats; const c = D.champs[L.me.champ];
-      h += `<div class="card"><div class="row nw">${cIcon(c, 'ico lg')}<div class="grow"><h2 style="margin:0">${esc(c ? c.name : '')} · niveau ${L.me.level}</h2><span class="muted small">❤️ ${st.hp}/${st.maxHp} · ⚔️ ${st.ad} AD · 🔮 ${st.ap} AP · 🛡️ ${st.armor}/${st.mr} · 👟 ${st.ms}</span></div><div class="gold-big">${nf(L.me.gold)} 🪙</div></div></div>`;
+      strip += `<div class="gm-me">${cIcon(c, 'ico')}<div class="grow"><b>${esc(c ? c.name : '')} · niv. ${L.me.level}</b><span class="muted small">❤️ ${st.hp}/${st.maxHp} · ⚔️ ${st.ad} · 🔮 ${st.ap} · 🛡️ ${st.armor}/${st.mr} · 👟 ${st.ms}</span></div><span class="gold-big">${nf(L.me.gold)} 🪙</span></div>`;
+    } else if (!L) {
+      strip += g.start
+        ? `<div class="row nw grow"><input type="text" placeholder="Corriger (ex. 12:30)" id="clockFix" class="grow"><button class="btn ghost small" data-act="clockFix">Caler</button><button class="btn danger small" data-act="newGame">Nouvelle partie</button></div>`
+        : `<div class="row nw grow"><button class="btn small" data-act="clockStart">▶ 0:00</button><input type="text" placeholder="ou heure du jeu, ex. 3:45" id="clockFix" class="grow"><button class="btn ghost small" data-act="clockFix">OK</button></div>`;
     }
+    strip += tools + '</div>';
+
+    const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted">${NB ? 'Aucune partie détectée. Pendant une partie, les 10 joueurs s\'affichent ici avec leurs kills, morts, assistances, objets et leur profil AD / AP.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
+
     /* Sorts adverses */
-    h += `<div class="card"><div class="row sp"><h2 style="margin:0">⚔️ Sorts d'invocateur adverses</h2><button class="chip ${S.opt.editEnemies ? 'on' : ''}" data-act="toggleEdit">${S.opt.editEnemies ? '✔ Terminé' : '✏️ Modifier'}</button></div>
-      <p class="muted small">Un ennemi utilise son Saut éclair ? Clique sur l'icône : le compte à rebours démarre. Clique à nouveau pour annuler.${L ? ' Champions et sorts remplis automatiquement depuis le jeu.' : ''}</p>`;
-    h += g.enemies.map((e, i) => {
+    let spells = `<div class="card"><div class="row sp nw"><h2 style="margin:0" title="Clique sur un sort utilisé : le compte à rebours démarre (re-clic = annuler).">⚔️ Sorts adverses</h2><div class="row nw" style="gap:6px"><button class="chip" data-act="copyChat" title="Copier les temps de recharge pour le chat">📋 Chat</button>${L ? '' : '<button class="chip" data-act="resetEnemies">Vider</button>'}<button class="chip" data-act="toggleEdit">${S.opt.editEnemies ? '✔' : '✏️'}</button></div></div>
+      <p class="muted small gm-hint">Clique sur un sort utilisé : le compte à rebours démarre (re-clic = annuler).</p>`;
+    spells += g.enemies.map((e, i) => {
       const c = D.champs[e.champ];
       const head = S.opt.editEnemies || !c
         ? `<select data-enemy="${i}" data-field="champ"><option value="">— Ennemi ${i + 1} —</option>${D.champList.map((x) => `<option value="${esc(x.id)}" ${x.id === e.champ ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`
-        : `<div class="row nw">${cIcon(c)}<b>${esc(c.name)}</b></div>`;
+        : `<div class="row nw">${cIcon(c, 'ico sm')}<b class="ell">${esc(c.name)}</b></div>`;
       const btns = [0, 1].map((k) => {
-        const sid = e.s[k], s = summ(sid), run = e.until[k] > now();
+        const s = summ(e.s[k]), run = e.until[k] > now();
         return `<button class="sspell ${run ? 'run' : ''}" data-act="sspell" data-i="${i}" data-k="${k}" title="${esc(s ? s.name : 'Choisir un sort')}">${s ? `<img alt="" src="${Dd.img.spell(s)}">` : '<span class="none">choisir</span>'}${run ? `<span class="cdv" data-until="${e.until[k]}">${fmt((e.until[k] - now()) / 1000)}</span>` : ''}</button>`;
       }).join('');
       let edit = '';
       if (S.opt.editEnemies) {
-        edit = `<div class="row" style="margin-top:6px">${[0, 1].map((k) => `<select class="grow" data-enemy="${i}" data-field="s${k}"><option value="">— Sort ${k ? 'F' : 'D'} —</option>${D.summList.map((s) => `<option value="${esc(s.id)}" ${s.id === e.s[k] ? 'selected' : ''}>${esc(s.name)} (${s.cooldownBurn} s)</option>`).join('')}</select>`).join('')}</div>
-          <div class="row" style="margin-top:6px"><span class="muted small">Accélération des sorts d'invocateur :</span>${[0, 10, 18, 28].map((v) => `<button class="chip ${e.haste === v ? 'on' : ''}" data-act="haste" data-i="${i}" data-val="${v}">${v ? '+' + v : 'Aucune'}</button>`).join('')}</div>`;
+        edit = `<div class="row" style="margin-top:6px">${[0, 1].map((k) => `<select class="grow" data-enemy="${i}" data-field="s${k}"><option value="">— Sort ${k ? 'F' : 'D'} —</option>${D.summList.map((x) => `<option value="${esc(x.id)}" ${x.id === e.s[k] ? 'selected' : ''}>${esc(x.name)} (${x.cooldownBurn} s)</option>`).join('')}</select>`).join('')}</div>
+          <div class="row" style="margin-top:6px"><span class="muted small">Accélération :</span>${[0, 10, 18, 28].map((v) => `<button class="chip ${e.haste === v ? 'on' : ''}" data-act="haste" data-i="${i}" data-val="${v}">${v ? '+' + v : '0'}</button>`).join('')}</div>`;
       }
-      const info = [0, 1].filter((k) => e.until[k] > now()).map((k) => { const s = summ(e.s[k]); const at = atGame(e.until[k]); return `${esc(s ? s.name : '?')} ${at ? 'à ' + at : ''}`; }).join(' · ');
-      return `<div class="enemy"><div class="row nw"><div class="grow">${head}${info ? `<div class="muted small" style="margin-top:4px">⏳ ${info}</div>` : ''}</div>${btns}</div>${edit}</div>`;
+      const info = [0, 1].filter((k) => e.until[k] > now()).map((k) => { const x = summ(e.s[k]); const at = atGame(e.until[k]); return `${esc(x ? x.name : '?')} ${at ? 'à ' + at : ''}`; }).join(' · ');
+      return `<div class="enemy"><div class="row nw"><div class="grow" style="min-width:0">${head}${info ? `<span class="muted small ell">⏳ ${info}</span>` : ''}</div>${btns}</div>${edit}</div>`;
     }).join('');
-    h += `<div class="row" style="margin-top:6px"><button class="btn hex small" data-act="copyChat">📋 Copier pour le chat</button>${L ? '' : '<button class="btn ghost small" data-act="resetEnemies">Vider les ennemis</button>'}</div>
-      ${S.opt.editEnemies ? '<p class="muted small">Exemple : la rune « Perspicacité cosmique » donne +18 d\'accélération des sorts d\'invocateur.</p>' : ''}</div>`;
-    h += '</div><div>';
-    /* Objectifs */
-    h += `<div class="card"><h2>🐉 Objectifs et buffs</h2><p class="muted small">${L ? 'Dragons et Nashor se lancent tout seuls quand le jeu les annonce. ' : ''}Pour le reste, clique sur « Tué » quand le monstre meurt.</p>
-      ${GUIDE.timers.map((t) => {
-        const u = g.timers[t.id] || 0, run = u > now();
-        return `<div class="timer ${run ? 'run' : ''}"><span style="font-size:1.3rem">${t.icon}</span><div class="nm"><b>${esc(t.name)}</b><div class="muted small">${run && g.start ? 'revient à ' + atGame(u) : 'réapparition ' + fmt(t.respawn)}</div></div>
-          <span class="cd" ${run ? `data-until="${u}"` : ''}>${run ? fmt((u - now()) / 1000) : '—'}</span>
-          ${run ? `<button class="chip" data-act="timerStop" data-val="${t.id}">✕</button>` : `<button class="btn small" data-act="timerGo" data-val="${t.id}">Tué</button>`}</div>`;
-      }).join('')}
-      <p class="muted small">Le Baron Nashor apparaît la première fois à 20:00. Repères indicatifs : Riot peut les ajuster selon les patchs.</p></div>`;
-    if (g.log.length) h += `<div class="card"><h2>📜 Journal de la partie</h2>${g.log.slice(0, 12).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div>`;
-    h += `<div class="card"><h2>⚙️ Alarmes</h2><div class="chips"><button class="chip ${S.opt.sound ? 'on' : ''}" data-act="opt" data-val="sound">🔔 Son</button></div><p class="muted small" style="margin-top:6px">Une alarme sonne quand un sort ou un objectif revient.</p></div>`;
-    h += '</div></div>';
-    return h;
+    spells += '</div>';
+
+    /* Objectifs + journal */
+    let objs = `<div class="card"><h2 title="${L ? 'Dragons et Nashor se lancent tout seuls. ' : ''}Nashor apparaît à 20:00. Repères indicatifs selon les patchs.">🐉 Objectifs et buffs</h2><div class="timers">${GUIDE.timers.map((t) => {
+      const u = g.timers[t.id] || 0, run = u > now();
+      return `<div class="timer ${run ? 'run' : ''}" title="${run && g.start ? 'Revient à ' + atGame(u) : 'Réapparition en ' + fmt(t.respawn)}"><span class="ti">${t.icon}</span><div class="nm"><b class="ell">${esc(t.name)}</b>${run && g.start ? `<span class="muted small">à ${atGame(u)}</span>` : ''}</div>
+        ${run ? `<span class="cd" data-until="${u}">${fmt((u - now()) / 1000)}</span>` : ''}
+        ${run ? `<button class="chip" data-act="timerStop" data-val="${t.id}">✕</button>` : `<button class="btn small" data-act="timerGo" data-val="${t.id}">Tué</button>`}</div>`;
+    }).join('')}</div><p class="muted small gm-hint">${L ? 'Dragons et Nashor se lancent tout seuls. ' : ''}Nashor apparaît à 20:00. Repères indicatifs selon les patchs.</p></div>`;
+    if (g.log.length) objs += `<div class="card"><h2>📜 Journal</h2><div class="log">${g.log.slice(0, 12).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>`;
+
+    return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${strip}${players}<div class="gm-tools"><div>${spells}</div><div>${objs}</div></div></div></div>`;
   }
   function chatLine() {
     const parts = [];
@@ -841,7 +839,7 @@
     h += '</div><div>';
     const running = col.running;
     h += `<div class="card"><h2>📊 Collecteur de statistiques</h2>
-      <p class="muted small">Il récupère des parties classées récentes de joueurs Maître, Grand maître et Challenger de ton serveur (API officielle de Riot) et calcule runes, objets, sorts et match-ups par champion et par rôle. Tout est stocké sur ton PC. Avec une clé de développement : environ 1 000 parties par jour si le PC reste allumé (2 requêtes par partie : résultat + chronologie des achats).</p>
+      <p class="muted small">Il récupère des parties classées récentes de joueurs Maître, Grand maître et Challenger de ton serveur (API officielle de Riot) et calcule runes, objets, sorts et match-ups par champion et par rôle. Tout est stocké sur ton PC. Avec une clé de développement (100 requêtes / 2 min, 2 requêtes par partie : résultat + chronologie des achats) : environ 1 500 parties par heure. Une clé de développement expire au bout de 24 h.</p>
       <div class="kpis"><div><b>${nf(col.matches)}</b><span>parties analysées</span></div><div><b>${nf(col.picks)}</b><span>lignes champion</span></div><div><b>${nf(col.pending)}</b><span>en attente</span></div><div><b>${nf(col.seeds)}</b><span>joueurs suivis</span></div></div>
       <p class="small">${running ? '🟢 En cours…' : '⏸️ À l\'arrêt'}${col.lastError ? ` · <span class="neg">${esc(col.lastError)}</span>` : ''}</p>
       <div class="row"><button class="btn ${running ? 'danger' : ''} small" data-act="${running ? 'colStop' : 'colStart'}" ${c.hasApiKey ? '' : 'disabled'}>${running ? '⏸️ Arrêter' : '▶ Démarrer'}</button>

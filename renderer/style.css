@@ -265,3 +265,108 @@ details.flat { background: none; border: 0; margin: 4px 0; } details.flat > summ
 .arrow { color: var(--accent2); font-weight: 800; }
 .skillord { font: 800 1.1rem ui-monospace, Menlo, Consolas, monospace; color: var(--accent2); }
 .sit { padding: 6px 0; border-top: 1px solid var(--line); }
+
+/* ===== En jeu : mise en page plein écran ===== */
+body[data-mode=game] #app { max-width: none; padding: 10px 14px 20px; }
+body[data-mode=game] .topbar { max-width: none; }
+/* Taille de la mini-carte : carrée, calée sur la hauteur de la fenêtre, plafonnée à la moitié de la largeur */
+.gm { --map: min(calc(100vh - 92px), 47vw); display: grid; grid-template-columns: var(--map) minmax(0, 1fr); gap: 12px; align-items: start; }
+.gm.nomap { grid-template-columns: minmax(0, 1fr); }
+.gm-map { position: sticky; top: 66px; width: var(--map); height: var(--map); padding: 4px; margin: 0; }
+.gm-map .mmslot { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
+.gm-side { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.gm-side > .card, .gm-tools .card { margin: 0; }
+.gm-tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; align-items: start; }
+.gm-tools > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.gm-strip { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 12px; }
+.gm-clock { display: flex; align-items: center; gap: 8px; }
+.gm-strip .clock { font-size: 2rem; margin: 0; }
+.gm-strip .clock.off { color: var(--muted); }
+.gm-me { display: flex; align-items: center; gap: 10px; flex: 1 1 320px; min-width: 0; }
+.gm-me .grow { display: flex; flex-direction: column; min-width: 0; }
+.gm-strip input { min-height: 36px; padding: 6px 10px; }
+.gm-btns { margin-left: auto; gap: 6px; }
+.gm-btns .chip { min-height: 34px; padding: 5px 10px; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.enemy { padding: 6px 8px; margin: 0 0 6px; }
+.enemy .sspell { width: 44px; height: 44px; }
+.timers { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }
+.timers .timer { margin: 0; padding: 6px 8px; }
+.timers .ti { font-size: 1.2rem; }
+.timers .cd { min-width: 48px; font-size: 1rem; }
+.log { max-height: 220px; overflow: auto; }
+
+/* Panneau joueurs : s'adapte à sa propre largeur */
+.players { container-type: inline-size; }
+.players .prow { grid-template-columns: 44px minmax(80px, 1fr) 64px auto minmax(110px, 150px); }
+@container (max-width: 520px) {
+  .players .prow { grid-template-columns: 44px minmax(0, 1fr) 64px; row-gap: 4px; }
+  .players .prow .build { grid-column: 2 / 3; }
+  .players .prow .dmg { grid-column: 3 / 4; }
+  .players .tdhead .dmg { width: 140px; }
+}
+@container (max-width: 380px) {
+  .players .prow .build .ico.sm { width: 24px; height: 24px; }
+  .players .prow .pname span { display: none; }
+}
+
+/* Très grands écrans : un peu plus d'air */
+@media (min-width: 2200px) { .gm { --map: min(calc(100vh - 92px), 44vw); } .players .prow .build .ico.sm { width: 34px; height: 34px; } body[data-mode=game] { font-size: 17px; } }
+/* Fenêtre étroite : on empile, la mini-carte reste grande */
+@media (max-width: 1100px) {
+  .gm { grid-template-columns: minmax(0, 1fr); }
+  .gm-map { position: static; width: min(100%, 72vh); height: auto; aspect-ratio: 1 / 1; margin: 0 auto; }
+  .hide-s { display: none; }
+}
+/* Fenêtre basse (ex. demi-écran) : mini-carte bornée par la hauteur */
+@media (max-height: 640px) and (min-width: 1101px) { .gm { --map: min(calc(100vh - 80px), 40vw); } }
+
+/* Compactage en jeu : tout doit tenir dans un écran 1080p sans défiler */
+body[data-mode=game] .card { padding: 9px 10px; }
+body[data-mode=game] h2 { font-size: .98rem; margin-bottom: 6px; }
+body[data-mode=game] .players .prow { padding: 3px 6px; margin-bottom: 3px; gap: 8px; }
+body[data-mode=game] .players .pic, body[data-mode=game] .players .pic .ico { width: 34px; height: 34px; }
+body[data-mode=game] .players .prow { grid-template-columns: 36px minmax(80px, 1fr) 60px auto minmax(100px, 140px); }
+body[data-mode=game] .players .build .ico.sm { width: 25px; height: 25px; }
+body[data-mode=game] .players .tdhead { margin: 6px 0 3px; }
+body[data-mode=game] .players .tipline { margin: 0 0 3px; }
+body[data-mode=game] .players > p.muted:last-child { display: none; }
+body[data-mode=game] .enemy { padding: 4px 8px; margin-bottom: 4px; }
+body[data-mode=game] .enemy .sspell { width: 38px; height: 38px; }
+body[data-mode=game] .enemy select { min-height: 34px; padding: 4px 8px; }
+body[data-mode=game] .timers .timer { padding: 4px 8px; }
+body[data-mode=game] .timers .btn.small { min-height: 30px; padding: 4px 10px; }
+body[data-mode=game] .gm-hint { margin: 0 0 6px; }
+body[data-mode=game] .log { max-height: 140px; }
+@container (max-width: 520px) { body[data-mode=game] .players .prow { grid-template-columns: 36px minmax(0, 1fr) 60px; } }
+/* Écrans hauts (1440p et plus) : on peut agrandir de nouveau */
+@media (min-height: 1300px) { body[data-mode=game] .players .pic, body[data-mode=game] .players .pic .ico { width: 42px; height: 42px; } body[data-mode=game] .players .build .ico.sm { width: 32px; height: 32px; } body[data-mode=game] .enemy .sspell { width: 46px; height: 46px; } }
+
+/* v2.3 : en-têtes et lignes encore plus compacts en jeu */
+.tdhead .tipline { flex: 1 1 auto; min-width: 0; margin: 0; color: var(--accent2); }
+.tdhead .dmg { margin-left: auto; flex: 0 0 auto; }
+body[data-mode=game] .gm-hint { display: none; }
+body[data-mode=game] .gm-tools .chip { min-height: 30px; padding: 4px 9px; font-size: .82rem; }
+body[data-mode=game] .timers { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; }
+body[data-mode=game] .timers .timer { padding: 3px 6px; gap: 6px; }
+body[data-mode=game] .timers .nm { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+body[data-mode=game] .timers .nm b { font-size: .88rem; }
+body[data-mode=game] .timers .cd { min-width: 42px; font-size: .95rem; }
+body[data-mode=game] .timers .btn.small { min-height: 28px; padding: 3px 9px; font-size: .8rem; }
+body[data-mode=game] .enemy .row.nw > .grow { display: flex; align-items: center; gap: 8px; }
+body[data-mode=game] .enemy .row.nw > .grow > .row { flex: 0 1 auto; min-width: 0; }
+
+/* Fenêtre agrandie sous Windows (~1000 px de haut) : lignes un peu plus serrées */
+@media (max-height: 1100px) and (min-width: 1101px) {
+  body[data-mode=game] .players .pic, body[data-mode=game] .players .pic .ico { width: 30px; height: 30px; }
+  body[data-mode=game] .players .prow { grid-template-columns: 32px minmax(80px, 1fr) 60px auto minmax(100px, 140px); padding: 2px 6px; margin-bottom: 2px; }
+  body[data-mode=game] .players .pname, body[data-mode=game] .players .kda { line-height: 1.1; }
+  body[data-mode=game] .players .build .ico.sm { width: 23px; height: 23px; }
+  body[data-mode=game] .enemy .sspell { width: 34px; height: 34px; }
+  body[data-mode=game] .enemy { padding: 3px 8px; margin-bottom: 3px; }
+  body[data-mode=game] .gm-strip { padding: 5px 10px; }
+  body[data-mode=game] .gm-strip .clock { font-size: 1.7rem; }
+  body[data-mode=game] .gm, body[data-mode=game] .gm-side, body[data-mode=game] .gm-tools, body[data-mode=game] .gm-tools > div { gap: 10px; }
+}
+.tdhead > b, .tdhead > span.muted { white-space: nowrap; }
+@container (max-width: 760px) { .players .tdhead .tipline { display: none; } }
