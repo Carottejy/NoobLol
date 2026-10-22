@@ -3,7 +3,7 @@
 ## 1. Récupérer l'installeur
 **Le plus simple** : sur la page du dépôt GitHub, colonne de droite → **Releases** → dernière version → télécharge `Noob-LOL-Setup-x.y.z.exe`.
 
-> Pas encore de Release ? Onglet **Actions** → « Installeur Windows » → **Run workflow**. Après ~5 minutes, ouvre l'exécution terminée et télécharge l'artefact **Noob-LOL-installeur** (un .zip qui contient le .exe).
+> Pas encore de Release ? Onglet **Actions** → « Installeur Windows » → **Run workflow** (laisse « Publier une Release » coché) → **Run workflow**. Après ~5 à 10 minutes, la Release apparaît avec l'installeur. (L'installeur est aussi dans l'artefact **Noob-LOL-installeur** de l'exécution.)
 
 Windows peut afficher « Windows a protégé votre ordinateur » (l'appli n'est pas signée par un certificat payant) : **Informations complémentaires → Exécuter quand même**.
 

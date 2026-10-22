@@ -36,7 +36,7 @@ npm run dist     # fabrique l'installeur Windows dans dist/
 | `renderer/` | Interface : `app.js` (3 parties + réglages), `ddragon.js`, `guide.js` (textes), `style.css`, `minimap.html/js` |
 | `test/` | Tests Node (`node --test`) |
 
-Pour publier une mise à jour : augmenter `version` dans `package.json` (et les notes dans `renderer/version.js`), puis pousser un tag `vX.Y.Z`. GitHub Actions fabrique l'installeur et publie la Release ; les PC équipés se mettent à jour tout seuls.
+Pour publier une mise à jour : augmenter `version` dans `package.json` (et les notes dans `renderer/version.js`), puis lancer le workflow « Installeur Windows » (onglet Actions → Run workflow) ou pousser un tag `vX.Y.Z`. GitHub Actions fabrique l'installeur et publie la Release ; les PC équipés se mettent à jour tout seuls.
 
 ---
 Noob LOL n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ou de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.
