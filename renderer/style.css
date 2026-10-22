@@ -227,3 +227,32 @@ details.flat { background: none; border: 0; margin: 4px 0; } details.flat > summ
 .crop { position: absolute; border: 2px solid var(--hex); background: rgba(10,200,185,.15); box-shadow: 0 0 0 9999px rgba(0,0,0,.45); pointer-events: none; }
 .loader.small { padding: 12px; } .loader.small::before { width: 20px; height: 20px; margin-bottom: 6px; }
 .lex { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 20px; }
+
+/* En jeu : mini-carte intégrée + joueurs */
+.gametop { display: grid; grid-template-columns: minmax(340px, 0.9fr) 1.1fr; gap: 14px; align-items: start; margin-bottom: 14px; }
+.gametop.nomap { grid-template-columns: 1fr; }
+.mmcard { padding: 6px; margin: 0; position: sticky; top: 70px; }
+.mmslot { aspect-ratio: 1 / 1; max-height: 78vh; width: 100%; background: #000; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 0; overflow: hidden; }
+.mmslot p { padding: 0 20px; }
+.mmcv { width: 100%; height: 100%; display: block; }
+.players { margin: 0; }
+.tdhead { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.tdhead .dmg { margin-left: auto; width: 200px; }
+.tipline { margin: 0 0 6px; color: var(--accent2); }
+.prow { display: grid; grid-template-columns: 46px minmax(90px, 1.1fr) 70px auto 150px; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 8px; background: var(--panel2); margin: 0 0 4px; border: 1px solid transparent; }
+.prow.me { border-color: var(--accent); }
+.prow.dead { opacity: .55; }
+.pic { position: relative; width: 42px; height: 42px; }
+.pic .ico { width: 42px; height: 42px; }
+.pic .lvl { position: absolute; right: -4px; bottom: -4px; background: #000; color: var(--accent2); font-size: .68rem; font-weight: 700; border-radius: 6px; padding: 0 4px; border: 1px solid var(--line); }
+.pic .resp { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); color: #fff; font-weight: 800; border-radius: 8px; }
+.pname, .kda { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.pname b, .pname span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.build { display: flex; gap: 2px; flex-wrap: nowrap; }
+.build .ico.sm { width: 28px; height: 28px; }
+.build .trk { margin-left: 4px; border-radius: 50%; }
+.dmg { display: flex; flex-direction: column; gap: 2px; font-size: .78rem; font-weight: 700; }
+.dmgbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); }
+.dmgbar .phy { background: var(--phy); } .dmgbar .mag { background: var(--mag); }
+.tphy { color: var(--phy); } .tmag { color: var(--mag); }
+@media (max-width: 1150px) { .gametop { grid-template-columns: 1fr; } .mmcard { position: static; } .mmslot { max-height: 60vh; margin: 0 auto; width: auto; height: 60vh; } }

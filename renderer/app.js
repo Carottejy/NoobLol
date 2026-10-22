@@ -19,7 +19,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false }, tipN: 0,
+    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true }, tipN: 0,
   });
   function load() {
     try {
@@ -104,6 +104,7 @@
     else if (S.mode === 'settings') v = viewSettings;
     else v = { home: viewHome, account: viewAccount, champs: viewChamps, meta: viewMeta, items: viewItems, runes: viewRunes, guide: viewGuide, lex: viewLex }[S.tab] || viewHome;
     $app.innerHTML = v();
+    mmSync();
     window.scrollTo(0, keepScroll ? y : 0);
     tick();
     save();
@@ -568,21 +569,107 @@
   function logEv(t, txt) { S.game.log.unshift({ t, txt }); S.game.log = S.game.log.slice(0, 30); }
 
   function teamValue(players) { return players.reduce((sum, p) => sum + p.items.reduce((s, i) => s + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0), 0); }
-  function scoreboard(L) {
+  /* ---------- Profil de dégâts AD / AP ----------
+     Estimé d'après les objets (valeur en or des statistiques offensives), mélangé au profil du champion
+     tant que le joueur a peu d'objets. */
+  const PHYS_TAGS = ['Damage', 'CriticalStrike', 'AttackSpeed', 'ArmorPenetration', 'OnHit'], MAG_TAGS = ['SpellDamage', 'MagicPenetration'];
+  function itemDmg(it) {
+    const st = it.stats || {};
+    let ad = (st.FlatPhysicalDamageMod || 0) * 35 + (st.FlatCritChanceMod || 0) * 100 * 40 + (st.PercentAttackSpeedMod || 0) * 100 * 25;
+    let ap = (st.FlatMagicDamageMod || 0) * 20;
+    if (!ad && !ap) { const t = it.tags || []; if (t.some((x) => PHYS_TAGS.includes(x))) ad = it.gold.total * 0.6; if (t.some((x) => MAG_TAGS.includes(x))) ap = it.gold.total * 0.6; }
+    return [ad, ap];
+  }
+  function dmgProfile(p) {
+    const c = D.champs[p.champ];
+    const base = c ? (c.info.attack + 0.01) / (c.info.attack + c.info.magic + 0.02) : 0.5;
+    let ad = 0, ap = 0;
+    p.items.forEach((i) => { const it = D.items[String(i.id)]; if (it) { const [x, y] = itemDmg(it); ad += x * (i.count || 1); ap += y * (i.count || 1); } });
+    const tot = ad + ap, w = Math.min(1, tot / 2500);
+    return { ad: base * (1 - w) + (tot ? ad / tot : base) * w, fromItems: w };
+  }
+  const dmgBar = (v, label = true) => { const a = Math.round(v * 100); return `<div class="dmg" title="${a} % AD / ${100 - a} % AP"><div class="dmgbar"><i class="phy" style="width:${a}%"></i><i class="mag" style="width:${100 - a}%"></i></div>${label ? `<span class="${a >= 50 ? 'tphy' : 'tmag'}">${a >= 50 ? a + ' % AD' : 100 - a + ' % AP'}</span>` : ''}</div>`; };
+  function teamValue(players) { return players.reduce((sum, p) => sum + p.items.reduce((s, i) => s + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0), 0); }
+  function playersPanel(L) {
     const myTeam = L.me ? L.me.team : 'ORDER';
     const teams = [L.players.filter((p) => p.team === myTeam), L.players.filter((p) => p.team !== myTeam)];
     const val = teams.map(teamValue);
     const kills = teams.map((t) => t.reduce((s, p) => s + p.k, 0));
     const diff = val[0] - val[1];
-    const row = (p) => { const c = D.champs[p.champ]; return `<tr class="${p.dead ? 'dead' : ''} ${L.me && p.name === L.me.name ? 'me' : ''}"><td>${cIcon(c, 'ico sm')}</td><td><b>${esc(c ? c.name : p.champName)}</b><div class="muted small">${esc(p.gameName)}</div></td><td>${p.level}</td><td>${p.k}/${p.d}/${p.a}</td><td>${p.cs}</td><td><div class="items">${p.items.filter((i) => i.slot < 6).map((i) => itIcon(i.id)).join('')}</div></td><td>${p.dead ? `<span class="pill off">💀 ${Math.ceil(p.respawn)} s</span>` : ''}</td></tr>`; };
-    return `<div class="card"><div class="row sp"><h2 style="margin:0">📋 Tableau des scores</h2><span>Kills <b>${kills[0]}</b> – <b>${kills[1]}</b> · Valeur des objets <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${nf(diff)}</b> po</span></div>
-      ${teams.map((t, i) => `<h3>${i ? '🟥 Adversaires' : '🟦 Mon équipe'} <span class="muted small">${nf(val[i])} po d'objets</span></h3><table class="tbl sb"><tbody>${t.map(row).join('')}</tbody></table>`).join('')}</div>`;
+    const row = (p) => {
+      const c = D.champs[p.champ]; const pr = dmgProfile(p);
+      const items = p.items.filter((i) => i.slot < 6).sort((a, b) => a.slot - b.slot);
+      const trinket = p.items.find((i) => i.slot === 6);
+      return `<div class="prow ${p.dead ? 'dead' : ''} ${L.me && p.name === L.me.name ? 'me' : ''}">
+        <div class="pic">${cIcon(c, 'ico')}<span class="lvl">${p.level}</span>${p.dead ? `<span class="resp">${Math.ceil(p.respawn)}</span>` : ''}</div>
+        <div class="pname"><b>${esc(c ? c.name : p.champName)}</b><span class="muted small">${esc(p.gameName)}</span></div>
+        <div class="kda"><b>${p.k}/<span class="neg">${p.d}</span>/${p.a}</b><span class="muted small">${p.cs} CS</span></div>
+        <div class="build">${[0, 1, 2, 3, 4, 5].map((k) => (items[k] ? itIcon(items[k].id) : '<span class="ico sm ph"></span>')).join('')}${trinket ? itIcon(trinket.id, 'ico sm trk') : ''}</div>
+        ${dmgBar(pr.ad)}</div>`;
+    };
+    const teamDmg = (t) => (t.length ? t.reduce((s, p) => s + dmgProfile(p).ad, 0) / t.length : 0.5);
+    const advice = (v) => (v >= 0.62 ? 'surtout physique : l\'<b>armure</b> est rentable' : v <= 0.38 ? 'surtout magique : la <b>résistance magique</b> est rentable' : 'mixte : équilibre armure et résistance magique');
+    return `<div class="card players"><div class="row sp"><h2 style="margin:0">👥 Joueurs</h2><span class="small">Kills <b>${kills[0]}</b> – <b>${kills[1]}</b> · Objets <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${nf(diff)}</b> po</span></div>
+      ${teams.map((t, i) => { const td = teamDmg(t); return `<div class="tdhead"><b>${i ? '🟥 Adversaires' : '🟦 Mon équipe'}</b><span class="muted small">${nf(val[i])} po d'objets</span>${dmgBar(td)}</div>
+        ${i ? `<p class="small tipline">Dégâts adverses ${advice(td)}.</p>` : ''}${t.map(row).join('')}`; }).join('')}
+      <p class="muted small">AD / AP estimé d'après les objets achetés (et le profil du champion en début de partie).</p></div>`;
   }
+
+  /* ---------- Mini-carte intégrée (capture de la zone de l'écran du jeu) ---------- */
+  const MM = { video: null, canvas: null, stream: null, raf: 0, err: '', starting: false };
+  async function mmStart() {
+    if (!NB || MM.stream || MM.starting) return;
+    MM.starting = true; MM.err = '';
+    try {
+      const src = await NB.minimap.source();
+      if (!src || !src.sourceId) throw new Error('aucun écran trouvé');
+      MM.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: src.sourceId, maxWidth: 3840, maxHeight: 2160, maxFrameRate: 30 } } });
+      MM.video = MM.video || Object.assign(document.createElement('video'), { muted: true, playsInline: true });
+      MM.video.srcObject = MM.stream; await MM.video.play();
+      cancelAnimationFrame(MM.raf); MM.raf = requestAnimationFrame(mmLoop);
+    } catch (e) { MM.err = e.message || String(e); MM.stream = null; }
+    MM.starting = false; mmPlace();
+  }
+  function mmStop() { if (MM.stream) MM.stream.getTracks().forEach((t) => t.stop()); MM.stream = null; cancelAnimationFrame(MM.raf); }
+  function mmLoop() {
+    const cv = MM.canvas, v = MM.video;
+    if (cv && cv.isConnected && v && v.videoWidth) {
+      const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      if (cv.width !== Math.round(r.width * dpr) || cv.height !== Math.round(r.height * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); }
+      const cr = ((R.cfg || {}).minimap || {}).crop || { x: 0.857, y: 0.745, w: 0.14, h: 0.25 };
+      const sx = cr.x * v.videoWidth, sy = cr.y * v.videoHeight, sw = cr.w * v.videoWidth, sh = cr.h * v.videoHeight;
+      const ctx = cv.getContext('2d'); const sc = Math.min(cv.width / sw, cv.height / sh); const dw = sw * sc, dh = sh * sc;
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height); ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(v, sx, sy, sw, sh, (cv.width - dw) / 2, (cv.height - dh) / 2, dw, dh);
+    }
+    MM.raf = requestAnimationFrame(mmLoop);
+  }
+  function mmPlaceholder() {
+    if (!NB) return '<p class="muted">La mini-carte est disponible dans l\'application PC.</p>';
+    if (!S.opt.miniEmbed) return '<p class="muted">Mini-carte masquée.</p><button class="btn small" data-act="miniEmbed">Afficher la mini-carte</button>';
+    if (MM.err) return `<p class="muted">Impossible de filmer l'écran du jeu : ${esc(MM.err)}</p><button class="btn small" data-act="miniRetry">Réessayer</button>`;
+    return '<p class="muted">Connexion à l\'écran du jeu…</p>';
+  }
+  /* Le même canevas est replacé à chaque rafraîchissement de l'écran : pas de clignotement. */
+  function mmPlace() {
+    const slot = document.getElementById('mmSlot');
+    if (!slot) return;
+    if (MM.stream && S.opt.miniEmbed) { if (!MM.canvas) { MM.canvas = document.createElement('canvas'); MM.canvas.className = 'mmcv'; } if (MM.canvas.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(MM.canvas); } }
+    else slot.innerHTML = mmPlaceholder();
+  }
+  function mmSync() {
+    if (S.mode === 'game' && S.opt.miniEmbed && NB) { if (!MM.stream && !MM.err) mmStart(); mmPlace(); }
+    else mmStop();
+  }
+
   function viewGame() {
     const nd = needData();
     const g = S.game, L = R.live;
-    let h = `<div class="row sp"><h1>⚔️ En jeu</h1>${NB ? `<div class="row"><button class="btn ${R.miniOpen ? 'danger' : 'hex'} small" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}">🗺️ ${R.miniOpen ? 'Fermer la mini-carte' : 'Mini-carte sur l\'écran 2'}</button></div>` : ''}</div>`;
-    if (nd) return h + nd;
+    let h = `<div class="row sp"><h1>⚔️ En jeu</h1>${NB ? `<div class="row"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed">🗺️ Mini-carte dans la fenêtre</button><button class="btn ${R.miniOpen ? 'danger' : 'hex'} small" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}">🖥️ ${R.miniOpen ? 'Fermer l\'écran 2' : 'Mini-carte sur l\'écran 2'}</button></div>` : ''}</div>`;
+    const mapCard = S.opt.miniEmbed && NB ? `<div class="card mmcard"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
+    if (nd) return h + `<div class="gametop ${mapCard ? '' : 'nomap'}">${mapCard}<div>${nd}</div></div>`;
+    h += `<div class="gametop ${mapCard ? '' : 'nomap'}">${mapCard}
+      <div>${L ? playersPanel(L) : `<div class="card"><h2>👥 Joueurs</h2><p class="muted">${NB ? 'Aucune partie détectée. Pendant une partie, les 10 joueurs s\'affichent ici avec leurs kills, morts, assistances, objets et leur profil de dégâts AD / AP (données officielles « Live Client Data » de Riot).' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`}</div></div>`;
     h += '<div class="cols"><div>';
     /* Horloge */
     h += `<div class="card gold"><div class="row sp"><h2 style="margin:0">🕒 Horloge de jeu</h2>${L ? '<span class="pill live">● Synchronisée avec le jeu</span>' : ''}</div>`;
@@ -633,8 +720,6 @@
     if (g.log.length) h += `<div class="card"><h2>📜 Journal de la partie</h2>${g.log.slice(0, 12).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div>`;
     h += `<div class="card"><h2>⚙️ Alarmes</h2><div class="chips"><button class="chip ${S.opt.sound ? 'on' : ''}" data-act="opt" data-val="sound">🔔 Son</button></div><p class="muted small" style="margin-top:6px">Une alarme sonne quand un sort ou un objectif revient.</p></div>`;
     h += '</div></div>';
-    if (L) h += scoreboard(L);
-    else if (NB) h += `<div class="card"><p class="muted">Aucune partie détectée. Pendant une partie, Noob LOL affiche ici le tableau des scores, la valeur des objets de chaque équipe et lance les timers tout seul (données officielles « Live Client Data » de Riot).</p></div>`;
     return h;
   }
   function chatLine() {
@@ -747,7 +832,7 @@
     t.textContent = msg; t.style.display = 'block';
     clearTimeout(toastT); toastT = setTimeout(() => { t.style.display = 'none'; }, 3500);
   }
-  function cfgSet(patch) { return NB.config.set(patch).then((c) => { R.cfg = c; render(true); }).catch((e) => toast(e.message)); }
+  function cfgSet(patch) { return NB.config.set(patch).then((c) => { R.cfg = c; if (patch.minimap && 'sourceDisplayId' in patch.minimap) mmStop(); render(true); }).catch((e) => toast(e.message)); }
 
   /* ---------- Actions ---------- */
   document.addEventListener('click', (ev) => {
@@ -814,6 +899,8 @@
       case 'colStop': NB.collector.stop().then((s) => { R.col = s; render(true); }); break;
       case 'colAuto': cfgSet({ collector: { autoStart: !((R.cfg || {}).collector || {}).autoStart } }); break;
       case 'colClear': if (confirmTap(el, 'Tout effacer ? Clique encore')) NB.stats.clear().then(() => { cache.clear(); return NB.collector.status(); }).then((s) => { R.col = s; render(true); }); break;
+      case 'miniEmbed': S.opt.miniEmbed = !S.opt.miniEmbed; MM.err = ''; render(true); break;
+      case 'miniRetry': MM.err = ''; mmStop(); render(true); break;
       case 'miniOpen': NB.minimap.open().then(() => { R.miniOpen = true; render(true); }).catch((e) => toast(e.message)); break;
       case 'miniClose': NB.minimap.close().then(() => { R.miniOpen = false; render(true); }); break;
       case 'miniTop': cfgSet({ minimap: { alwaysOnTop: !((R.cfg || {}).minimap || {}).alwaysOnTop } }); break;

@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('noob', {
   },
   collector: { start: () => call('collector:start'), stop: () => call('collector:stop'), status: () => call('collector:status'), on: on('collector') },
   minimap: {
-    displays: () => call('minimap:displays'), sources: () => call('minimap:sources'), open: () => call('minimap:open'), close: () => call('minimap:close'), isOpen: () => call('minimap:isOpen'),
+    displays: () => call('minimap:displays'), source: () => call('minimap:source'), sources: () => call('minimap:sources'), open: () => call('minimap:open'), close: () => call('minimap:close'), isOpen: () => call('minimap:isOpen'),
     onState: on('minimap:state'), onConfig: on('minimap:config'),
   },
   openExternal: (u) => call('open:external', u),

@@ -115,6 +115,7 @@ function handlers() {
 
   h('minimap:displays', () => displays());
   h('minimap:sources', () => screenSources(true));
+  h('minimap:source', () => miniConfig());
   h('minimap:open', () => openMinimap());
   h('minimap:close', () => { if (mini && !mini.isDestroyed()) mini.close(); return true; });
   h('minimap:isOpen', () => !!(mini && !mini.isDestroyed()));

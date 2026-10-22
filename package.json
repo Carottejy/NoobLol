@@ -1,7 +1,7 @@
 {
   "name": "nooblol",
   "productName": "Noob LOL",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Compagnon de jeu League of Legends pour débutants : préparation, sélection des champions et aide en jeu.",
   "author": "Carottejy",
   "license": "UNLICENSED",
@@ -56,7 +56,7 @@
         "provider": "github",
         "owner": "Carottejy",
         "repo": "NoobLol",
-        "releaseType": "release"
+        "releaseType": "draft"
       }
     ]
   }
