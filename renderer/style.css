@@ -610,3 +610,8 @@ body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 @media (min-height: 1300px) { body[data-mode=game] .lp .pic, body[data-mode=game] .lp .pic .ico { width: 42px; height: 42px; } body[data-mode=game] .lp .build .ico.sm { width: 28px; height: 28px; } }
 .ibsel { display: inline-flex; align-items: center; gap: 6px; }
 .lp .build { justify-content: start; }
+.lp .kda > span { white-space: nowrap; font-size: .76rem; }
+.lp { grid-template-columns: 38px minmax(0, 1fr) 72px auto; }
+.lp.them { grid-template-columns: auto 72px minmax(0, 1fr) 38px; }
+@container (max-width: 760px) { .lp { grid-template-columns: 34px minmax(0, 1fr) 72px; } .lp.them { grid-template-columns: 72px minmax(0, 1fr) 34px; } }
+@container (max-width: 520px) { .lp.them { grid-template-columns: 34px minmax(0, 1fr) 72px; } }

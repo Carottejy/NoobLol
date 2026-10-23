@@ -328,7 +328,7 @@ test('fin de partie : analyse (équipes, parts de dégâts, courbe d\'or, moi co
   assert.strictEqual(G.teams[0].win, true); assert.strictEqual(G.teams[0].kills, 10); assert.strictEqual(G.me.dmgShare, 0.5); assert.strictEqual(G.me.kp, 0.9);
   assert.strictEqual(G.curve.length, 12); assert.strictEqual(G.curve[10], (650 * 10) - (680 * 10) + 0);
   assert.strictEqual(G.at10.cs, -30); assert.strictEqual(G.at10.gold, -800);
-  assert.ok(G.tips.some((t) => t.startsWith('Farm')) && G.tips.some((t) => t.includes('8 morts')) && G.tips.some((t) => t.includes('30 sbires')));
+  assert.ok(G.tips.some((t) => t.startsWith('Farm')) && G.tips.some((t) => t.includes('8 morts')) && G.tips.some((t) => t.includes('3,0 CS/min')));
 });
 
 test('en jeu : prochain objet du kit conseillé', () => {

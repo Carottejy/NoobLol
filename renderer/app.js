@@ -10,6 +10,8 @@
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/['’.\s-]/g, '');
   const pct = (w, g) => (g ? (100 * w / g).toFixed(1).replace('.', ',') + ' %' : '—');
   const nf = (n) => Number(n || 0).toLocaleString('fr-FR');
+  /* Sbires par minute, partout à la place du total de sbires */
+  const csm = (cs, sec) => ((cs || 0) / Math.max(1, (sec || 0) / 60)).toFixed(1).replace('.', ',');
   const D = Dd.st;
 
   /* ---------- État enregistré ---------- */
@@ -195,7 +197,7 @@
     h += `<div class="cols"><div class="card"><h2>🏅 Mes meilleures maîtrises</h2><div class="grid-ic">${(P.mastery || []).map((m) => { const c = byKey(m.championId); return c ? tile(c, `<div class="price">Niv. ${m.championLevel} · ${nf(Math.round(m.championPoints / 1000))}k</div>`) : ''; }).join('')}</div></div>`;
     h += `<div class="card"><h2>🕹️ Mes dernières parties</h2>${(P.matches || []).length ? P.matches.map((m) => { const c = byKey(m.champ);
       return `<div class="match ${m.remake ? '' : m.win ? 'win' : 'loss'}" data-act="openMatch" data-val="${esc(m.id)}" title="Voir toutes les statistiques de la partie">${cIcon(c)}<div class="grow"><b>${m.remake ? 'Annulée' : m.win ? 'Victoire' : 'Défaite'}</b> <span class="muted small">${esc(QUEUE[m.queue] || 'Mode ' + m.queue)} · ${fmt(m.duration)}${MATCH_ROLE[m.role] ? ' · ' + ROLE_NAME[MATCH_ROLE[m.role]] : ''}</span>
-        <div class="small">${m.k} / ${m.d} / ${m.a} · ${m.cs} CS (${(m.cs / Math.max(1, m.duration / 60)).toFixed(1).replace('.', ',')}/min) · vision ${m.vision}</div></div><div class="items">${m.items.map((i) => (i ? itIcon(i) : '<span class="ico sm ph"></span>')).join('')}</div></div>`; }).join('') : '<p class="muted">Aucune partie récente.</p>'}</div></div>`;
+        <div class="small">${m.k} / ${m.d} / ${m.a} · ${csm(m.cs, m.duration)} CS/min · vision ${m.vision}</div></div><div class="items">${m.items.map((i) => (i ? itIcon(i) : '<span class="ico sm ph"></span>')).join('')}</div></div>`; }).join('') : '<p class="muted">Aucune partie récente.</p>'}</div></div>`;
     return h;
   }
 
@@ -1040,7 +1042,7 @@
       return `<div class="lp ${side} ${p.dead ? 'dead' : ''} ${L.me && p.name === L.me.name ? 'me' : ''}">
         <div class="pic">${cIcon(c, 'ico')}<span class="lvl">${p.level}</span>${p.dead ? `<span class="resp">${Math.ceil(p.respawn)}</span>` : ''}</div>
         <div class="pname"><b>${esc(c ? c.name : p.champName)}</b><span class="small pmeta"><span class="muted">${esc(p.gameName)}</span>${rankTag(puuidOf(p))}</span>${dmgBar(pr.ad, false)}</div>
-        <div class="kda"><b>${p.k}/<span class="neg">${p.d}</span>/${p.a}</b><span class="muted small">${p.cs} CS</span><span class="pgold" title="${g.exact ? 'Or gagné (objets + or en poche)' : `Or gagné estimé · objets : ${nf(g.items)} po`}">${g.exact ? '' : '≈'}${k1g(g.v)} 🪙</span></div>
+        <div class="kda"><b>${p.k}/<span class="neg">${p.d}</span>/${p.a}</b><span class="muted small" title="${p.cs} sbires et monstres">${csm(p.cs, L.time)} CS/min</span><span class="pgold" title="${g.exact ? 'Or gagné (objets + or en poche)' : `Or gagné estimé · objets : ${nf(g.items)} po`}">${g.exact ? '' : '≈'}${k1g(g.v)} 🪙</span></div>
         <div class="build">${[0, 1, 2, 3, 4, 5].map((k) => (items[k] ? itIcon(items[k].id) : '<span class="ico sm ph"></span>')).join('')}${trinket ? itIcon(trinket.id, 'ico sm trk') : ''}</div></div>`;
     };
     const mid = (x) => {
@@ -1196,16 +1198,17 @@
         ${[['Kills', us.kills, them.kills], ['Or', k1(us.gold), k1(them.gold)], ['Dégâts aux champions', k1(us.damage), k1(them.damage)], ['Vision', us.vision, them.vision]].map(([l, a, b]) => `<div><b class="us">${a}</b><span>${l}</span><b class="them">${b}</b></div>`).join('')}
         ${OBJS.map(([ic, l, k]) => { const [a, b] = obj(k); return `<div><b class="us">${a}</b><span>${ic} ${l}</span><b class="them">${b}</b></div>`; }).join('')}</div></div>
         <div class="card"><h2>⭐ Les meilleurs</h2>${[['Plus de dégâts', G.best.damage, (p) => k1(p.totalDamageDealtToChampions)], ['Meilleur KDA', G.best.kda, (p) => `${p.kills}/${p.deaths}/${p.assists}`], ['Meilleure vision', G.best.vision, (p) => p.visionScore]].map(([l, p, f]) => `<div class="best">${name(p)}<span class="small muted">${l}</span><b>${f(p)}</b></div>`).join('')}</div></div>`;
-      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '64px 52px 58px 1fr', (p) => `<b>${p.kills}/<span class="neg">${p.deaths}</span>/${p.assists}</b><span>${p.cs}</span><span>${k1(p.goldEarned)}</span><div class="items">${p.items.map((x) => itIcon(x)).join('')}</div>`)}</div>`).join('')}</div>`;
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '64px 74px 58px 1fr', (p) => `<b>${p.kills}/<span class="neg">${p.deaths}</span>/${p.assists}</b><span title="${p.cs} sbires et monstres">${p.csm.toFixed(1).replace('.', ',')} CS/min</span><span>${k1(p.goldEarned)}</span><div class="items">${p.items.map((x) => itIcon(x)).join('')}</div>`)}</div>`).join('')}</div>`;
     } else if (tab === 'moi') {
       if (!me) h += '<div class="card"><p class="muted">Joueur introuvable dans cette partie.</p></div>';
       else {
         const oc = G.opp ? byKey(G.opp.championId) : null;
         const kp = (v) => `${Math.round(v * 100)} %`;
+        const sgd = (v, min) => (v == null ? '—' : `<b class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${Math.abs(v / min).toFixed(1).replace('.', ',')}</b>`);
         const sg = (v) => (v == null ? '—' : `<b class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${nf(v)}</b>`);
         h += `<div class="kpis big">${[['KDA', me.kda.toFixed(2).replace('.', ',')], ['Participation', kp(me.kp)], ['Sbires/min', me.csm.toFixed(1).replace('.', ',')], ['Or/min', Math.round(me.gpm)], ['Part des dégâts', kp(me.dmgShare)], ['Vision', me.visionScore]].map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
         h += '<div class="cols"><div>';
-        h += `<div class="card"><h2>🎯 Contre ${oc ? esc(oc.name) : 'mon adversaire'}</h2>${G.opp ? `<div class="vsstats"><div><b class="us">${sg(G.at10.gold)}</b><span>Or à 10 min</span><b class="them"></b></div><div><b class="us">${sg(G.at10.cs)}</b><span>Sbires à 10 min</span><b></b></div><div><b class="us">${sg(G.at15.gold)}</b><span>Or à 15 min</span><b></b></div><div><b class="us">${sg(G.at15.cs)}</b><span>Sbires à 15 min</span><b></b></div></div>${curveSvg(G.meVs.gold, { title: 'Différence d\'or avec ton adversaire de voie, minute par minute' })}` : '<p class="muted">Pas d\'adversaire de voie identifié.</p>'}</div>`;
+        h += `<div class="card"><h2>🎯 Contre ${oc ? esc(oc.name) : 'mon adversaire'}</h2>${G.opp ? `<div class="vsstats"><div><b class="us">${sg(G.at10.gold)}</b><span>Or à 10 min</span><b class="them"></b></div><div><b class="us">${sgd(G.at10.cs, 10)}</b><span>Écart CS/min à 10 min</span><b></b></div><div><b class="us">${sg(G.at15.gold)}</b><span>Or à 15 min</span><b></b></div><div><b class="us">${sgd(G.at15.cs, 15)}</b><span>Écart CS/min à 15 min</span><b></b></div></div>${curveSvg(G.meVs.gold, { title: 'Différence d\'or avec ton adversaire de voie, minute par minute' })}` : '<p class="muted">Pas d\'adversaire de voie identifié.</p>'}</div>`;
         h += '</div><div>';
         h += `<div class="card gold"><h2>💡 Pour progresser</h2><ul class="tips">${G.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
         h += `<div class="card"><h2>📋 Détails</h2><div class="kv">${[['Dégâts aux champions', nf(me.totalDamageDealtToChampions)], ['Dégâts subis', nf(me.totalDamageTaken)], ['Dégâts atténués', nf(me.damageSelfMitigated)], ['Dégâts aux objectifs', nf(me.damageDealtToObjectives)], ['Soins', nf(me.totalHeal)], ['Boucliers sur alliés', nf(me.totalDamageShieldedOnTeammates)], ['Contrôle infligé (s)', nf(me.timeCCingOthers)], ['Plus grosse série', me.largestKillingSpree || 0], ['Multi-kill max', me.largestMultiKill || 0], ['Temps mort', fmt(me.totalTimeSpentDead || 0)], ['Balises posées', me.wardsPlaced || 0], ['Balises détruites', me.wardsKilled || 0]].map(([l, v]) => `<div><span>${l}</span><b>${v}</b></div>`).join('')}</div></div>`;
@@ -1218,7 +1221,7 @@
     } else if (tab === 'or') {
       h += `<div class="card">${curveSvg(G.curve, { title: 'Différence d\'or entre les équipes (au-dessus de la ligne : mon équipe devant)' })}</div>`;
       const mx = Math.max(...G.teams.flatMap((t) => t.players.map((p) => p.goldEarned || 0)));
-      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '1fr 70px 70px', (p) => `<div class="dcell"><span class="small"><b>${nf(p.goldEarned)}</b> po · ${Math.round(p.gpm)}/min</span>${bar(p.goldEarned || 0, mx, 'gld')}</div><span><b>${p.cs}</b> CS</span><span>${p.csm.toFixed(1).replace('.', ',')}/min</span>`)}</div>`).join('')}</div>`;
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '1fr 90px', (p) => `<div class="dcell"><span class="small"><b>${nf(p.goldEarned)}</b> po · ${Math.round(p.gpm)}/min</span>${bar(p.goldEarned || 0, mx, 'gld')}</div><span title="${p.cs} sbires et monstres"><b>${p.csm.toFixed(1).replace('.', ',')}</b> CS/min</span>`)}</div>`).join('')}</div>`;
     } else if (tab === 'vision') {
       const mx = Math.max(...G.teams.flatMap((t) => t.players.map((p) => p.visionScore || 0)));
       h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '1fr 60px 60px 60px', (p) => `<div class="dcell"><span class="small">Score <b>${p.visionScore}</b></span>${bar(p.visionScore || 0, mx, 'vis')}</div><span title="Balises posées">📍 ${p.wardsPlaced || 0}</span><span title="Balises détruites">❌ ${p.wardsKilled || 0}</span><span title="Balises de contrôle achetées">🔴 ${p.visionWardsBoughtInGame || 0}</span>`)}</div>`).join('')}</div>

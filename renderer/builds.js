@@ -268,7 +268,7 @@ var Builds = (() => {
       if (me.kp < 0.4 && teams[0].kills >= 10) tips.push(`Participation aux kills : ${Math.round(me.kp * 100)} %. Rejoins ton équipe pour les combats et les objectifs.`);
       if ((me.visionWardsBoughtInGame || 0) === 0 && dur > 900) tips.push('Aucune balise de contrôle achetée : prends-en une à chaque retour à la base (75 po).');
       if (me.visionScore / min < (role === 'UTILITY' ? 1.5 : 0.6)) tips.push(`Score de vision faible (${me.visionScore}) : utilise ton trinket dès qu'il est rechargé.`);
-      if (at(meVs.cs, 10) != null && at(meVs.cs, 10) <= -15) tips.push(`À 10 min, tu avais ${-at(meVs.cs, 10)} sbires de retard sur ton adversaire.`);
+      if (at(meVs.cs, 10) != null && at(meVs.cs, 10) <= -15) tips.push(`À 10 min, tu avais ${(-at(meVs.cs, 10) / 10).toFixed(1).replace('.', ',')} CS/min de moins que ton adversaire.`);
       if (!tips.length) tips.push('Belle partie, rien de flagrant à corriger. Continue comme ça !');
     }
     return { matchId: (match.metadata || {}).matchId, queue: info.queueId, dur, created: info.gameCreation, me, opp, teams, curve, meVs,
