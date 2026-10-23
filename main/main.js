@@ -10,10 +10,11 @@ const { StatsDb } = require('./db');
 const { Collector } = require('./collector');
 const { PostGame } = require('./postgame');
 const { KeyWatch } = require('./keyrenew');
+const { History } = require('./history');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
+let hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
 const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
@@ -149,6 +150,13 @@ function handlers() {
     }
     return { account: acc, summoner: summ, leagues, mastery, matches };
   });
+  /* Mes 20 dernières parties sur la Faille (progression, choix des champions) */
+  h('riot:history', async (riotId) => {
+    const id = riotId && riotId.gameName ? riotId : cfg.data.riotId;
+    if (!id || !id.gameName || !id.tagLine) throw new Error('Indique ton Riot ID dans les Réglages, ou lance le client du jeu.');
+    const acc = await api.account(id.gameName, id.tagLine);
+    return { puuid: acc.puuid, games: await hist.get(acc.puuid, 20) };
+  });
   h('riot:masteries', async (puuid) => api.masteries(puuid, 30));
 
   /* Rangs et niveaux : d'abord le client LoL (sans clé), sinon l'API Riot */
@@ -247,6 +255,7 @@ app.whenReady().then(async () => {
     /* Le collecteur s'était arrêté à cause de la clé expirée : on le relance */
     if (!collector.running && (colWasRunning || cfg.data.collector.autoStart)) collector.start();
   });
+  hist = new History({ api, dir: app.getPath('userData') });
   post = new PostGame({ api, getPlatform: () => cfg.data.platform, dir: app.getPath('userData') });
   post.on('update', (d) => send('postgame', d));
   let postFor = null;

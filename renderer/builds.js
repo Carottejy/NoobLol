@@ -248,6 +248,48 @@ var Builds = (() => {
     return null;
   }
 
+  /* ---------- Zone de la Faille d'après une position (coordonnées de la chronologie, base bleue en bas à gauche) ---------- */
+  function zoneOf(x, y, teamId) {
+    if (x == null || y == null) return { id: 'unknown', name: 'endroit inconnu' };
+    const blue = teamId !== 200;
+    if (x + y < 5600) return blue ? { id: 'mybase', name: 'ta base' } : { id: 'enemybase', name: 'la base adverse' };
+    if (x + y > 24300) return blue ? { id: 'enemybase', name: 'la base adverse' } : { id: 'mybase', name: 'ta base' };
+    if ((x < 2300 && y > 4000) || (y > 12600 && x < 10900)) return { id: 'top', name: 'la voie du haut' };
+    if ((y < 2300 && x > 4000) || (x > 12600 && y < 10900)) return { id: 'bot', name: 'la voie du bas' };
+    if (Math.abs(x - y) < 1300) return { id: 'mid', name: 'la voie du milieu' };
+    if (Math.abs(x + y - 14900) < 1700) return { id: 'river', name: 'la rivière' };
+    const blueSide = x + y < 14900;
+    return blueSide === blue ? { id: 'myjungle', name: 'ta jungle' } : { id: 'enemyjungle', name: 'la jungle adverse' };
+  }
+  /* Bilan de mes morts : où, quand, contre combien d'ennemis, et les habitudes à corriger */
+  function deathReview(list, myTeamId, byPid, me, dur) {
+    const rows = list.map((d) => {
+      const z = zoneOf(d.x, d.y, myTeamId);
+      const enemies = 1 + (d.assists || []).length;
+      const killer = byPid[d.killer] || null;
+      const kind = enemies >= 3 ? 'gank' : enemies === 2 ? 'duo' : killer ? 'solo' : 'other';
+      return { t: d.t, x: d.x, y: d.y, zone: z, enemies, killer: killer ? killer.championId : 0, killerTower: !killer, lvl: d.lvl || 0, klvl: d.klvl || 0, kind };
+    });
+    const tips = [];
+    const n = (f) => rows.filter(f).length;
+    const early = rows.filter((r) => r.t < 600);
+    if (early.length >= 2) tips.push(`${early.length} morts avant 10 min. Au début, chaque mort donne beaucoup d'or à ton adversaire : joue plus prudemment tant que tu n'as pas ton premier objet.`);
+    const risky = n((r) => r.zone.id === 'river' || r.zone.id === 'enemyjungle');
+    if (risky >= 2) tips.push(`${risky} morts dans la rivière ou la jungle adverse. Ces zones sont souvent sans vision : avance seulement si une balise ou un allié les éclaire, et avec ton équipe.`);
+    const ganks = n((r) => r.kind === 'gank');
+    if (ganks >= 2) tips.push(`${ganks} morts face à 3 ennemis ou plus. Quand tu ne vois pas plusieurs adversaires sur la mini-carte, recule vers ta tour : ils sont peut-être en train de venir.`);
+    const solos = rows.filter((r) => r.kind === 'solo');
+    if (solos.length >= 2) tips.push(`${solos.length} morts en 1 contre 1${solos.some((r) => r.klvl > r.lvl) ? ', parfois contre un adversaire de niveau plus élevé' : ''}. Engage un duel seulement quand tu as l'avantage (niveau, objets, sorts disponibles).`);
+    const enemyBase = n((r) => r.zone.id === 'enemybase');
+    if (enemyBase) tips.push(`${enemyBase} mort${enemyBase > 1 ? 's' : ''} dans la base adverse : n'y entre qu'avec ton équipe et un gros avantage.`);
+    const late = rows.filter((r) => r.t > 1500);
+    if (late.length >= 2) tips.push(`${late.length} morts après 25 min. En fin de partie tu restes mort longtemps : une mort peut faire perdre un Nashor ou une base. Reste groupé.`);
+    if (!rows.length) tips.push('Aucune mort : excellent !');
+    else if (!tips.length) tips.push('Pas d\'habitude flagrante dans tes morts. Continue de surveiller la mini-carte.');
+    const zones = {}; rows.forEach((r) => { zones[r.zone.name] = (zones[r.zone.name] || 0) + 1; });
+    return { rows, tips, zones, deadTime: me ? me.totalTimeSpentDead || 0 : 0, share: me && dur ? (me.totalTimeSpentDead || 0) / dur : 0 };
+  }
+
   /* ---------- Fin de partie : analyse complète d'une partie match-v5 (+ chronologie) ---------- */
   const POS_ORDER = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
   function postgame(match, timeline, puuid, ids) {
@@ -303,7 +345,8 @@ var Builds = (() => {
     const frames = ((timeline || {}).info || {}).frames || [];
     const T = { xp: [], kills: { us: [], them: [] }, gold: { us: [], them: [] }, me: { gold: [], cs: [], xp: [], lvl: [], dmg: [] }, opp: { gold: [], cs: [], xp: [], lvl: [], dmg: [] },
       killEv: [], objEv: [], buildEv: [], myEv: [], plates: { us: 0, them: 0 }, wards: { us: 0, them: 0 }, firsts: {} };
-    let kUs = 0, kThem = 0;
+    let kUs = 0, kThem = 0, lastPf = {};
+    const lvlNow = (pid) => (lastPf[pid] ? lastPf[pid].level || 0 : 0);
     const csOf = (x) => (x.minionsKilled || 0) + (x.jungleMinionsKilled || 0);
     const firstOf = (k, side, t) => { if (!T.firsts[k]) T.firsts[k] = { side, t }; };
     for (const f of frames) {
@@ -320,7 +363,7 @@ var Builds = (() => {
           if (me) {
             const id = me.participantId;
             if (e.killerId === id) T.myEv.push({ t, kind: 'kill', x: ev.x, y: ev.y });
-            else if (e.victimId === id) T.myEv.push({ t, kind: 'death', x: ev.x, y: ev.y });
+            else if (e.victimId === id) T.myEv.push({ t, kind: 'death', x: ev.x, y: ev.y, killer: e.killerId, assists: e.assistingParticipantIds || [], lvl: lvlNow(id), klvl: lvlNow(e.killerId) });
             else if ((e.assistingParticipantIds || []).includes(id)) T.myEv.push({ t, kind: 'assist', x: ev.x, y: ev.y });
           }
         } else if (e.type === 'ELITE_MONSTER_KILL') {
@@ -339,6 +382,7 @@ var Builds = (() => {
           const c = byPid[e.creatorId]; if (c) T.wards[sideOfTeam(c.teamId)]++;
         }
       }
+      lastPf = pf;
       let xa = 0, xb = 0, ga = 0, gb = 0;
       for (const p of ps) { const x = pf[p.participantId]; if (!x) continue; if (p.teamId === myTeamId) { xa += x.xp || 0; ga += x.totalGold || 0; } else { xb += x.xp || 0; gb += x.totalGold || 0; } }
       T.xp.push(xa - xb); T.gold.us.push(ga); T.gold.them.push(gb);
@@ -364,11 +408,12 @@ var Builds = (() => {
       if (!tips.length) tips.push('Belle partie, rien de flagrant à corriger. Continue comme ça !');
     }
     for (const t of teams) { const g = t.gold || 1; for (const p of t.players) p.goldShare = (p.goldEarned || 0) / g; }
-    return { matchId: (match.metadata || {}).matchId, queue: info.queueId, dur, created: info.gameCreation, me, opp, teams, curve, meVs, T, lead, min,
+    const deaths = deathReview(T.myEv.filter((e) => e.kind === 'death'), myTeamId, byPid, me, dur);
+    return { matchId: (match.metadata || {}).matchId, queue: info.queueId, dur, created: info.gameCreation, me, opp, teams, curve, meVs, T, lead, min, deaths,
       at10: { gold: at(meVs.gold, 10), cs: at(meVs.cs, 10) }, at15: { gold: at(meVs.gold, 15), cs: at(meVs.cs, 15) }, tips,
       best: { damage: ps.slice().sort((a, b) => (b.totalDamageDealtToChampions || 0) - (a.totalDamageDealtToChampions || 0))[0], vision: ps.slice().sort((a, b) => b.visionScore - a.visionScore)[0], kda: ps.slice().sort((a, b) => b.kda - a.kda)[0] } };
   }
 
-  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, teamResolver, eventTeam, structureOwner, structureTeam, ROLES5, nextItem, postgame };
+  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, zoneOf, teamResolver, eventTeam, structureOwner, structureTeam, ROLES5, nextItem, postgame };
 })();
 if (typeof module !== 'undefined') module.exports = Builds;

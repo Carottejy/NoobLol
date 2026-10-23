@@ -19,9 +19,9 @@
   const newGame = () => ({ start: null, timers: {}, enemies: [0, 1, 2, 3, 4].map(newEnemy), fired: {}, seenEv: [], log: [], sig: '' });
   const defaults = () => ({
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
-    cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
+    cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '', stats: [], any: false, price: '', sort: 'price' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], ed: null,
+    goal: { metric: '', target: 0 }, game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], ed: null,
   });
   function load() {
     try {
@@ -29,7 +29,7 @@
       if (!raw) return defaults();
       const d = defaults();
       Object.assign(d, raw);
-      ['cf', 'itf', 'rune', 'opt', 'view', 'select'].forEach((k) => { d[k] = Object.assign(defaults()[k], raw[k] || {}); });
+      ['cf', 'itf', 'rune', 'opt', 'view', 'select', 'goal'].forEach((k) => { d[k] = Object.assign(defaults()[k], raw[k] || {}); });
       if (!d.selItems || typeof d.selItems !== 'object') d.selItems = {}; if (!Array.isArray(d.myRunes)) d.myRunes = []; if (!Array.isArray(d.myItems)) d.myItems = [];
       d.game = Object.assign(newGame(), raw.game || {});
       if (!Array.isArray(d.game.enemies) || d.game.enemies.length !== 5) d.game.enemies = newGame().enemies;
@@ -150,6 +150,33 @@
   /* =====================================================================
      PRÉPARATION
      ===================================================================== */
+  /* ---------- Ce qui change au patch pour MES champions (favoris, maîtrises, champions joués récemment) ---------- */
+  function myChampIds() {
+    const ids = [...S.favs];
+    ((R.profile && R.profile.mastery) || []).slice(0, 5).forEach((m) => { const c = byKey(m.championId); if (c) ids.push(c.id); });
+    const cnt = {}; ((R.hist && R.hist.games) || []).forEach((g) => { const c = byKey(g.champ); if (c) cnt[c.id] = (cnt[c.id] || 0) + 1; });
+    Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 5).forEach((id) => ids.push(id));
+    return [...new Set(ids)].filter((id) => D.champs && D.champs[id]).slice(0, 12);
+  }
+  function patchCard() {
+    if (!D.version) return '';
+    const ids = myChampIds();
+    const pv = (v) => String(v || '').split('.').slice(0, 2).join('.');
+    if (!ids.length) return `<div class="card"><h2>🔧 Patch ${esc(pv(D.version))}</h2><p class="muted small">Ajoute des champions en favoris (⭐) ou joue quelques parties : Noob LOL te montrera ce qui change pour eux à chaque patch.</p></div>`;
+    const key = ids.join(',') + '@' + D.version;
+    if (!R.patch || R.patch.key !== key) { R.patch = { key, loading: true }; Dd.patchDiff(ids).then((d) => { R.patch = { key, d }; soon(); }).catch(() => { R.patch = { key, d: null }; }); }
+    if (R.patch.loading) return `<div class="card"><h2>🔧 Patch ${esc(pv(D.version))}</h2><div class="loader small">Comparaison avec le patch précédent…</div></div>`;
+    const d = R.patch.d;
+    if (!d) return '';
+    const entries = ids.map((id) => [id, d.champs[id]]).filter(([, v]) => v);
+    const changed = entries.filter(([, v]) => v === 'new' || v.length);
+    const same = entries.filter(([, v]) => v !== 'new' && !v.length);
+    const line = (c) => `<li class="${c.good === true ? 'buff' : c.good === false ? 'nerf' : ''}" ${c.text ? `title="${esc(c.text)}"` : ''}>${c.good === true ? '▲' : c.good === false ? '▼' : '•'} ${esc(c.what)}${c.before ? ` : <s class="muted">${esc(c.before)}</s> → <b>${esc(c.after)}</b>` : ` ${esc(c.after)}`}</li>`;
+    return `<div class="card"><h2>🔧 Patch ${esc(pv(d.to))} : ce qui change pour tes champions</h2><p class="small muted">Comparaison des données officielles de Riot avec le patch ${esc(pv(d.from))}. ▲ amélioration · ▼ affaiblissement.</p>
+      ${changed.length ? changed.map(([id, v]) => { const c = D.champs[id]; return `<details class="pchg" ${changed.length <= 3 ? 'open' : ''}><summary>${cIcon(c, 'ico xs')}<b>${esc(c.name)}</b> <span class="small muted">${v === 'new' ? 'nouveau champion' : v.length + ' changement' + (v.length > 1 ? 's' : '')}</span></summary>${v === 'new' ? '' : `<ul>${v.map(line).join('')}</ul>`}</details>`; }).join('') : '<p class="small">Aucun changement visible pour tes champions dans les données de Riot.</p>'}
+      ${same.length ? `<p class="small muted">Inchangés : ${same.map(([id]) => esc(D.champs[id].name)).join(', ')}.</p>` : ''}
+      <p class="small muted">Les dégâts exacts ne figurent pas toujours dans ces données : pour le détail, consulte les <a href="https://www.leagueoflegends.com/fr-fr/news/tags/patch-notes/" data-ext="1">notes de patch officielles</a>.</p></div>`;
+  }
   function viewHome() {
     const nd = needData();
     const favs = D.champs ? S.favs.map((id) => D.champs[id]).filter(Boolean) : [];
@@ -164,6 +191,8 @@
     h += `</div><div>`;
     if (nd) h += nd;
     else {
+      if (NB && R.cfg && R.cfg.hasApiKey) { if (!R.profile && !R.profileErr) loadProfile(); loadHistory(); }
+      h += patchCard();
       h += `<div class="card"><h2>⭐ Mes champions</h2>${favs.length ? `<div class="grid-ic">${favs.map((c) => tile(c)).join('')}</div>` : '<p class="muted">Ajoute tes champions préférés avec l\'étoile sur leur fiche : ils apparaîtront ici.</p>'}</div>`;
       const ids = GUIDE.beginners[S.role] || [];
       h += `<div class="card"><h2>🎓 Par qui commencer ?</h2><p class="muted">Des champions simples et efficaces, conseillés pour débuter dans chaque rôle.</p>
@@ -188,6 +217,82 @@
       <button class="btn small" data-act="mode" data-val="settings">Ouvrir les Réglages</button></div>`;
   }
 
+
+  /* ---------- Ma progression sur mes 20 dernières parties ---------- */
+  function loadHistory(force) {
+    if (!NB || R.histLoading || ((R.hist || R.histErr) && !force)) return;
+    R.histLoading = true; R.histErr = '';
+    const riotId = R.lcu.summoner && R.lcu.summoner.tagLine ? { gameName: R.lcu.summoner.gameName, tagLine: R.lcu.summoner.tagLine } : null;
+    NB.riot.history(riotId).then((h) => { R.hist = h; }).catch((e) => { R.histErr = e.message; }).finally(() => { R.histLoading = false; render(true); });
+  }
+  const perMin = (v, g) => v / Math.max(1, g.dur / 60);
+  const METRICS = {
+    csm: { label: 'CS/min', f: (g) => perMin(g.cs, g), fmt: (v) => f1(v), up: true, def: 6, step: 0.5 },
+    deaths: { label: 'Morts', f: (g) => g.d, fmt: (v) => f1(v), up: false, def: 5, step: 1 },
+    vision: { label: 'Vision/min', f: (g) => perMin(g.vision, g), fmt: (v) => f1(v), up: true, def: 1, step: 0.1 },
+    kp: { label: 'Participation', f: (g) => g.kp, fmt: (v) => Math.round(v * 100) + ' %', up: true, def: 0.5, step: 0.05 },
+    kda: { label: 'KDA', f: (g) => (g.k + g.a) / Math.max(1, g.d), fmt: (v) => f1(v), up: true, def: 3, step: 0.5 },
+    gpm: { label: 'Or/min', f: (g) => perMin(g.gold, g), fmt: (v) => String(Math.round(v)), up: true, def: 400, step: 25 },
+  };
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+  function mainRoleOf(games) { const c = {}; games.forEach((g) => { const r = MATCH_ROLE[g.role]; if (r) c[r] = (c[r] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; }
+  function currentGoal(games) {
+    const role = mainRoleOf(games);
+    const metric = METRICS[S.goal.metric] ? S.goal.metric : role === 'support' ? 'vision' : role === 'jungle' ? 'kp' : 'csm';
+    const M = METRICS[metric];
+    const target = S.goal.metric === metric && S.goal.target ? S.goal.target : M.def;
+    return { metric, M, target };
+  }
+  function progressCard() {
+    if (R.histLoading && !R.hist) return '<div class="card"><h2>📈 Ma progression</h2><div class="loader small">Récupération de tes 20 dernières parties…</div></div>';
+    if (R.histErr) return `<div class="card"><h2>📈 Ma progression</h2><p class="muted small">${esc(R.histErr)}</p></div>`;
+    const G = (R.hist && R.hist.games) || [];
+    if (G.length < 3) return '<div class="card"><h2>📈 Ma progression</h2><p class="muted small">Il faut au moins 3 parties sur la Faille de l\'invocateur pour suivre ta progression.</p></div>';
+    const { metric, M, target } = currentGoal(G);
+    const vals = G.map(M.f), last5 = vals.slice(-5), prev5 = vals.slice(-10, -5);
+    const ok = (v) => (M.up ? v >= target : v <= target);
+    const last10 = vals.slice(-10), reached = last10.filter(ok).length;
+    const a5 = avg(last5);
+    const prog = M.up ? Math.min(1, a5 / (target || 1)) : Math.min(1, (target || 1) / Math.max(0.01, a5));
+    const ma = vals.map((_, i) => avg(vals.slice(Math.max(0, i - 4), i + 1)));
+    const trend = (k) => { const m = METRICS[k], v = G.map(m.f), l = avg(v.slice(-5)), p = avg(v.slice(-10, -5)); if (v.length < 6 || !p) return `<div><b>${m.fmt(l)}</b><span>${m.label}</span></div>`; const rise = l > p * 1.03, fall = l < p * 0.97, better = m.up ? rise : fall, worse = m.up ? fall : rise; return `<div><b>${m.fmt(l)} <small class="${better ? 'pos' : worse ? 'neg' : 'muted'}" title="${better ? 'en progrès' : worse ? 'en recul' : 'stable'}">${rise ? '▲' : fall ? '▼' : '='}</small></b><span>${m.label}<br><small class="muted">avant : ${m.fmt(p)}</small></span></div>`; };
+    let h = `<div class="card"><div class="row sp"><h2 style="margin:0">📈 Ma progression <span class="muted small">(${G.length} dernières parties sur la Faille)</span></h2></div>
+      <p class="small muted">Moyenne de tes 5 dernières parties, comparée aux 5 d'avant.</p>
+      <div class="kpis">${Object.keys(METRICS).map(trend).join('')}</div>
+      <h3>🎯 Mon objectif</h3>
+      <div class="chips">${Object.entries(METRICS).map(([k, m]) => `<button class="chip ${k === metric ? 'on' : ''}" data-act="goalMetric" data-val="${k}">${m.label}</button>`).join('')}</div>
+      <div class="goal"><div class="row nw"><button class="btn ghost small" data-act="goalStep" data-val="-1">−</button><b class="gtarget">${M.up ? 'au moins' : 'au plus'} ${M.fmt(target)} ${esc(M.label.toLowerCase())}</b><button class="btn ghost small" data-act="goalStep" data-val="1">+</button></div>
+        <div class="grow"><div class="hbar"><i class="${prog >= 1 ? 'gld' : ''}" style="width:${Math.round(prog * 100)}%"></i></div>
+        <span class="small">${prog >= 1 ? '✅ Objectif atteint en moyenne sur tes 5 dernières parties !' : `Moyenne actuelle : <b>${M.fmt(a5)}</b>`} · atteint dans <b>${reached}</b> de tes ${last10.length} dernières parties</span></div></div>
+      ${lineChart([{ vals, cls: 'us', label: 'par partie' }, { vals: ma, cls: 'avg', label: 'moyenne sur 5 parties' }, { vals: vals.map(() => target), cls: 'goal', label: 'objectif', dash: true }], { title: `${M.label}, partie par partie (de la plus ancienne à la plus récente)`, fmtY: M.fmt, tickEvery: 5, tickLabel: (i) => `#${i + 1}`, min0: true })}
+      <div class="gdots">${G.map((g, i) => `<span class="${g.win ? 'w' : 'l'}" title="Partie ${i + 1} : ${g.win ? 'victoire' : 'défaite'} · ${esc((byKey(g.champ) || {}).name || '')} · ${M.label} ${M.fmt(vals[i])}"></span>`).join('')}</div></div>`;
+    return h;
+  }
+  /* ---------- Mes champions : lesquels travailler en priorité ---------- */
+  function poolCard() {
+    const G = (R.hist && R.hist.games) || [];
+    if (G.length < 3) return '';
+    const by = {};
+    for (const g of G) {
+      const o = by[g.champ] || (by[g.champ] = { champ: g.champ, games: 0, wins: 0, k: 0, d: 0, a: 0, csm: 0, roles: {} });
+      o.games++; if (g.win) o.wins++; o.k += g.k; o.d += g.d; o.a += g.a; o.csm += perMin(g.cs, g);
+      const r = MATCH_ROLE[g.role]; if (r) o.roles[r] = (o.roles[r] || 0) + 1;
+    }
+    const L = Object.values(by).map((o) => Object.assign(o, { wr: o.wins / o.games, kda: (o.k + o.a) / Math.max(1, o.d), csm: o.csm / o.games, role: Object.keys(o.roles).sort((a, b) => o.roles[b] - o.roles[a])[0] || '',
+      /* score prudent : taux de victoire « lissé » (+1 victoire / +2 parties), bonus si le KDA est bon et si tu l'as joué souvent */
+      score: (o.wins + 1) / (o.games + 2) + Math.min(0.08, (((o.k + o.a) / Math.max(1, o.d)) - 2.5) * 0.02) + Math.min(0.06, o.games * 0.01) })).sort((a, b) => b.score - a.score);
+    const picks = L.filter((o) => o.games >= 2).slice(0, 3);
+    const avoid = L.filter((o) => o.games >= 3 && o.wr < 0.34);
+    const row = (o) => { const c = byKey(o.champ); return `<div class="pool-row">${cIcon(c, 'ico sm')}<b class="ell">${esc(c ? c.name : '?')}</b><span class="small muted">${o.role ? ROLE_IC[o.role] + ' ' + ROLE_NAME[o.role] : ''}</span><span class="small">${o.games} partie${o.games > 1 ? 's' : ''}</span><span class="small ${o.wr >= 0.5 ? 'pos' : 'neg'}">${Math.round(o.wr * 100)} % V</span><span class="small">KDA ${f1(o.kda)}</span><span class="small">${f1(o.csm)} CS/min</span></div>`; };
+    let h = `<div class="card"><h2>🎯 Mes champions <span class="muted small">(${G.length} dernières parties)</span></h2>`;
+    if (picks.length) h += `<p class="small">👉 À travailler en priorité : ${picks.map((o) => `<b>${esc((byKey(o.champ) || {}).name || '?')}</b>`).join(', ')}. Ce sont tes meilleurs résultats sur plusieurs parties.</p>`;
+    else h += '<p class="small muted">Joue au moins 2 parties avec un champion pour qu\'il puisse être conseillé.</p>';
+    if (avoid.length) h += `<p class="small">⏸️ À mettre de côté pour l'instant : ${avoid.map((o) => `<b>${esc((byKey(o.champ) || {}).name || '?')}</b> (${o.wins} V / ${o.games - o.wins} D)`).join(', ')}.</p>`;
+    if (L.length > 6) h += `<p class="small warn">Tu as joué ${L.length} champions différents en ${G.length} parties. En te concentrant sur 2 ou 3, tu progresseras plus vite : tu connaîtras mieux leurs combos et leurs match-ups.</p>`;
+    h += `<div class="pool">${L.map(row).join('')}</div></div>`;
+    return h;
+  }
+
   /* ---------- Mon compte ---------- */
   function loadProfile(force) {
     if (!NB || R.profileLoading) return;
@@ -208,6 +313,8 @@
     const rank = (l, name) => `<div class="stat"><span class="muted small">${name}</span><b>${l ? `${TIER[l.tier] || l.tier} ${['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(l.tier) ? '' : l.rank}` : 'Non classé'}</b>${l ? `<span class="small">${l.leaguePoints} LP · ${l.wins} V / ${l.losses} D (${pct(l.wins, l.wins + l.losses)})</span>` : '<span class="small muted">10 parties de placement</span>'}</div>`;
     h += `<div class="card gold"><div class="row nw"><img class="ico lg round" alt="" src="${D.version ? `https://ddragon.leagueoflegends.com/cdn/${D.version}/img/profileicon/${P.summoner.profileIconId}.png` : ''}"><div class="grow"><h2 style="margin:0">${esc(P.account.gameName)}<span class="muted">#${esc(P.account.tagLine)}</span></h2><span class="muted">Niveau ${P.summoner.summonerLevel}</span></div></div>
       <div class="stat-row" style="margin-top:10px">${rank(solo, 'Classée solo/duo')}${rank(flex, 'Classée flexible')}</div></div>`;
+    if (!R.hist && !R.histLoading && !R.histErr) loadHistory();
+    h += progressCard() + poolCard();
     h += `<div class="cols"><div class="card"><h2>🏅 Mes meilleures maîtrises</h2><div class="grid-ic">${(P.mastery || []).map((m) => { const c = byKey(m.championId); return c ? tile(c, `<div class="price">Niv. ${m.championLevel} · ${nf(Math.round(m.championPoints / 1000))}k</div>`) : ''; }).join('')}</div></div>`;
     h += `<div class="card"><h2>🕹️ Mes dernières parties</h2>${(P.matches || []).length ? P.matches.map((m) => { const c = byKey(m.champ);
       return `<div class="match ${m.remake ? '' : m.win ? 'win' : 'loss'}" data-act="openMatch" data-val="${esc(m.id)}" title="Voir toutes les statistiques de la partie">${cIcon(c)}<div class="grow"><b>${m.remake ? 'Annulée' : m.win ? 'Victoire' : 'Défaite'}</b> <span class="muted small">${esc(QUEUE[m.queue] || 'Mode ' + m.queue)} · ${fmt(m.duration)}${MATCH_ROLE[m.role] ? ' · ' + ROLE_NAME[MATCH_ROLE[m.role]] : ''}</span>
@@ -469,22 +576,45 @@
   }
 
   /* ---------- Objets ---------- */
+  /* Filtres combinables de l'onglet Objets : type (un seul), statistiques (plusieurs : toutes ou au moins une), prix, tri */
+  const ITYPE = [['', 'Tous'], ['_start', 'Départ'], ['_final', 'Objets finaux'], ['Boots', 'Bottes'], ['Consumable', 'Consommables']];
+  const ISTAT = [['Damage', 'Dégâts (AD)'], ['SpellDamage', 'Puissance (AP)'], ['AttackSpeed', 'Vitesse d\'attaque'], ['CriticalStrike', 'Critique'], ['OnHit', 'À l\'impact'], ['ArmorPenetration', 'Létalité / pénétr. armure'], ['MagicPenetration', 'Pénétr. magique'],
+    ['Health', 'Vie'], ['Armor', 'Armure'], ['SpellBlock', 'Résist. magique'], ['AbilityHaste', 'Accélération'], ['LifeSteal', 'Vol de vie'], ['SpellVamp', 'Omnivampirisme'], ['HealthRegen', 'Régén. PV'], ['Mana', 'Mana'], ['ManaRegen', 'Régén. mana'],
+    ['NonbootsMovement', 'Vitesse'], ['Tenacity', 'Ténacité'], ['Active', 'Actif'], ['Aura', 'Aura'], ['Vision', 'Vision']];
+  const IPRICE = [['lt1000', '< 1 000'], ['1000-2500', '1 000 – 2 500'], ['2500-3000', '2 500 – 3 000'], ['gt3000', '> 3 000']];
+  const hasTag = (it, t) => { const tags = it.tags || []; return t === 'AbilityHaste' ? tags.includes('AbilityHaste') || tags.includes('CooldownReduction') : tags.includes(t); };
+  const priceOk = (it, p) => { const g = it.gold.total; return !p || (p === 'lt1000' ? g < 1000 : p === '1000-2500' ? g >= 1000 && g <= 2500 : p === '2500-3000' ? g > 2500 && g <= 3000 : g > 3000); };
   function itemMatches() {
-    const f = S.itf, q = norm(f.q);
-    return D.itemList.filter((it) => {
+    const f = S.itf, q = norm(f.q), stats = f.stats || [];
+    const list = D.itemList.filter((it) => {
       if (q && !norm(it.name).includes(q) && !norm(it.plaintext).includes(q) && !(it.colloq && norm(it.colloq).includes(q))) return false;
+      if (stats.length && !(f.any ? stats.some((t) => hasTag(it, t)) : stats.every((t) => hasTag(it, t)))) return false;
+      if (!priceOk(it, f.price)) return false;
       if (!f.tag) return true;
       if (f.tag === '_start') return (it.tags || []).some((t) => t === 'Lane' || t === 'Jungle' || t === 'GoldPer') && it.gold.total <= 600 && !it.from;
       if (f.tag === '_final') return isLegendary(it);
       return (it.tags || []).includes(f.tag);
     });
+    if (f.sort === 'price-desc') list.sort((a, b) => b.gold.total - a.gold.total);
+    else if (f.sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    return list;
   }
-  function itemGrid() { const l = itemMatches(); return l.length ? `<p class="muted small">${l.length} objet${l.length > 1 ? 's' : ''} · triés par prix</p><div class="grid-ic">${l.map((it) => `<button class="tile" data-act="item" data-val="${esc(it.id)}"><img loading="lazy" alt="" src="${Dd.img.item(it)}">${esc(it.name)}<div class="price">${it.gold.total} 🪙</div></button>`).join('')}</div>` : '<div class="empty">Aucun objet ne correspond.</div>'; }
+  function itemGrid() { const l = itemMatches(); return l.length ? `<p class="muted small">${l.length} objet${l.length > 1 ? 's' : ''} · triés ${({ 'price-desc': 'du plus cher au moins cher', name: 'par nom' })[S.itf.sort] || 'du moins cher au plus cher'}</p><div class="grid-ic">${l.map((it) => `<button class="tile" data-act="item" data-val="${esc(it.id)}"><img loading="lazy" alt="" src="${Dd.img.item(it)}">${esc(it.name)}<div class="price">${it.gold.total} 🪙</div></button>`).join('')}</div>` : '<div class="empty">Aucun objet ne correspond.</div>'; }
+  function itemFilters() {
+    const f = S.itf, stats = f.stats || [];
+    const active = !!(f.tag || stats.length || f.price);
+    return `<div class="ifilters card">
+      <div class="frow"><span class="small muted">Type</span><div class="chips">${ITYPE.map(([t, l]) => `<button class="chip ${(f.tag || '') === t ? 'on' : ''}" data-act="itag" data-val="${t}">${l}</button>`).join('')}</div></div>
+      <div class="frow"><span class="small muted">Statistiques</span><div class="chips">${ISTAT.map(([t, l]) => `<button class="chip ${stats.includes(t) ? 'on' : ''}" data-act="istat" data-val="${t}">${stats.includes(t) ? '✓ ' : ''}${l}</button>`).join('')}</div></div>
+      ${stats.length > 1 ? `<div class="frow"><span class="small muted">Combiner</span><div class="chips"><button class="chip ${!f.any ? 'on' : ''}" data-act="iany" data-val="0">Toutes ces stats</button><button class="chip ${f.any ? 'on' : ''}" data-act="iany" data-val="1">Au moins une</button></div></div>` : ''}
+      <div class="frow"><span class="small muted">Prix</span><div class="chips">${IPRICE.map(([t, l]) => `<button class="chip ${f.price === t ? 'on' : ''}" data-act="iprice" data-val="${t}">${l} 🪙</button>`).join('')}</div></div>
+      <div class="frow"><span class="small muted">Trier</span><div class="chips">${[['price', 'Prix ↑'], ['price-desc', 'Prix ↓'], ['name', 'Nom']].map(([t, l]) => `<button class="chip ${(f.sort || 'price') === t ? 'on' : ''}" data-act="isort" data-val="${t}">${l}</button>`).join('')}${active ? '<button class="chip danger" data-act="ireset">✕ Effacer les filtres</button>' : ''}</div></div></div>`;
+  }
   function viewItems() {
     if (S.view.item) return viewItem(S.view.item);
     const nd = needData(); if (nd) return '<h1>Objets</h1>' + nd;
     return `<div class="search"><input type="search" placeholder="🔎 Rechercher un objet…" value="${esc(S.itf.q)}" data-in="itf.q" autocomplete="off"></div>
-      <div class="chips" style="margin-bottom:10px">${ITAG.map(([t, l]) => `<button class="chip ${S.itf.tag === t ? 'on' : ''}" data-act="itag" data-val="${t}">${l}</button>`).join('')}</div>
+      ${itemFilters()}
       <div id="ilist">${itemGrid()}</div>`;
   }
   function viewItem(id) {
@@ -780,7 +910,7 @@
     const sig = enemies.map((p) => p.champ).join(',');
     if (g.sig !== sig || (g.lastTime && L.time + 5 < g.lastTime)) {
       /* Nouvelle partie détectée */
-      S.game = newGame(); S.game.sig = sig; Voice.said.clear(); R.prevObj = {}; R.pinfo = {};
+      S.game = newGame(); S.game.sig = sig; Voice.said.clear(); R.remind = null; R.prevObj = {}; R.pinfo = {};
       S.game.enemies = enemies.slice(0, 5).map((p) => ({ champ: D.champs && D.champs[p.champ] ? p.champ : '', s: [p.spells[0] || '', p.spells[1] || ''], until: [0, 0], haste: 0 }));
       while (S.game.enemies.length < 5) S.game.enemies.push(newEnemy());
     }
@@ -899,6 +1029,23 @@
     /* Mort : temps de réapparition */
     const meP = L.me ? L.players.find((p) => p.name === L.me.name) : null;
     if (meP && meP.dead && meP.respawn > 8) speak(`Tu es mort. Réapparition dans ${Math.round(meP.respawn)} secondes. Regarde la carte en attendant.`, `death-${meP.d}`);
+    /* Rappels utiles (uniquement d'après tes propres données) */
+    if (S.opt.reminders !== false && meP && L.me) {
+      const lvl = L.me.level || meP.level || 0;
+      if (lvl >= 6) speak('Niveau 6 : ton ultime est disponible.', 'ult-6');
+      if (lvl >= 11) speak('Niveau 11 : améliore ton ultime.', 'ult-11');
+      if (lvl >= 16) speak('Niveau 16 : améliore ton ultime une dernière fois.', 'ult-16');
+      /* Après un achat : balise de contrôle si tu n'en as pas (à partir de 6 min, au plus une fois toutes les 3 min) */
+      const ids = meP.items.map((i) => i.id).sort().join(',');
+      const value = meP.items.reduce((sum, i) => sum + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0);
+      if (R.remind && R.remind.ids !== ids && value > R.remind.value && L.time > 360 && !meP.items.some((i) => i.id === 2055) && meP.items.filter((i) => i.slot < 6).length < 6 && L.time - (R.remind.ctrlAt || 0) > 180) {
+        speak('Pense à acheter une balise de contrôle.'); R.remind.ctrlAt = L.time;
+      }
+      R.remind = Object.assign(R.remind || {}, { ids, value });
+      /* Support : passer à la Lentille d'oracle pour détruire les balises adverses */
+      const role = liveRoles(L).get(meP.name);
+      if (role === 'support' && L.time > 540 && meP.items.some((i) => i.id === 3340)) speak('Pense à échanger ton trinket contre la Lentille d\'oracle, pour détruire les balises adverses.', 'oracle');
+    }
     /* Or suffisant pour le prochain objet du build */
     const lb = liveBuild(L);
     if (lb && lb.next && L.me && L.me.gold >= lb.next.cost && !(meP && meP.dead)) speak(`Tu as assez d'or pour ${lb.next.name}. Rentre à la base si tu peux.`, `gold-${lb.next.item}`);
@@ -1196,7 +1343,7 @@
   /* =====================================================================
      FIN DE PARTIE : toutes les statistiques, en onglets
      ===================================================================== */
-  const POST_TABS = [['resume', '🏁', 'Résumé'], ['equipe', '📈', 'Équipe'], ['moi', '🙋', 'Ma partie'], ['carte', '🗺️', 'Carte'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds']];
+  const POST_TABS = [['resume', '🏁', 'Résumé'], ['equipe', '📈', 'Équipe'], ['moi', '🙋', 'Ma partie'], ['morts', '💀', 'Mes morts'], ['carte', '🗺️', 'Carte'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds']];
   const k1 = (n) => (n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(n || 0)));
   function curveSvg(vals, { title = '', unit = 'po' } = {}) {
     if (!vals || vals.length < 2) return '<p class="muted small">Courbe indisponible.</p>';
@@ -1215,13 +1362,13 @@
   const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
   const pctS = (v) => `${Math.round((v || 0) * 100)} %`;
   /* Plusieurs courbes sur la même échelle, en minutes */
-  function lineChart(series, { title = '', unit = '', H = 170, fmtY = k1, legend = true } = {}) {
+  function lineChart(series, { title = '', unit = '', H = 170, fmtY = k1, legend = true, tickEvery = 5, tickLabel = (m) => `${m}'`, min0 = true } = {}) {
     const ss = series.filter((x) => x.vals && x.vals.length > 1);
     if (!ss.length) return '<p class="muted small">Courbe indisponible (chronologie de la partie non publiée).</p>';
     const W = 640, P = 34, n = Math.max(...ss.map((x) => x.vals.length));
-    const all = ss.flatMap((x) => x.vals); const max = Math.max(1, ...all), min = Math.min(0, ...all);
+    const all = ss.flatMap((x) => x.vals); const max = Math.max(min0 ? 1 : -Infinity, ...all), min = min0 ? Math.min(0, ...all) : Math.min(...all);
     const x = (i) => P + (i * (W - P - 8)) / Math.max(1, n - 1), y = (v) => H - 16 - ((v - min) / (max - min || 1)) * (H - 30);
-    const ticks = []; for (let m = 0; m < n; m += 5) ticks.push(`<line x1="${x(m)}" x2="${x(m)}" y1="10" y2="${H - 16}" class="gl"/><text x="${x(m)}" y="${H - 3}" class="tk">${m}'</text>`);
+    const ticks = []; for (let m = 0; m < n; m += tickEvery) ticks.push(`<line x1="${x(m)}" x2="${x(m)}" y1="10" y2="${H - 16}" class="gl"/><text x="${x(m)}" y="${H - 3}" class="tk">${tickLabel(m)}</text>`);
     const lines = ss.map((sr) => `<polyline points="${sr.vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}" class="sr ${sr.cls || ''}"${sr.dash ? ' stroke-dasharray="5 4"' : ''}/>`).join('');
     /* valeurs finales, écartées si elles se chevauchent */
     const ends = ss.map((sr) => ({ sr, v: sr.vals[sr.vals.length - 1], yy: y(sr.vals[sr.vals.length - 1]) - 4 })).sort((a, b) => a.yy - b.yy);
@@ -1340,6 +1487,20 @@
         <div class="card">${lineChart([{ vals: T.gold.us, cls: 'us', label: 'Mon équipe' }, { vals: T.gold.them, cls: 'them', label: 'Adversaires' }], { title: 'Or total de chaque équipe', unit: 'po' })}</div></div>`;
       h += `<div class="cols"><div class="card">${curveSvg(G.curve, { title: 'Différence d\'or entre les équipes' })}</div><div class="card">${curveSvg(T.xp, { title: 'Différence d\'expérience entre les équipes', unit: 'XP' })}</div></div>`;
       h += `<div class="card"><h2>⏱️ Objectifs dans le temps</h2>${objStrip(G)}</div>`;
+    } else if (tab === 'morts') {
+      const DR = G.deaths;
+      if (!me) h += '<div class="card"><p class="muted">Joueur introuvable dans cette partie.</p></div>';
+      else if (!P.timeline) h += '<div class="card"><p class="muted">La chronologie de cette partie n\'est pas disponible : impossible de détailler tes morts.</p></div>';
+      else {
+        const rows = DR.rows;
+        h += `<div class="kpis">${[['Morts', me.deaths], ['Temps passé mort', fmt(DR.deadTime)], ['Part de la partie', pctS(DR.share)], ['Avant 10 min', rows.filter((r) => r.t < 600).length], ['Face à 3 ennemis ou +', rows.filter((r) => r.kind === 'gank').length], ['En 1 contre 1', rows.filter((r) => r.kind === 'solo').length]].map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+        const S2 = 300, X = (v) => (v / 14870) * S2, Y = (v) => S2 - (v / 14980) * S2;
+        const map = `<figure class="kmap"><svg viewBox="0 0 ${S2} ${S2}" role="img" aria-label="Carte de mes morts"><image href="https://ddragon.leagueoflegends.com/cdn/${D.version}/img/map/map11.png" x="0" y="0" width="${S2}" height="${S2}" opacity=".75"/>${rows.filter((r) => r.x != null).map((r, i) => `<g><circle cx="${X(r.x).toFixed(1)}" cy="${Y(r.y).toFixed(1)}" r="8" class="ev-death"/><text x="${X(r.x).toFixed(1)}" y="${(Y(r.y) + 3.5).toFixed(1)}" class="dnum">${i + 1}</text><title>${fmt(r.t)} · ${esc(r.zone.name)}</title></g>`).join('')}</svg></figure>`;
+        const KIND = { gank: '👥 attaqué à plusieurs', duo: '⚔️ à 2 contre toi', solo: '🗡️ 1 contre 1', other: '🏰 tour ou monstre' };
+        const list = rows.length ? rows.map((r, i) => { const kc = byKey(r.killer); return `<div class="drow"><span class="dn">${i + 1}</span><b>${fmt(r.t)}</b><span class="dz">${esc(r.zone.name)}</span>${kc ? cIcon(kc, 'ico xs') : ''}<span class="small">${kc ? esc(kc.name) : 'tour / monstre'}${r.enemies > 1 ? ` <span class="muted">+${r.enemies - 1}</span>` : ''}</span><span class="small muted">${KIND[r.kind]}</span>${r.lvl && r.klvl ? `<span class="small ${r.klvl > r.lvl ? 'neg' : 'muted'}">niv. ${r.lvl} vs ${r.klvl}</span>` : ''}</div>`; }).join('') : '<p class="muted">Aucune mort dans cette partie. Bravo !</p>';
+        h += `<div class="cols"><div class="card"><h2>🗺️ Où je suis mort</h2>${map}</div><div><div class="card gold"><h2>💡 Ce que tes morts racontent</h2><ul class="tips">${DR.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>
+          <div class="card"><h2>📋 Détail</h2><div class="dlist">${list}</div>${Object.keys(DR.zones).length ? `<p class="small muted" style="margin-top:6px">Par zone : ${Object.entries(DR.zones).sort((a, b) => b[1] - a[1]).map(([z, c]) => `${esc(z)} ×${c}`).join(' · ')}</p>` : ''}</div></div></div>`;
+      }
     } else if (tab === 'carte') {
       h += `<div class="cols"><div class="card"><h2>⚔️ Toutes les éliminations</h2>${killMap(G, false)}</div><div class="card"><h2>🙋 Mes kills, morts et assistances</h2>${me ? killMap(G, true) : '<p class="muted">Joueur introuvable dans cette partie.</p>'}</div></div>`;
       if (me && G.T.myEv.length) h += `<div class="card"><h2>🕒 Mes actions dans le temps</h2><div class="myev">${G.T.myEv.map((e) => `<span class="ev ${e.kind}"><b>${fmt(e.t)}</b> ${{ kill: '⚔️ kill', death: '💀 mort', assist: '🤝 assistance' }[e.kind]}</span>`).join('')}</div></div>`;
@@ -1499,6 +1660,7 @@
       <div class="row" style="margin-top:8px"><div class="grow"><label>Voix</label><select data-voice="1">${vs.length ? vs.map((v) => `<option value="${esc(v.name)}" ${v.name === S.opt.voiceName ? 'selected' : ''}>${esc(v.name)}</option>`).join('') : '<option value="">Voix française par défaut</option>'}</select></div></div>
       <div class="row" style="margin-top:8px"><span class="small muted">Vitesse</span>${[0.9, 1.05, 1.25].map((r) => `<button class="chip ${S.opt.voiceRate === r ? 'on' : ''}" data-act="voiceRate" data-val="${r}">${r < 1 ? 'Lente' : r > 1.1 ? 'Rapide' : 'Normale'}</button>`).join('')}
       <span class="small muted">Volume</span>${[50, 75, 100].map((r) => `<button class="chip ${S.opt.voiceVol === r ? 'on' : ''}" data-act="voiceVol" data-val="${r}">${r} %</button>`).join('')}</div>
+      <div class="chips" style="margin-top:8px"><button class="chip ${S.opt.reminders !== false ? 'on' : ''}" data-act="remToggle">💡 Rappels : ultime (niveaux 6, 11, 16), balise de contrôle après un achat, Lentille d'oracle pour les supports</button></div>
       ${!vs.length ? '<p class="small warn">Aucune voix française trouvée : ajoute-en une dans Windows (Paramètres → Heure et langue → Voix).</p>' : ''}</div>`;
   }
   function miniSettings() {
@@ -1569,9 +1731,14 @@
       case 'tipNext': S.tipN = (S.tipN + 1 + Math.floor(Math.random() * (GUIDE.tips.length - 1))) % GUIDE.tips.length; render(true); break;
       case 'cf': { const p = el.dataset.path; const val = p === 'fav' ? true : v; S.cf[p] = S.cf[p] === val ? (p === 'fav' ? false : '') : val; render(true); break; }
       case 'itag': S.itf.tag = v; render(true); break;
+      case 'istat': { const L2 = S.itf.stats || (S.itf.stats = []); const i = L2.indexOf(v); if (i >= 0) L2.splice(i, 1); else L2.push(v); render(true); break; }
+      case 'iany': S.itf.any = v === '1'; render(true); break;
+      case 'iprice': S.itf.price = S.itf.price === v ? '' : v; render(true); break;
+      case 'isort': S.itf.sort = v; render(true); break;
+      case 'ireset': Object.assign(S.itf, { tag: '', stats: [], any: false, price: '' }); render(true); break;
       case 'tree': S.rune.tree = +v; S.rune.sel = null; render(true); break;
       case 'rune': S.rune.sel = S.rune.sel === +v ? null : +v; render(true); break;
-      case 'profileReload': cache.clear(); loadProfile(true); render(true); break;
+      case 'profileReload': loadHistory(true); cache.clear(); loadProfile(true); render(true); break;
       case 'selRole': S.select.role = v; render(true); break;
       case 'postTab': S.postTab = v; render(true); break;
       /* ---- Mes builds ---- */
@@ -1705,6 +1872,9 @@
       }).catch((e) => toast(e.message)); break;
       case 'miniSaveCrop': if (pendingCrop) cfgSet({ minimap: { crop: pendingCrop } }).then(() => toast('Zone enregistrée.')); break;
       case 'installUpdate': NB.installUpdate(); break;
+      case 'remToggle': S.opt.reminders = S.opt.reminders === false; save(); render(true); break;
+      case 'goalMetric': S.goal = { metric: v, target: METRICS[v].def }; save(); render(true); break;
+      case 'goalStep': { const G0 = (R.hist && R.hist.games) || []; const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goal = { metric: g.metric, target: t }; save(); render(true); break; }
       case 'openData': NB.openData().catch(() => {}); break;
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;

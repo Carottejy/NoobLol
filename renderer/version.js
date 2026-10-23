@@ -1,6 +1,15 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.9.3';
+var APP_VERSION = '3.0.0';
 var APP_RELEASES = [
+  { v: '3.0.0', date: '2026-10-23', notes: [
+    'Mon compte → Ma progression : tes 20 dernières parties sur la Faille (CS/min, morts, vision/min, participation, KDA, or/min), avec la moyenne des 5 dernières comparée aux 5 d\'avant, et une courbe partie par partie.',
+    'Mon compte → Mon objectif : choisis un indicateur et une valeur à atteindre (ex. 6 CS/min). Noob LOL te montre ta moyenne actuelle et combien de fois tu l\'as atteint sur tes 10 dernières parties.',
+    'Mon compte → Mes champions : taux de victoire, KDA et CS/min par champion sur tes 20 dernières parties, les 2 ou 3 champions à travailler en priorité et ceux à mettre de côté pour l\'instant.',
+    'Fin de partie → nouvel onglet « Mes morts » : chaque mort sur la carte avec la minute, la zone (voie, rivière, jungle…), qui t\'a tué et combien d\'ennemis étaient là, l\'écart de niveau, et les habitudes à corriger.',
+    'En jeu : rappels vocaux (ultime aux niveaux 6, 11 et 16, balise de contrôle après un achat si tu n\'en as pas, Lentille d\'oracle pour les supports). Désactivables dans Réglages → Voix.',
+    'Accueil : ce qui change au nouveau patch pour tes champions (favoris, meilleures maîtrises, champions joués récemment) : statistiques, recharges, coûts, portées et descriptions des compétences, avec ▲ amélioration / ▼ affaiblissement.',
+    'Objets : filtres combinables (type, plusieurs statistiques à la fois avec « toutes » ou « au moins une », tranche de prix) et tri par prix ou par nom.',
+  ]},
   { v: '2.9.3', date: '2026-10-23', notes: [
     'Mes builds : ajout du build « Claude Lillia Support » (runes Comète arcanique / Inspiration, Saut éclair + Fatigue ; Atlas du monde → Pointe-de-royaume de Zaz\'Zak, Tourment de Liandry, Sceptre de Rylai, Bottes ioniennes).',
     'L\'application s\'ouvre en plein écran (fenêtre agrandie).',

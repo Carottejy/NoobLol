@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('noob', {
   config: { get: () => call('config:get'), set: (p) => call('config:set', p), setKey: (k) => call('config:setKey', k), testKey: () => call('config:testKey') },
   lcu: { state: () => call('lcu:state'), on: on('lcu'), applyRunes: (p) => call('lcu:applyRunes', p), applySpells: (s) => call('lcu:applySpells', s) },
   live: { state: () => call('live:state'), on: on('live') },
-  riot: { profile: (riotId) => call('riot:profile', riotId), masteries: (puuid) => call('riot:masteries', puuid) },
+  riot: { profile: (riotId) => call('riot:profile', riotId), masteries: (puuid) => call('riot:masteries', puuid), history: (riotId) => call('riot:history', riotId) },
   stats: {
     counts: () => call('stats:counts'), roleDist: (c) => call('stats:roleDist', c), builds: (c, r, d) => call('stats:builds', c, r, d), champ: (c, r, d) => call('stats:champ', c, r, d), tier: (r, d, m) => call('stats:tier', r, d, m),
     counters: (e, r, d) => call('stats:counters', e, r, d), matchup: (c, o, r, d) => call('stats:matchup', c, o, r, d), mainRole: (c) => call('stats:mainRole', c), clear: () => call('stats:clear'),

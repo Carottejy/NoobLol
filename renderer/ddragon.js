@@ -12,7 +12,7 @@ var Dd = (() => {
 
   async function resolveVersion() {
     let v = null;
-    try { const list = await getJSON(`${BASE}/api/versions.json`); v = list[0]; } catch (e) { /* hors ligne */ }
+    try { const list = await getJSON(`${BASE}/api/versions.json`); v = list[0]; st.prevVersion = list.find((x) => x.split('.').slice(0, 2).join('.') !== String(v).split('.').slice(0, 2).join('.')) || null; } catch (e) { /* hors ligne */ }
     let saved = null;
     try { saved = localStorage.getItem(VKEY); } catch (e) { /* ignoré */ }
     if (!v) v = saved;
@@ -64,6 +64,56 @@ var Dd = (() => {
     return getJSON(cdn(`data/${LANG}/champion/${id}.json`)).then((j) => (st.full[id] = j.data[id]));
   }
 
+  /* ---------- Ce qui change pour un champion entre le patch précédent et le patch actuel ---------- */
+  const STAT_FR = { hp: 'PV', hpperlevel: 'PV par niveau', mp: 'Mana', mpperlevel: 'Mana par niveau', movespeed: 'Vitesse de déplacement', armor: 'Armure', armorperlevel: 'Armure par niveau',
+    spellblock: 'Résistance magique', spellblockperlevel: 'Résistance magique par niveau', attackrange: 'Portée d\'attaque', hpregen: 'Régénération de PV', hpregenperlevel: 'Régénération de PV par niveau',
+    mpregen: 'Régénération de mana', mpregenperlevel: 'Régénération de mana par niveau', attackdamage: 'Dégâts d\'attaque', attackdamageperlevel: 'Dégâts d\'attaque par niveau',
+    attackspeedperlevel: 'Vitesse d\'attaque par niveau (%)', attackspeed: 'Vitesse d\'attaque' };
+  const nums = (b) => String(b || '').split('/').map(Number).filter((x) => !Number.isNaN(x));
+  const plainTxt = (t) => String(t || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  /* Comparaison de deux fiches champion (données Riot) : utilisable aussi dans les tests */
+  function diffChamp(a, b) {
+    const out = [];
+    if (!a || !b) return out;
+    for (const k of Object.keys(STAT_FR)) {
+      const x = (a.stats || {})[k], y = (b.stats || {})[k];
+      if (x == null || y == null || Math.abs(x - y) < 1e-6) continue;
+      out.push({ what: STAT_FR[k], before: String(x), after: String(y), good: y > x });
+    }
+    const sp = (c) => [Object.assign({ key: 'Passif' }, c.passive || {})].concat((c.spells || []).map((x, i) => Object.assign({ key: 'QWER'[i] }, x)));
+    const A = sp(a), B = sp(b);
+    B.forEach((y, i) => {
+      const x = A[i]; if (!x) return;
+      const lab = `${y.key} – ${y.name}`;
+      for (const [f, nm, lowerIsBetter] of [['cooldownBurn', 'recharge (s)', true], ['costBurn', 'coût', true], ['rangeBurn', 'portée', false]]) {
+        if (x[f] == null || y[f] == null || x[f] === y[f]) continue;
+        const nx = nums(x[f]), ny = nums(y[f]);
+        const sx = nx.reduce((s2, v) => s2 + v, 0), sy = ny.reduce((s2, v) => s2 + v, 0);
+        out.push({ what: `${lab} : ${nm}`, before: x[f], after: y[f], good: nx.length && ny.length ? (lowerIsBetter ? sy < sx : sy > sx) : null });
+      }
+      const ex = JSON.stringify(x.effectBurn || []), ey = JSON.stringify(y.effectBurn || []);
+      if (ex !== ey && (y.effectBurn || []).some(Boolean)) out.push({ what: `${lab} : valeurs de la compétence`, before: '', after: 'modifiées', good: null });
+      if (plainTxt(x.description) !== plainTxt(y.description)) out.push({ what: `${lab} : description`, before: '', after: 'modifiée', good: null, text: plainTxt(y.description) });
+    });
+    return out;
+  }
+  function champAt(version, id) { return getJSON(`${BASE}/cdn/${version}/data/${LANG}/champion/${id}.json`).then((j) => j.data[id]); }
+  async function patchDiff(ids) {
+    if (!st.prevVersion) return null;
+    const key = `nooblol.patch.${st.prevVersion}>${st.version}`;
+    let memo = {};
+    try { memo = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { memo = {}; }
+    const out = {};
+    for (const id of ids) {
+      if (!memo[id]) {
+        try { const [a, b] = await Promise.all([champAt(st.prevVersion, id).catch(() => null), champFull(id)]); memo[id] = a ? diffChamp(a, b) : 'new'; } catch (e) { continue; }
+      }
+      out[id] = memo[id];
+    }
+    try { localStorage.setItem(key, JSON.stringify(memo)); } catch (e) { /* ignoré */ }
+    return { from: st.prevVersion, to: st.version, champs: out };
+  }
+
   const img = {
     champ: (c) => cdn(`img/champion/${c.image.full}`),
     splash: (id, n = 0) => `${BASE}/cdn/img/champion/splash/${id}_${n}.jpg`,
@@ -102,5 +152,5 @@ var Dd = (() => {
   }
   const plain = (html) => { const t = document.createElement('div'); t.innerHTML = rich(html).replace(/<br>/g, ' '); return t.textContent.replace(/\s+/g, ' ').trim(); };
 
-  return { st, load, champFull, img, rich, plain };
+  return { st, load, champFull, img, rich, plain, diffChamp, patchDiff };
 })();

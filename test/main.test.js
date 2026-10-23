@@ -424,3 +424,60 @@ test('en jeu : tours et inhibiteurs comptés quel que soit le format du nom', ()
   assert.deepStrictEqual(o.turret, { us: 4, them: 1 });
   assert.deepStrictEqual(o.inhib, { us: 1, them: 0 });
 });
+
+test('historique : résumé des parties, cache sur le disque, parties inutiles écartées', async () => {
+  const os = require('os'), fs = require('fs'), path = require('path');
+  const { History, summarize } = require('../main/history');
+  const mk = (id, map, mode, dur, extra = {}) => ({ metadata: { matchId: id }, info: Object.assign({ gameCreation: +id.split('_')[1], gameEndTimestamp: 1, gameDuration: dur, mapId: map, gameMode: mode, queueId: 420,
+    participants: [{ puuid: 'ME', teamId: 100, championId: 99, teamPosition: 'MIDDLE', win: true, kills: 4, deaths: 2, assists: 6, totalMinionsKilled: 150, neutralMinionsKilled: 10, goldEarned: 9000, totalDamageDealtToChampions: 20000, visionScore: 20 },
+      { puuid: 'A', teamId: 100, kills: 6, totalDamageDealtToChampions: 20000, goldEarned: 9000 }, { puuid: 'B', teamId: 200, kills: 3 }] }, extra) });
+  const g = summarize(mk('EUW1_5', 11, 'CLASSIC', 1800), 'ME');
+  assert.strictEqual(g.kp, 1); assert.strictEqual(g.dmgShare, 0.5); assert.strictEqual(g.cs, 160); assert.strictEqual(g.role, 'MIDDLE');
+  const db = { EUW1_5: mk('EUW1_5', 11, 'CLASSIC', 1800), EUW1_4: mk('EUW1_4', 12, 'ARAM', 1200), EUW1_3: mk('EUW1_3', 11, 'CLASSIC', 300), EUW1_2: mk('EUW1_2', 11, 'CLASSIC', 1500) };
+  let calls = 0;
+  const api = { matchIds: async () => Object.keys(db), match: async (id) => { calls++; return db[id]; } };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nl-'));
+  const h = new History({ api, dir });
+  const games = await h.get('ME', 20);
+  assert.deepStrictEqual(games.map((x) => x.id), ['EUW1_2', 'EUW1_5'], 'ARAM et partie de 5 min écartées, de la plus ancienne à la plus récente');
+  assert.strictEqual(calls, 4);
+  const h2 = new History({ api, dir });
+  await h2.get('ME', 20);
+  assert.strictEqual(calls, 4, 'tout vient du cache');
+});
+
+test('fin de partie : bilan des morts (zones, ganks, habitudes)', () => {
+  const Builds = require('../renderer/builds.js');
+  assert.strictEqual(Builds.zoneOf(7400, 7400, 100).id, 'mid');
+  assert.strictEqual(Builds.zoneOf(1000, 9000, 100).id, 'top');
+  assert.strictEqual(Builds.zoneOf(9000, 1000, 100).id, 'bot');
+  assert.strictEqual(Builds.zoneOf(9800, 4700, 100).id, 'river');
+  assert.strictEqual(Builds.zoneOf(4000, 7000, 100).id, 'myjungle');
+  assert.strictEqual(Builds.zoneOf(4000, 7000, 200).id, 'enemyjungle');
+  assert.strictEqual(Builds.zoneOf(14000, 14200, 100).id, 'enemybase');
+  const P = (id, team, pos) => ({ participantId: id, teamId: team, teamPosition: pos, kills: 0, deaths: 0, assists: 0, totalMinionsKilled: 0, goldEarned: 1000, totalDamageDealtToChampions: 100, visionScore: 1, puuid: 'p' + id, championId: id, totalTimeSpentDead: 120 });
+  const match = { info: { gameDuration: 1800, gameEndTimestamp: 1, teams: [{ teamId: 100 }, { teamId: 200 }], participants: [P(1, 100, 'MIDDLE'), P(6, 200, 'MIDDLE'), P(7, 200, 'JUNGLE'), P(8, 200, 'TOP')] } };
+  const kill = (t, x, y, assists) => ({ type: 'CHAMPION_KILL', timestamp: t * 1000, killerId: 6, victimId: 1, assistingParticipantIds: assists, position: { x, y } });
+  const tl = { info: { frames: [{ participantFrames: { 1: { level: 3 }, 6: { level: 4 } }, events: [] }, { participantFrames: {}, events: [kill(200, 9800, 4700, [7, 8]), kill(400, 9500, 5200, [7]), kill(500, 7400, 7400, [])] }] } };
+  const G = Builds.postgame(match, tl, 'p1');
+  const D = G.deaths;
+  assert.strictEqual(D.rows.length, 3);
+  assert.deepStrictEqual(D.rows.map((r) => r.kind), ['gank', 'duo', 'solo']);
+  assert.deepStrictEqual(D.rows.map((r) => r.zone.id), ['river', 'river', 'mid']);
+  assert.ok(D.tips.some((t) => t.includes('avant 10 min')) && D.tips.some((t) => t.includes('rivière')));
+  assert.strictEqual(D.rows[0].lvl, 3); assert.strictEqual(D.rows[0].klvl, 4);
+});
+
+test('patch : différences entre deux fiches champion', () => {
+  const vm = require('vm'), fs = require('fs');
+  const ctx = { fetch: () => Promise.reject(new Error('hors ligne')), localStorage: { getItem: () => null, setItem: () => {} }, window: {}, console };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(require.resolve('../renderer/ddragon.js'), 'utf8') + '\nthis.Dd = Dd;', ctx);
+  const base = { stats: { hp: 600, armor: 30, attackrange: 550 }, passive: { name: 'P', description: 'a' }, spells: [{ name: 'Q', cooldownBurn: '8/7/6', costBurn: '50', rangeBurn: '700', description: 'x' }] };
+  const next = JSON.parse(JSON.stringify(base)); next.stats.hp = 620; next.stats.armor = 28; next.spells[0].cooldownBurn = '9/8/7'; next.spells[0].description = 'y';
+  const d = ctx.Dd.diffChamp(base, next);
+  const by = (w) => d.find((x) => x.what.includes(w));
+  assert.strictEqual(by('PV').good, true); assert.strictEqual(by('Armure').good, false);
+  assert.strictEqual(by('recharge').good, false); assert.strictEqual(by('recharge').after, '9/8/7');
+  assert.ok(by('description')); assert.strictEqual(d.length, 4);
+});
