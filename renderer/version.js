@@ -1,6 +1,12 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.1.1';
+var APP_VERSION = '3.2.0';
 var APP_RELEASES = [
+  { v: '3.2.0', date: '2026-10-23', notes: [
+    'Ma progression par rôle : un filtre (Tous les rôles, Top, Jungle, Mid, ADC, Support, avec le nombre de parties) change les indicateurs, la courbe et l\'objectif.',
+    'Un objectif différent pour chaque rôle (par défaut : vision/min en support, participation en jungle, CS/min ailleurs). En jeu, le point farm utilise l\'objectif CS/min du rôle que tu joues.',
+    'Nouveau tableau « Mes rôles comparés » : parties, victoires, CS/min, morts, vision/min, participation, KDA et or/min par rôle, avec ton meilleur rôle en jaune pour chaque indicateur.',
+    'L\'historique passe à tes 40 dernières parties sur la Faille, pour avoir assez de parties dans chaque rôle.',
+  ]},
   { v: '3.1.1', date: '2026-10-23', notes: [
     'Coaching « Moment pour rentrer » : alerte aussi quand il te reste moins de 10 % de mana (champions à mana seulement).',
   ]},

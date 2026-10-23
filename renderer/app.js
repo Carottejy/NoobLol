@@ -21,7 +21,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '', stats: [], any: false, price: '', sort: 'price' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    goal: { metric: '', target: 0 }, game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], ed: null,
+    goal: { metric: '', target: 0 }, goals: {}, progRole: '', game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], ed: null,
   });
   function load() {
     try {
@@ -218,7 +218,7 @@
   }
 
 
-  /* ---------- Ma progression sur mes 20 dernières parties ---------- */
+  /* ---------- Ma progression sur mes 40 dernières parties ---------- */
   function loadHistory(force) {
     if (!NB || R.histLoading || ((R.hist || R.histErr) && !force)) return;
     R.histLoading = true; R.histErr = '';
@@ -236,18 +236,39 @@
   };
   const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   function mainRoleOf(games) { const c = {}; games.forEach((g) => { const r = MATCH_ROLE[g.role]; if (r) c[r] = (c[r] || 0) + 1; }); return Object.keys(c).sort((a, b) => c[b] - c[a])[0] || ''; }
-  function currentGoal(games) {
-    const role = mainRoleOf(games);
-    const metric = METRICS[S.goal.metric] ? S.goal.metric : role === 'support' ? 'vision' : role === 'jungle' ? 'kp' : 'csm';
+  /* Objectif propre à chaque rôle (« all » = tous rôles confondus) */
+  const goalOf = (rk) => { if (!S.goals || typeof S.goals !== 'object') S.goals = {}; if (!S.goals.all && S.goal && S.goal.metric) S.goals.all = Object.assign({}, S.goal); return S.goals[rk] || {}; };
+  const DEF_METRIC = (role) => (role === 'support' ? 'vision' : role === 'jungle' ? 'kp' : 'csm');
+  function currentGoal(games, rk = S.progRole || 'all') {
+    const role = rk === 'all' ? mainRoleOf(games) : rk;
+    const g = goalOf(rk);
+    const metric = METRICS[g.metric] ? g.metric : DEF_METRIC(role);
     const M = METRICS[metric];
-    const target = S.goal.metric === metric && S.goal.target ? S.goal.target : M.def;
-    return { metric, M, target };
+    const target = g.metric === metric && g.target ? g.target : M.def;
+    return { metric, M, target, rk };
+  }
+  /* Tableau comparatif par rôle */
+  function rolesTable(all) {
+    const by = {}; all.forEach((g) => { const r = MATCH_ROLE[g.role]; if (r) (by[r] = by[r] || []).push(g); });
+    const roles = ROLE_ORDER.filter((r) => by[r]);
+    if (roles.length < 2) return '';
+    const cols = ['csm', 'deaths', 'vision', 'kp', 'kda', 'gpm'];
+    const best = {}; cols.forEach((k) => { const m = METRICS[k]; const v = roles.map((r) => avg(by[r].map(m.f))); best[k] = m.up ? Math.max(...v) : Math.min(...v); });
+    return `<h3>🧭 Mes rôles comparés</h3><div class="rtable"><div class="rt-h"><span>Rôle</span><span>Parties</span><span>Victoires</span>${cols.map((k) => `<span>${METRICS[k].label}</span>`).join('')}</div>
+      ${roles.map((r) => { const L2 = by[r]; const wr = L2.filter((g) => g.win).length / L2.length; return `<button class="rt-r ${S.progRole === r ? 'on' : ''}" data-act="progRole" data-val="${r}"><span>${ROLE_IC[r]} ${ROLE_NAME[r]}</span><span>${L2.length}</span><span class="${wr >= 0.5 ? 'pos' : 'neg'}">${Math.round(wr * 100)} %</span>${cols.map((k) => { const v = avg(L2.map(METRICS[k].f)); return `<span class="${Math.abs(v - best[k]) < 1e-9 ? 'top1' : ''}">${METRICS[k].fmt(v)}</span>`; }).join('')}</button>`; }).join('')}</div>
+      <p class="small muted">Moyennes par rôle. En jaune : ton meilleur rôle pour chaque indicateur. Clique un rôle pour suivre sa progression.</p>`;
   }
   function progressCard() {
-    if (R.histLoading && !R.hist) return '<div class="card"><h2>📈 Ma progression</h2><div class="loader small">Récupération de tes 20 dernières parties…</div></div>';
+    if (R.histLoading && !R.hist) return '<div class="card"><h2>📈 Ma progression</h2><div class="loader small">Récupération de tes 40 dernières parties (la première fois peut prendre une minute)…</div></div>';
     if (R.histErr) return `<div class="card"><h2>📈 Ma progression</h2><p class="muted small">${esc(R.histErr)}</p></div>`;
-    const G = (R.hist && R.hist.games) || [];
-    if (G.length < 3) return '<div class="card"><h2>📈 Ma progression</h2><p class="muted small">Il faut au moins 3 parties sur la Faille de l\'invocateur pour suivre ta progression.</p></div>';
+    const ALL = (R.hist && R.hist.games) || [];
+    if (ALL.length < 3) return '<div class="card"><h2>📈 Ma progression</h2><p class="muted small">Il faut au moins 3 parties sur la Faille de l\'invocateur pour suivre ta progression.</p></div>';
+    /* Filtre par rôle */
+    const cnt = {}; ALL.forEach((g) => { const r = MATCH_ROLE[g.role]; if (r) cnt[r] = (cnt[r] || 0) + 1; });
+    if (S.progRole && !cnt[S.progRole]) S.progRole = '';
+    const G = S.progRole ? ALL.filter((g) => MATCH_ROLE[g.role] === S.progRole) : ALL;
+    const roleChips = `<div class="chips" style="margin:6px 0 8px"><button class="chip ${!S.progRole ? 'on' : ''}" data-act="progRole" data-val="">Tous les rôles <span class="muted">${ALL.length}</span></button>${ROLE_ORDER.filter((r) => cnt[r]).map((r) => `<button class="chip ${S.progRole === r ? 'on' : ''}" data-act="progRole" data-val="${r}">${ROLE_IC[r]} ${ROLE_NAME[r]} <span class="muted">${cnt[r]}</span></button>`).join('')}</div>`;
+    if (G.length < 3) return `<div class="card"><h2>📈 Ma progression</h2>${roleChips}<p class="muted small">Seulement ${G.length} partie${G.length > 1 ? 's' : ''} dans ce rôle : il en faut au moins 3.</p>${rolesTable(ALL)}</div>`;
     const { metric, M, target } = currentGoal(G);
     const vals = G.map(M.f), last5 = vals.slice(-5), prev5 = vals.slice(-10, -5);
     const ok = (v) => (M.up ? v >= target : v <= target);
@@ -256,16 +277,18 @@
     const prog = M.up ? Math.min(1, a5 / (target || 1)) : Math.min(1, (target || 1) / Math.max(0.01, a5));
     const ma = vals.map((_, i) => avg(vals.slice(Math.max(0, i - 4), i + 1)));
     const trend = (k) => { const m = METRICS[k], v = G.map(m.f), l = avg(v.slice(-5)), p = avg(v.slice(-10, -5)); if (v.length < 6 || !p) return `<div><b>${m.fmt(l)}</b><span>${m.label}</span></div>`; const rise = l > p * 1.03, fall = l < p * 0.97, better = m.up ? rise : fall, worse = m.up ? fall : rise; return `<div><b>${m.fmt(l)} <small class="${better ? 'pos' : worse ? 'neg' : 'muted'}" title="${better ? 'en progrès' : worse ? 'en recul' : 'stable'}">${rise ? '▲' : fall ? '▼' : '='}</small></b><span>${m.label}<br><small class="muted">avant : ${m.fmt(p)}</small></span></div>`; };
-    let h = `<div class="card"><div class="row sp"><h2 style="margin:0">📈 Ma progression <span class="muted small">(${G.length} dernières parties sur la Faille)</span></h2></div>
-      <p class="small muted">Moyenne de tes 5 dernières parties, comparée aux 5 d'avant.</p>
+    let h = `<div class="card"><div class="row sp"><h2 style="margin:0">📈 Ma progression <span class="muted small">(${G.length} partie${G.length > 1 ? 's' : ''}${S.progRole ? ' en ' + ROLE_NAME[S.progRole] : ''} sur la Faille)</span></h2></div>
+      ${roleChips}
+      <p class="small muted">Moyenne de tes 5 dernières parties${S.progRole ? ' dans ce rôle' : ''}, comparée aux 5 d'avant.</p>
       <div class="kpis">${Object.keys(METRICS).map(trend).join('')}</div>
-      <h3>🎯 Mon objectif</h3>
+      <h3>🎯 Mon objectif${S.progRole ? ' en ' + ROLE_NAME[S.progRole] : ''}</h3>
       <div class="chips">${Object.entries(METRICS).map(([k, m]) => `<button class="chip ${k === metric ? 'on' : ''}" data-act="goalMetric" data-val="${k}">${m.label}</button>`).join('')}</div>
       <div class="goal"><div class="row nw"><button class="btn ghost small" data-act="goalStep" data-val="-1">−</button><b class="gtarget">${M.up ? 'au moins' : 'au plus'} ${M.fmt(target)} ${esc(M.label.toLowerCase())}</b><button class="btn ghost small" data-act="goalStep" data-val="1">+</button></div>
         <div class="grow"><div class="hbar"><i class="${prog >= 1 ? 'gld' : ''}" style="width:${Math.round(prog * 100)}%"></i></div>
         <span class="small">${prog >= 1 ? '✅ Objectif atteint en moyenne sur tes 5 dernières parties !' : `Moyenne actuelle : <b>${M.fmt(a5)}</b>`} · atteint dans <b>${reached}</b> de tes ${last10.length} dernières parties</span></div></div>
-      ${lineChart([{ vals, cls: 'us', label: 'par partie' }, { vals: ma, cls: 'avg', label: 'moyenne sur 5 parties' }, { vals: vals.map(() => target), cls: 'goal', label: 'objectif', dash: true }], { title: `${M.label}, partie par partie (de la plus ancienne à la plus récente)`, fmtY: M.fmt, tickEvery: 5, tickLabel: (i) => `#${i + 1}`, min0: true })}
-      <div class="gdots">${G.map((g, i) => `<span class="${g.win ? 'w' : 'l'}" title="Partie ${i + 1} : ${g.win ? 'victoire' : 'défaite'} · ${esc((byKey(g.champ) || {}).name || '')} · ${M.label} ${M.fmt(vals[i])}"></span>`).join('')}</div></div>`;
+      ${lineChart([{ vals, cls: 'us', label: 'par partie' }, { vals: ma, cls: 'avg', label: 'moyenne sur 5 parties' }, { vals: vals.map(() => target), cls: 'tgt', label: 'objectif', dash: true }], { title: `${M.label}, partie par partie (de la plus ancienne à la plus récente)`, fmtY: M.fmt, tickEvery: 5, tickLabel: (i) => `#${i + 1}`, min0: true })}
+      <div class="gdots">${G.map((g, i) => `<span class="${g.win ? 'w' : 'l'}" title="Partie ${i + 1} : ${g.win ? 'victoire' : 'défaite'} · ${esc((byKey(g.champ) || {}).name || '')} · ${M.label} ${M.fmt(vals[i])}"></span>`).join('')}</div>
+      ${rolesTable(ALL)}</div>`;
     return h;
   }
   /* ---------- Mes champions : lesquels travailler en priorité ---------- */
@@ -1115,7 +1138,8 @@
       for (const m of [10, 20]) {
         if (myRole !== 'support' && L.time >= m * 60 && L.time < m * 60 + 20) {
           const rate = meP.cs / (L.time / 60);
-          const target = S.goal && S.goal.metric === 'csm' && S.goal.target ? S.goal.target : 6;
+          const gr = goalOf(myRole || 'all'), ga = goalOf('all');
+          const target = gr.metric === 'csm' && gr.target ? gr.target : ga.metric === 'csm' && ga.target ? ga.target : 6;
           coachSay(L, `${m} minutes : ${meP.cs} sbires, soit ${f1(rate)} par minute. ${rate >= target ? `Objectif de ${f1(target)} atteint, bravo !` : `Objectif : ${f1(target)}.`}`, 'cs-' + m);
         }
       }
@@ -1947,8 +1971,9 @@
       case 'installUpdate': NB.installUpdate(); break;
       case 'coachToggle': S.opt.coach = Object.assign({}, S.opt.coach || {}, { [v]: !coachOn(v) }); save(); render(true); break;
       case 'remToggle': S.opt.reminders = S.opt.reminders === false; save(); render(true); break;
-      case 'goalMetric': S.goal = { metric: v, target: METRICS[v].def }; save(); render(true); break;
-      case 'goalStep': { const G0 = (R.hist && R.hist.games) || []; const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goal = { metric: g.metric, target: t }; save(); render(true); break; }
+      case 'progRole': S.progRole = v; save(); render(true); break;
+      case 'goalMetric': goalOf('all'); S.goals[S.progRole || 'all'] = { metric: v, target: METRICS[v].def }; save(); render(true); break;
+      case 'goalStep': { const G0 = ((R.hist && R.hist.games) || []).filter((g) => !S.progRole || MATCH_ROLE[g.role] === S.progRole); const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goals[g.rk] = { metric: g.metric, target: t }; save(); render(true); break; }
       case 'openData': NB.openData().catch(() => {}); break;
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;

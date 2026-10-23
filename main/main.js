@@ -155,7 +155,7 @@ function handlers() {
     const id = riotId && riotId.gameName ? riotId : cfg.data.riotId;
     if (!id || !id.gameName || !id.tagLine) throw new Error('Indique ton Riot ID dans les Réglages, ou lance le client du jeu.');
     const acc = await api.account(id.gameName, id.tagLine);
-    return { puuid: acc.puuid, games: await hist.get(acc.puuid, 20) };
+    return { puuid: acc.puuid, games: await hist.get(acc.puuid, 40) };
   });
   h('riot:masteries', async (puuid) => api.masteries(puuid, 30));
 

@@ -675,8 +675,8 @@ button.bi:hover .ico, .mybuild .next.sm:hover { outline: 2px solid var(--accent)
 .bi.own { opacity: .5; }
 
 /* v3.0 : progression, champions, morts, patch, filtres d'objets */
-.curve .sr.avg { stroke: var(--accent2); stroke-width: 2.6; } .curve .sr.goal { stroke: var(--good); stroke-width: 1.5; }
-.lgd i.avg { background: var(--accent2); } .lgd i.goal { background: var(--good); }
+.curve .sr.avg { stroke: var(--accent2); stroke-width: 2.6; } .curve .sr.tgt { stroke: var(--good); stroke-width: 1.5; }
+.lgd i.avg { background: var(--accent2); } .lgd i.tgt { background: var(--good); }
 .goal { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line); }
 .goal .gtarget { min-width: 170px; text-align: center; }
 .goal .grow { min-width: 220px; display: flex; flex-direction: column; gap: 4px; }
@@ -704,3 +704,12 @@ button.bi:hover .ico, .mybuild .next.sm:hover { outline: 2px solid var(--accent)
 @media (max-width: 600px) { .ifilters .frow { grid-template-columns: 1fr; gap: 3px; } }
 
 .lgd span { white-space: nowrap; }
+
+/* v3.2 : progression par rôle */
+.rtable { display: flex; flex-direction: column; gap: 3px; overflow-x: auto; }
+.rt-h, .rt-r { display: grid; grid-template-columns: 110px repeat(8, minmax(64px, 1fr)); gap: 6px; align-items: center; padding: 5px 8px; min-width: 640px; text-align: center; font-size: .84rem; }
+.rt-h { color: var(--muted); font-size: .74rem; }
+.rt-h span:first-child, .rt-r span:first-child { text-align: left; }
+.rt-r { background: var(--panel2); border: 1px solid transparent; border-radius: 8px; color: inherit; font: inherit; font-size: .84rem; cursor: pointer; }
+.rt-r:hover, .rt-r.on { border-color: var(--accent); }
+.rt-r .top1 { color: var(--accent2); font-weight: 800; }
