@@ -1449,9 +1449,30 @@
     h += '</div></div>';
     return h;
   }
+  /* Mises à jour de l'appli : vérification à la demande */
+  function updBlock() {
+    if (!NB || !NB.update) return '';
+    const u = R.upd || { state: 'idle' };
+    const when = u.checkedAt ? ` <span class="muted small">(vérifié à ${new Date(u.checkedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })})</span>` : '';
+    const msg = {
+      idle: '<span class="muted">Les mises à jour se vérifient toutes seules toutes les heures.</span>',
+      checking: '⏳ Recherche d\'une mise à jour…',
+      latest: `✅ Tu as la dernière version.${when}`,
+      available: `🔄 Version ${esc(u.version)} disponible, téléchargement…`,
+      downloading: `⬇️ Téléchargement de la version ${esc(u.version)}… ${u.percent || 0} %<div class="hbar" style="margin-top:4px"><i class="gld" style="width:${u.percent || 0}%"></i></div>`,
+      downloaded: `🎉 La version <b>${esc(u.version)}</b> est prête.`,
+      dev: '🛠️ Version de développement : pas de mise à jour automatique.',
+      error: `<span class="neg">❌ Vérification impossible : ${esc(u.error || 'erreur inconnue')}</span>${when}`,
+    }[u.state] || '';
+    const busyU = u.state === 'checking' || u.state === 'downloading' || u.state === 'available';
+    return `<div class="updbox"><div class="small">${msg}</div><div class="row" style="margin-top:6px">${u.state === 'downloaded'
+      ? '<button class="btn small" data-act="installUpdate">🔄 Redémarrer et installer</button>'
+      : `<button class="btn ghost small" data-act="checkUpdate" ${busyU ? 'disabled' : ''}>🔎 Vérifier les mises à jour</button>`}</div></div>`;
+  }
   function infoCard() {
     return `<div class="card"><h2>ℹ️ Noob LOL</h2><p>Version <b>${esc((R.info && R.info.version) || APP_VERSION)}</b>${D.version ? ` · données du patch <b>${esc(D.version)}</b>` : ''}</p>
-      <p class="muted small">Données des champions, objets et runes : Data Dragon (Riot Games). Compte et statistiques : API officielle de Riot. En jeu : API officielle « Live Client Data ». Les mises à jour de l'appli s'installent toutes seules.</p>
+      ${updBlock()}
+      <p class="muted small">Données des champions, objets et runes : Data Dragon (Riot Games). Compte et statistiques : API officielle de Riot. En jeu : API officielle « Live Client Data ».</p>
       <details class="flat"><summary class="small">📝 Notes de version</summary>${APP_RELEASES.map((r) => `<h3>${esc(r.v)} <span class="muted small">${esc(r.date)}</span></h3><ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</details>
       <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button><button class="btn danger small" data-act="wipe">Effacer favoris et notes (garde mes builds)</button></div>
       <p class="muted small" style="margin-top:8px">Noob LOL n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ou de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.</p></div>`;
@@ -1668,6 +1689,7 @@
       }).catch((e) => toast(e.message)); break;
       case 'miniSaveCrop': if (pendingCrop) cfgSet({ minimap: { crop: pendingCrop } }).then(() => toast('Zone enregistrée.')); break;
       case 'installUpdate': NB.installUpdate(); break;
+      case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'reloadData': if (window.caches) window.caches.delete('nooblol-ddragon').finally(() => location.reload()); else location.reload(); break;
       case 'wipe': if (confirmTap(el, 'Tout effacer ? Clique encore')) { const keep = { myRunes: S.myRunes, myItems: S.myItems }; localStorage.setItem(KEY, JSON.stringify(Object.assign(defaults(), keep))); location.reload(); } break;
@@ -1767,6 +1789,7 @@
     NB.collector.on((s) => { const grew = R.col && s.picks !== R.col.picks; R.col = s; if (grew && s.picks % 50 < 10) cache.clear(); if (S.mode === 'settings' && !busy()) render(true); });
     NB.minimap.onState((open) => { R.miniOpen = open; if (!busy()) render(true); });
     NB.onUpdate((u) => { R.update = u; renderTop(); });
+    if (NB.update) { NB.update.on((u) => { R.upd = u; if (S.mode === 'settings' && !busy()) render(true); }); NB.update.state().then((u) => { R.upd = u; }).catch(() => {}); }
     NB.postgame.on((d) => {
       const fresh = !R.post || R.post.at !== d.at;
       R.post = d;

@@ -194,14 +194,36 @@ function handlers() {
   h('overlay:update', (d) => { setOverlay(d); return true; });
   h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
   h('open:external', (url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return true; });
+  h('update:check', () => checkUpdate());
+  h('update:state', () => upd);
   h('update:install', () => { try { require('electron-updater').autoUpdater.quitAndInstall(); } catch (e) { /* ignoré */ } return true; });
 }
 
+/* Mises à jour (GitHub Releases) : vérification automatique toutes les heures, ou à la demande (Réglages) */
+let upd = { state: 'idle', version: '', percent: 0, error: '', checkedAt: 0 };
+function setUpd(patch) { upd = Object.assign({}, upd, patch); send('update:state', upd); }
+async function checkUpdate() {
+  if (!app.isPackaged) { setUpd({ state: 'dev', checkedAt: Date.now() }); return upd; }
+  if (upd.state === 'downloaded' || upd.state === 'downloading') return upd;
+  setUpd({ state: 'checking', error: '' });
+  try {
+    const { autoUpdater } = require('electron-updater');
+    const r = await autoUpdater.checkForUpdates();
+    /* Pas de nouvelle version : l'événement « update-not-available » a déjà mis l'état à jour */
+    if (r && r.updateInfo && upd.state === 'checking') setUpd({ state: r.isUpdateAvailable === false ? 'latest' : 'available', version: r.updateInfo.version, checkedAt: Date.now() });
+  } catch (e) { setUpd({ state: 'error', error: e.message || String(e), checkedAt: Date.now() }); }
+  return upd;
+}
 function autoUpdate() {
   if (!app.isPackaged) return;
   try {
     const { autoUpdater } = require('electron-updater');
-    autoUpdater.on('update-downloaded', (info) => send('update', { version: info.version }));
+    autoUpdater.on('checking-for-update', () => setUpd({ state: 'checking', error: '' }));
+    autoUpdater.on('update-not-available', (info) => setUpd({ state: 'latest', version: (info && info.version) || app.getVersion(), checkedAt: Date.now() }));
+    autoUpdater.on('update-available', (info) => setUpd({ state: 'downloading', version: info.version, percent: 0, checkedAt: Date.now() }));
+    autoUpdater.on('download-progress', (p) => setUpd({ state: 'downloading', percent: Math.round(p.percent || 0) }));
+    autoUpdater.on('error', (e) => setUpd({ state: 'error', error: (e && e.message) || String(e) }));
+    autoUpdater.on('update-downloaded', (info) => { setUpd({ state: 'downloaded', version: info.version, percent: 100 }); send('update', { version: info.version }); });
     autoUpdater.checkForUpdates().catch(() => {});
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 60 * 60 * 1000);
   } catch (e) { /* mise à jour indisponible */ }

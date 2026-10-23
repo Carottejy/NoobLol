@@ -26,4 +26,5 @@ contextBridge.exposeInMainWorld('noob', {
   postgame: { get: () => call('postgame:get'), load: (id, puuid) => call('postgame:load', id, puuid), on: on('postgame') },
   openExternal: (u) => call('open:external', u),
   onUpdate: on('update'), installUpdate: () => call('update:install'),
+  update: { check: () => call('update:check'), state: () => call('update:state'), on: on('update:state') },
 });

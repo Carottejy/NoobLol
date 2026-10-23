@@ -656,3 +656,5 @@ body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 .kpis small { font-size: .7rem; color: var(--muted); font-weight: 400; }
 .ptabs { flex-wrap: wrap; }
 .strip { overflow-x: auto; } .strip svg { min-width: 720px; }
+
+.updbox { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }

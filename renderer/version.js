@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.9.0';
+var APP_VERSION = '2.9.1';
 var APP_RELEASES = [
+  { v: '2.9.1', date: '2026-10-23', notes: [
+    'Réglages : bouton « Vérifier les mises à jour » avec l\'état en direct (recherche, téléchargement en %, dernière version installée, prête à installer) et bouton « Redémarrer et installer ».',
+  ]},
   { v: '2.9.0', date: '2026-10-23', notes: [
     'Correction : en jeu, les objectifs (dragons, larves, Héraut, Nashor) sont de nouveau comptés pour la bonne équipe, et l\'annonce vocale ne dit plus « l\'ennemi » à tort. Le jeu nomme parfois les joueurs par leur ancien nom d\'invocateur dans ses événements : Noob LOL reconnaît maintenant tous les noms (Riot ID, nom de jeu, ancien nom, et ceux du client LoL), puis les joueurs qui ont aidé. Si l\'équipe reste inconnue, l\'annonce ne dit pas qui.',
     'Correction : dans l\'historique des parties, ton équipe et les adversaires ne sont plus inversés (tu es retrouvé par ton compte, sinon par ton Riot ID).',
