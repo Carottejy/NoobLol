@@ -910,7 +910,7 @@
     const sig = enemies.map((p) => p.champ).join(',');
     if (g.sig !== sig || (g.lastTime && L.time + 5 < g.lastTime)) {
       /* Nouvelle partie détectée */
-      S.game = newGame(); S.game.sig = sig; Voice.said.clear(); R.remind = null; R.prevObj = {}; R.pinfo = {};
+      S.game = newGame(); S.game.sig = sig; Voice.said.clear(); R.remind = null; R.coach = null; R.prevObj = {}; R.pinfo = {};
       S.game.enemies = enemies.slice(0, 5).map((p) => ({ champ: D.champs && D.champs[p.champ] ? p.champ : '', s: [p.spells[0] || '', p.spells[1] || ''], until: [0, 0], haste: 0 }));
       while (S.game.enemies.length < 5) S.game.enemies.push(newEnemy());
     }
@@ -1046,9 +1046,77 @@
       const role = liveRoles(L).get(meP.name);
       if (role === 'support' && L.time > 540 && meP.items.some((i) => i.id === 3340)) speak('Pense à échanger ton trinket contre la Lentille d\'oracle, pour détruire les balises adverses.', 'oracle');
     }
+    try { coachLive(L, O, meP); } catch (e) { /* ignoré */ }
     /* Or suffisant pour le prochain objet du build */
     const lb = liveBuild(L);
     if (lb && lb.next && L.me && L.me.gold >= lb.next.cost && !(meP && meP.dead)) speak(`Tu as assez d'or pour ${lb.next.name}. Rentre à la base si tu peux.`, `gold-${lb.next.item}`);
+  }
+  /* ---------- Coaching en direct : uniquement tes données et ce que tout joueur voit dans le tableau des scores (Tab) ---------- */
+  const COACH = [['back', '🏠 Moment pour rentrer (moins de 20 % de vie et au moins 1 800 po)'], ['lane', '⚔️ Ton adversaire de voie (avance de niveau, objets terminés) et tes objets terminés'], ['dead', '💀 Adversaires morts : fenêtre pour pousser ou prendre un objectif'], ['counter', '🛡️ Objets contre l\'équipe adverse (anti-soins, pénétration)'], ['cs', '🌾 Point farm à 10 et 20 min, plaques des tours à 14 min']];
+  const coachOn = (k) => ((S.opt.coach || {})[k] !== false);
+  function coachSay(L, text, key) { if (Voice.said.has(key)) return; speak(text, key); logEv(L.time, '💡 ' + text); }
+  const itemName = (id) => ((D.items || {})[String(id)] || {}).name || '';
+  const legendaryIds = (p) => p.items.filter((i) => i.slot < 6 && Builds.isLegendary((D.items || {})[String(i.id)])).map((i) => i.id);
+  function coachLive(L, O, meP) {
+    if (!meP || !L.me || !D.items) return;
+    const myTeam = L.me.team;
+    const enemies = L.players.filter((p) => p.team !== myTeam);
+    const LR = liveRoles(L), myRole = LR.get(meP.name) || '';
+    const opp = enemies.find((p) => myRole && LR.get(p.name) === myRole) || null;
+    const myLvl = L.me.level || meP.level || 0;
+    /* Première lecture de la partie (ou appli ouverte en cours de partie) : on note l'existant sans rien annoncer */
+    if (!R.coach) { R.coach = { mine: new Set(legendaryIds(meP)), opp: new Set(opp ? legendaryIds(opp) : []), oppName: opp ? opp.name : '' }; return; }
+    if (opp && R.coach.oppName !== opp.name) { R.coach.opp = new Set(legendaryIds(opp)); R.coach.oppName = opp.name; }
+    /* 2. Moment pour rentrer */
+    const st = L.me.stats;
+    if (coachOn('back') && st && st.maxHp && !meP.dead && st.hp / st.maxHp <= 0.2 && (L.me.gold || 0) >= 1800) {
+      coachSay(L, `Moins de 20 % de vie et ${nf(L.me.gold)} pièces d'or : c'est le bon moment pour rentrer à la base.`, 'back-' + Math.floor(L.time / 90));
+    }
+    /* 4. Adversaire de voie et objets terminés */
+    if (coachOn('lane')) {
+      if (opp) {
+        const oc = D.champs[opp.champ], on = oc ? oc.name : 'Ton adversaire';
+        if (opp.level >= 6 && myLvl < 6) coachSay(L, `${on} est niveau 6 et pas toi : il a son ultime, sois prudent.`, 'opp-6');
+        else if (opp.level - myLvl >= 2) coachSay(L, `${on} a ${opp.level - myLvl} niveaux d'avance : évite le combat et farme près de ta tour.`, 'opp-lead-' + opp.level);
+        for (const id of legendaryIds(opp)) if (!R.coach.opp.has(id)) { R.coach.opp.add(id); coachSay(L, `${on} a terminé ${itemName(id)}.`, 'opp-item-' + id); }
+      }
+      for (const id of legendaryIds(meP)) if (!R.coach.mine.has(id)) { R.coach.mine.add(id); coachSay(L, `Tu as terminé ${itemName(id)} : tu es plus fort, cherche un combat ou un objectif.`, 'my-item-' + id); }
+    } else { legendaryIds(meP).forEach((id) => R.coach.mine.add(id)); if (opp) legendaryIds(opp).forEach((id) => R.coach.opp.add(id)); }
+    /* 5. Plusieurs adversaires morts en même temps */
+    if (coachOn('dead') && !meP.dead) {
+      const r = enemies.filter((p) => p.dead && p.respawn > 0).map((p) => p.respawn).sort((a, b) => b - a);
+      if (r.length >= 3 && r[2] >= 12) {
+        const up = O.rows.filter((x) => x.state === 'up').map((x) => x.id);
+        const target = up.includes('baron') ? 'prenez le Nashor' : up.includes('elder') ? 'prenez le dragon ancestral' : up.includes('drake') ? 'prenez le dragon' : up.includes('herald') ? 'prenez le Héraut' : 'poussez une tour';
+        coachSay(L, `${r.length} adversaires morts pendant ${Math.round(r[2])} secondes : ${target} !`, 'deadwin-' + Math.floor(L.time / 45));
+      }
+    }
+    /* 6. Objets adaptés à l'équipe adverse (une fois chacun, après 10 min) */
+    if (coachOn('counter') && L.time > 600) {
+      const ad = dmgProfile(meP).ad >= 0.5;
+      const pick = (f) => D.itemList.filter((it) => f(it) && (it.tags || []).includes(ad ? 'Damage' : 'SpellDamage')).sort((a, b) => a.gold.total - b.gold.total)[0];
+      const owns = (f) => meP.items.some((i) => { const it = D.items[String(i.id)]; return it && f(it); });
+      const gw = (it) => /blessures graves|grievous/i.test(it.description || '');
+      const ekeys = enemies.map((p) => (D.champs[p.champ] ? +D.champs[p.champ].key : 0)).filter(Boolean);
+      const prof = Builds.teamProfile(ekeys, D) || { healers: [] };
+      const sustain = prof.healers.length + enemies.reduce((n, p) => n + p.items.filter((i) => { const it = D.items[String(i.id)]; return it && Builds.isLegendary(it) && ((it.tags || []).includes('LifeSteal') || (it.tags || []).includes('SpellVamp')); }).length, 0);
+      if (sustain >= 3 && !owns(gw)) { const it = pick(gw); if (it) coachSay(L, `L'équipe adverse se soigne beaucoup : pense à un objet anti-soins, comme ${it.name}.`, 'counter-heal'); }
+      const stack = (tag) => enemies.reduce((n, p) => n + p.items.filter((i) => { const it = D.items[String(i.id)]; return it && Builds.isLegendary(it) && (it.tags || []).includes(tag); }).length, 0);
+      const legPen = (tag) => D.itemList.filter((it) => Builds.isLegendary(it) && (it.tags || []).includes(tag)).sort((a, b) => a.gold.total - b.gold.total)[0];
+      if (ad && stack('Armor') >= 3 && !owns((it) => (it.tags || []).includes('ArmorPenetration'))) { const it = legPen('ArmorPenetration'); if (it) coachSay(L, `Les adversaires empilent l'armure : un objet de pénétration d'armure comme ${it.name} t'aidera.`, 'counter-armor'); }
+      if (!ad && stack('SpellBlock') >= 3 && !owns((it) => (it.tags || []).includes('MagicPenetration'))) { const it = legPen('MagicPenetration'); if (it) coachSay(L, `Les adversaires empilent la résistance magique : un objet de pénétration magique comme ${it.name} t'aidera.`, 'counter-mr'); }
+    }
+    /* 7. Point farm à 10 et 20 min, plaques à 14 min */
+    if (coachOn('cs')) {
+      for (const m of [10, 20]) {
+        if (myRole !== 'support' && L.time >= m * 60 && L.time < m * 60 + 20) {
+          const rate = meP.cs / (L.time / 60);
+          const target = S.goal && S.goal.metric === 'csm' && S.goal.target ? S.goal.target : 6;
+          coachSay(L, `${m} minutes : ${meP.cs} sbires, soit ${f1(rate)} par minute. ${rate >= target ? `Objectif de ${f1(target)} atteint, bravo !` : `Objectif : ${f1(target)}.`}`, 'cs-' + m);
+        }
+      }
+      if (L.time >= 810 && L.time < 830) coachSay(L, 'Dans 30 secondes, les plaques des tours disparaissent : dernière chance de les prendre.', 'plates');
+    }
   }
   function announceEvent(e, L, side) {
     if (!S.opt.voice || L.time - e.t > 15) return;
@@ -1660,6 +1728,7 @@
       <div class="row" style="margin-top:8px"><div class="grow"><label>Voix</label><select data-voice="1">${vs.length ? vs.map((v) => `<option value="${esc(v.name)}" ${v.name === S.opt.voiceName ? 'selected' : ''}>${esc(v.name)}</option>`).join('') : '<option value="">Voix française par défaut</option>'}</select></div></div>
       <div class="row" style="margin-top:8px"><span class="small muted">Vitesse</span>${[0.9, 1.05, 1.25].map((r) => `<button class="chip ${S.opt.voiceRate === r ? 'on' : ''}" data-act="voiceRate" data-val="${r}">${r < 1 ? 'Lente' : r > 1.1 ? 'Rapide' : 'Normale'}</button>`).join('')}
       <span class="small muted">Volume</span>${[50, 75, 100].map((r) => `<button class="chip ${S.opt.voiceVol === r ? 'on' : ''}" data-act="voiceVol" data-val="${r}">${r} %</button>`).join('')}</div>
+      <p class="small muted" style="margin:10px 0 4px">Coaching en direct (annoncé et noté dans le journal) :</p><div class="chips">${COACH.map(([k, l]) => `<button class="chip ${coachOn(k) ? 'on' : ''}" data-act="coachToggle" data-val="${k}">${l}</button>`).join('')}</div>
       <div class="chips" style="margin-top:8px"><button class="chip ${S.opt.reminders !== false ? 'on' : ''}" data-act="remToggle">💡 Rappels : ultime (niveaux 6, 11, 16), balise de contrôle après un achat, Lentille d'oracle pour les supports</button></div>
       ${!vs.length ? '<p class="small warn">Aucune voix française trouvée : ajoute-en une dans Windows (Paramètres → Heure et langue → Voix).</p>' : ''}</div>`;
   }
@@ -1872,6 +1941,7 @@
       }).catch((e) => toast(e.message)); break;
       case 'miniSaveCrop': if (pendingCrop) cfgSet({ minimap: { crop: pendingCrop } }).then(() => toast('Zone enregistrée.')); break;
       case 'installUpdate': NB.installUpdate(); break;
+      case 'coachToggle': S.opt.coach = Object.assign({}, S.opt.coach || {}, { [v]: !coachOn(v) }); save(); render(true); break;
       case 'remToggle': S.opt.reminders = S.opt.reminders === false; save(); render(true); break;
       case 'goalMetric': S.goal = { metric: v, target: METRICS[v].def }; save(); render(true); break;
       case 'goalStep': { const G0 = (R.hist && R.hist.games) || []; const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goal = { metric: g.metric, target: t }; save(); render(true); break; }

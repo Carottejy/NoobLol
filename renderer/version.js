@@ -1,6 +1,15 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.0.0';
+var APP_VERSION = '3.1.0';
 var APP_RELEASES = [
+  { v: '3.1.0', date: '2026-10-23', notes: [
+    'Coaching en direct pendant la partie (annonce vocale + ligne 💡 dans le journal), d\'après tes propres données et ce que tout joueur voit dans le tableau des scores :',
+    '• Moment pour rentrer : moins de 20 % de vie et au moins 1 800 po.',
+    '• Ton adversaire de voie : quand il atteint le niveau 6 avant toi, quand il a 2 niveaux d\'avance, quand il termine un objet ; et quand toi tu termines un objet.',
+    '• Plusieurs adversaires morts en même temps : pendant combien de secondes, et quoi faire (Nashor, dragon, Héraut ou pousser une tour).',
+    '• Objets contre l\'équipe adverse : anti-soins si elle se soigne beaucoup, pénétration d\'armure ou magique si elle empile les résistances.',
+    '• Point farm à 10 et 20 min par rapport à ton objectif de CS/min, et rappel des plaques des tours à 13:30.',
+    'Chaque type de coaching se désactive dans Réglages → Voix.',
+  ]},
   { v: '3.0.0', date: '2026-10-23', notes: [
     'Mon compte → Ma progression : tes 20 dernières parties sur la Faille (CS/min, morts, vision/min, participation, KDA, or/min), avec la moyenne des 5 dernières comparée aux 5 d\'avant, et une courbe partie par partie.',
     'Mon compte → Mon objectif : choisis un indicateur et une valeur à atteindre (ex. 6 CS/min). Noob LOL te montre ta moyenne actuelle et combien de fois tu l\'as atteint sur tes 10 dernières parties.',
