@@ -21,7 +21,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, ed: null,
+    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], ed: null,
   });
   function load() {
     try {
@@ -37,6 +37,20 @@
     } catch (e) { return defaults(); }
   }
   let S = load();
+  /* Builds préparés par Claude, ajoutés une seule fois dans « Mes builds » (si tu les supprimes, ils ne reviennent pas) */
+  const PRESETS = [
+    { key: 'claude-lillia-support',
+      runes: { name: 'Claude Lillia Support', champ: 'Lillia', roles: ['support'], primary: 8200, perks: [8229, 8226, 8234, 8237], sub: 8300, subPerks: [{ row: 1, perk: 8304 }, { row: 3, perk: 8347 }], shards: [5008, 5010, 5011], spells: [4, 3] },
+      items: { name: 'Claude Lillia Support', champ: 'Lillia', roles: ['support'], start: [3865, 3871, 2003], core: [6653, 3116], boots: 3158, situational: [3157, 3165, 3102, 3135] } },
+  ];
+  if (!Array.isArray(S.seeded)) S.seeded = [];
+  for (const p of PRESETS) {
+    if (S.seeded.includes(p.key)) continue;
+    const t = Date.now();
+    S.myRunes.push(Object.assign({ id: p.key + '-r', at: t }, JSON.parse(JSON.stringify(p.runes))));
+    S.myItems.push(Object.assign({ id: p.key + '-i', at: t }, JSON.parse(JSON.stringify(p.items))));
+    S.seeded.push(p.key);
+  }
   S.tipN = Math.floor(Math.random() * GUIDE.tips.length);
   S.view = { champ: null, item: null };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* stockage plein */ } };
@@ -1511,6 +1525,8 @@
   }
 
   /* ---------- Navigation ---------- */
+  /* Changement d'onglet : on vide les champs de recherche */
+  function clearSearch() { S.cf.q = ''; S.itf.q = ''; S.lexQ = ''; if (S.ed) S.ed.itQ = ''; }
   function openView(kind, id) {
     S.view = { champ: null, item: null }; S.view[kind] = id;
     S.mode = 'prep';
@@ -1539,8 +1555,8 @@
     if (el.tagName === 'A') ev.preventDefault();
     const g = S.game;
     switch (a) {
-      case 'mode': S.view = { champ: null, item: null }; S.mode = v; render(); break;
-      case 'tab': S.view = { champ: null, item: null }; S.mode = 'prep'; S.tab = v; render(); break;
+      case 'mode': clearSearch(); S.view = { champ: null, item: null }; S.mode = v; render(); break;
+      case 'tab': clearSearch(); S.view = { champ: null, item: null }; S.mode = 'prep'; S.tab = v; render(); break;
       case 'retry': D.error = null; render(); break;
       case 'champ': if (S.mode !== 'prep') lastMode = S.mode; openView('champ', v); break;
       case 'item': if (S.mode !== 'prep') lastMode = S.mode; openView('item', v); break;
@@ -1693,7 +1709,7 @@
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'reloadData': if (window.caches) window.caches.delete('nooblol-ddragon').finally(() => location.reload()); else location.reload(); break;
-      case 'wipe': if (confirmTap(el, 'Tout effacer ? Clique encore')) { const keep = { myRunes: S.myRunes, myItems: S.myItems }; localStorage.setItem(KEY, JSON.stringify(Object.assign(defaults(), keep))); location.reload(); } break;
+      case 'wipe': if (confirmTap(el, 'Tout effacer ? Clique encore')) { const keep = { myRunes: S.myRunes, myItems: S.myItems, selItems: S.selItems, seeded: S.seeded }; localStorage.setItem(KEY, JSON.stringify(Object.assign(defaults(), keep))); location.reload(); } break;
       default: break;
     }
   });

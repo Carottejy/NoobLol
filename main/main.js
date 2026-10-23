@@ -27,7 +27,8 @@ function createWindow() {
     width: 1320, height: 860, minWidth: 900, minHeight: 600, backgroundColor: '#070d18', title: 'Noob LOL',
     icon: path.join(RENDERER, 'icons', 'icon-512.png'), autoHideMenuBar: true, show: false, webPreferences: secureWebPrefs(),
   });
-  win.once('ready-to-show', () => win.show());
+  /* Ouverture en plein écran (fenêtre agrandie) */
+  win.once('ready-to-show', () => { win.maximize(); win.show(); });
   win.loadFile(path.join(RENDERER, 'index.html'));
   /* Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli. */
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
