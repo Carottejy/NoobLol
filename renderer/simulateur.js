@@ -307,7 +307,8 @@
     const card = (p) => { const c = champ(p.champ); const pr = Math.min(100, Math.round(L.prog[p.cell])); return `<div class="lcard ${p.isMe ? 'me' : ''}" data-cell="${p.cell}">${c ? `<img alt="" src="${Dd.img.loading(c.id)}">` : ''}<div class="lname"><b>${esc(c ? c.name : '?')}</b><span>${esc(p.gameName)}</span><span class="lsp">${spellIcon(p.spells[0])}${spellIcon(p.spells[1])}</span></div><div class="lbar"><i style="width:${pr}%"></i></div><span class="lpct">${pr} %</span></div>`; };
     return `<div class="loading"><h2>Écran de chargement <span class="muted">(Noob LOL voit la phase « GameStart » : partie trouvée, pas encore de données en jeu)</span></h2>
       <div class="lrow">${byTeam('ORDER').map(card).join('')}</div><div class="vs">VS</div><div class="lrow">${byTeam('CHAOS').map(card).join('')}</div>
-      <div class="row center"><button class="btn" data-act="skipLoading">⏩ Terminer le chargement</button></div></div>`;
+      <div class="row center">${L.done ? '<span class="ready">✅ Tout le monde est prêt.</span>' : '<button class="btn ghost" data-act="fillLoading">⏩ Terminer le chargement</button>'}<button class="btn hex" data-act="skipLoading">▶ Lancer la partie</button></div>
+      <p class="muted">La partie ne commence que lorsque tu cliques sur « Lancer la partie », même quand le chargement est terminé.</p></div>`;
   }
   function boardHtml() {
     const G = SIM.game, S = G.st;
@@ -384,6 +385,7 @@
     else if (a === 'allPicks') { pickOrder().filter((p) => !p.locked).forEach((p) => { if (p.hover) { p.champ = p.hover; p.hover = 0; p.locked = true; } else autoPick(p); }); }
     else if (a === 'toLoading') { SIM.step = 'loading'; SIM.load = { prog: {}, speed: {} }; SIM.players.forEach((p) => { SIM.load.prog[p.cell] = 0; SIM.load.speed[p.cell] = 6 + Math.random() * 10; }); }
     else if (a === 'skipLoading') { startGame(); }
+    else if (a === 'fillLoading' && SIM.load) { SIM.players.forEach((p) => { SIM.load.prog[p.cell] = 100; }); SIM.load.done = true; }
     else if (a === 'speed') SIM.speed = +v;
     else if (a === 'pause' && G) G.running = !G.running;
     else if (a === 'skip' && G) { for (let i = 0; i < +v; i++) step1(); }
@@ -423,7 +425,9 @@
     if (SIM.step !== 'loading' || !SIM.load) return;
     let done = true;
     SIM.players.forEach((p) => { SIM.load.prog[p.cell] = Math.min(100, SIM.load.prog[p.cell] + SIM.load.speed[p.cell] * 0.25 * (0.6 + Math.random() * 0.8)); if (SIM.load.prog[p.cell] < 100) done = false; });
-    if (done) { startGame(); render(); push(); return; }
+    /* Chargement fini : la partie ne démarre que sur un clic (le temps de tester l'écran « partie trouvée ») */
+    if (done && !SIM.load.done) { SIM.load.done = true; render(); push(); return; }
+    if (done) return;
     let ok = true;
     SIM.players.forEach((p) => { const el = document.querySelector(`.lcard[data-cell="${p.cell}"]`); if (!el) { ok = false; return; } const pr = Math.min(100, Math.round(SIM.load.prog[p.cell])); el.querySelector('.lbar i').style.width = pr + '%'; el.querySelector('.lpct').textContent = pr + ' %'; });
     if (!ok) render();

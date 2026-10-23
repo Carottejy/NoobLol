@@ -66,3 +66,4 @@ select { max-width: 100%; }
 .loader { padding: 40px; text-align: center; color: var(--muted); }
 .ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; }
 .clock { font-size: 1.4rem; color: var(--accent2); }
+.ready { color: var(--good); font-weight: 700; }

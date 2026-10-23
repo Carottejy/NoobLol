@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.4.0';
+var APP_VERSION = '3.4.1';
 var APP_RELEASES = [
+  { v: '3.4.1', date: '2026-10-23', notes: [
+    'Simulateur : l\'écran de chargement reste affiché tant que tu ne cliques pas sur « Lancer la partie », même quand tout le monde est prêt. « Terminer le chargement » remplit les barres sans lancer la partie.',
+  ]},
   { v: '3.4.0', date: '2026-10-23', notes: [
     'Nouveau : Simulateur de partie (Réglages → 🧪 Simulateur de partie). Une fenêtre joue le rôle du client League of Legends et du jeu : Noob LOL s\'y connecte comme au vrai client, ce qui permet de tout tester sans lancer de partie.',
     '• Salon : ton nom, ton rang, ton rôle, la file (classée, normale draft ou aveugle), les rôles fournis ou non, et le format des noms dans les événements du jeu (ancien nom d\'invocateur, nom de jeu ou Riot ID).',
