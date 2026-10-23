@@ -554,3 +554,59 @@ body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 .tt-desc .dd-stats { margin-bottom: 6px; }
 .tt-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 .tt-mini { width: 22px; height: 22px; border-radius: 5px; border: 1px solid #000; }
+
+/* v2.8 : joueurs face à face par voie, or gagné et domination */
+.players { --us: #4f8fe8; --them: #e8606a; }
+.lhead, .lane { display: grid; grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr); gap: 6px; align-items: stretch; }
+.lhead { margin: 8px 0 4px; }
+.lh { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lh .dmg { margin-left: auto; width: 120px; }
+.lh.them { flex-direction: row-reverse; }
+.lh.them .dmg { margin-left: 0; margin-right: auto; }
+.lane { margin: 0 0 4px; }
+.lane.mine .lp.us { border-color: var(--accent); }
+.lp { display: grid; grid-template-columns: 38px minmax(0, 1fr) 62px auto; grid-template-areas: "pic name kda build"; gap: 6px; align-items: center; padding: 4px 6px; border-radius: 8px; background: var(--panel2); border: 1px solid transparent; min-width: 0; }
+.lp.us { border-left: 3px solid var(--us); }
+.lp.them { grid-template-columns: auto 62px minmax(0, 1fr) 38px; grid-template-areas: "build kda name pic"; border-right: 3px solid var(--them); text-align: right; }
+.lp.empty { display: flex; align-items: center; justify-content: center; }
+.lp.dead { opacity: .55; }
+.lp .pic { grid-area: pic; } .lp .pname { grid-area: name; } .lp .kda { grid-area: kda; } .lp .build { grid-area: build; }
+.lp .pic, .lp .pic .ico { width: 36px; height: 36px; }
+.lp .pname .dmg { margin-top: 3px; }
+.lp .pname .dmgbar { height: 5px; }
+.lp.them .pmeta { justify-content: flex-end; }
+.lp .build { display: grid; grid-template-columns: repeat(4, auto); gap: 2px; }
+.lp.them .build { direction: rtl; }
+.lp .build .ico.sm { width: 22px; height: 22px; }
+.lp .build .trk { margin-left: 0; }
+.pgold { font-size: .8rem; font-weight: 700; color: var(--accent2); white-space: nowrap; }
+.lmid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 0; }
+.lrole { font-size: .74rem; color: var(--muted); white-space: nowrap; }
+.lead { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.lbar { position: relative; width: 100%; height: 8px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+.lbar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+.lbar i { position: absolute; top: 0; bottom: 0; background: var(--muted); }
+.lead.us .lbar i { background: var(--us); } .lead.them .lbar i { background: var(--them); }
+.ltxt { font-size: .74rem; font-weight: 800; white-space: nowrap; }
+.lead.us .ltxt, .lead.us .lgold { color: var(--us); } .lead.them .ltxt, .lead.them .lgold { color: var(--them); } .lead .ltxt { color: var(--muted); }
+.lead.us .ltxt { color: var(--us); } .lead.them .ltxt { color: var(--them); }
+.lgold { font-size: .72rem; color: var(--muted); }
+/* Panneau étroit : la voie s'empile (allié, domination, adversaire) */
+@container (max-width: 760px) {
+  .lp .build { grid-template-columns: repeat(7, auto); }
+  .lp { grid-template-columns: 34px minmax(0, 1fr) 58px; grid-template-areas: "pic name kda" "build build build"; }
+  .lp.them { grid-template-columns: 58px minmax(0, 1fr) 34px; grid-template-areas: "kda name pic" "build build build"; }
+  .lp.them .build { justify-content: end; }
+}
+@container (max-width: 520px) {
+  .lhead, .lane { grid-template-columns: minmax(0, 1fr); }
+  .lhead .lmid { display: none; }
+  .lane { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .lmid { flex-direction: row; gap: 8px; }
+  .lead { flex-direction: row; gap: 6px; } .lbar { width: 90px; }
+  .lp.them { grid-template-columns: 34px minmax(0, 1fr) 58px; grid-template-areas: "pic name kda" "build build build"; text-align: left; border-right: 1px solid transparent; border-left: 3px solid var(--them); }
+  .lp.them .build { direction: ltr; justify-content: start; } .lp.them .pmeta { justify-content: flex-start; }
+}
+@media (min-height: 1300px) { body[data-mode=game] .lp .pic, body[data-mode=game] .lp .pic .ico { width: 42px; height: 42px; } body[data-mode=game] .lp .build .ico.sm { width: 28px; height: 28px; } }
+.ibsel { display: inline-flex; align-items: center; gap: 6px; }
+.lp .build { justify-content: start; }

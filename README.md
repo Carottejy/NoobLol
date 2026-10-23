@@ -6,7 +6,7 @@ Compagnon de jeu **League of Legends** pour débutants, en français. Applicatio
 |---|---|
 | 📚 **Préparation** | Accueil, **Mon compte** (rang, maîtrises, dernières parties), **Champions** (sorts, conseils pour jouer et contrer, statistiques Noob LOL : runes, sorts, objets, match-ups), **Méta** (tier list maison par rôle), **Objets**, **Runes**, **Mes builds** (tes pages de runes et builds d'objets par champion et par rôle), **Guide** débutant, **Lexique**. |
 | 🎯 **Sélection** | S'ouvre toute seule quand la sélection commence : équipes et bannissements en direct, ton rôle, ton adversaire de voie (deviné ou choisi), **champions conseillés** (statistiques + tes maîtrises + champions faciles), **runes, sorts et objets** du champion survolé, conseils pour contrer l'adversaire. *C'est toujours toi qui cliques dans le client.* |
-| ⚔️ **En jeu** | S'ouvre toute seule au lancement de la partie, sans aucun bouton : mini-carte en direct, les 10 joueurs (rang, niveau, K/D/A, objets, AD/AP), objectifs avec temps avant apparition et score, **Mon build** (prochain objet, or manquant), **annonces vocales**. À la fin de la partie : **toutes les statistiques en onglets** (Résumé, Ma partie, Dégâts, Or et farm, Vision, Builds). |
+| ⚔️ **En jeu** | S'ouvre toute seule au lancement de la partie, sans aucun bouton : mini-carte en direct, les 10 joueurs **face à face par voie** (rang, niveau, K/D/A, objets, AD/AP, or gagné, qui domine la voie), objectifs avec temps avant apparition et score, **Mon build** (prochain objet, or manquant), **encart déplaçable par-dessus le jeu** avec ton build perso, **annonces vocales**. À la fin de la partie : **toutes les statistiques en onglets** (Résumé, Ma partie, Dégâts, Or et farm, Vision, Builds). |
 | ⚙️ **Réglages** | Clé Riot (chiffrée par Windows), serveur, Riot ID, collecteur de statistiques, réglage de la mini-carte. |
 
 ## D'où viennent les données (uniquement des sources officielles ou publiques)
@@ -33,7 +33,7 @@ npm run dist     # fabrique l'installeur Windows dans dist/
 | Dossier | Contenu |
 |---|---|
 | `main/` | Processus principal : `main.js` (fenêtres, IPC), `preload.js` (pont sécurisé), `lcu.js` (client LoL), `live.js` (données en jeu), `riotapi.js` (API Riot + limiteur), `collector.js`, `db.js` (SQLite), `config.js` |
-| `renderer/` | Interface : `app.js` (3 parties + réglages), `ddragon.js`, `guide.js` (textes), `style.css`, `minimap.html/js` |
+| `renderer/` | Interface : `app.js` (3 parties + réglages), `ddragon.js`, `guide.js` (textes), `style.css`, `minimap.html/js`, `overlay.html/js` (encart par-dessus le jeu) |
 | `test/` | Tests Node (`node --test`) |
 
 Pour publier une mise à jour : augmenter `version` dans `package.json` (et les notes dans `renderer/version.js`), puis lancer le workflow « Installeur Windows » (onglet Actions → Run workflow) ou pousser un tag `vX.Y.Z`. GitHub Actions fabrique l'installeur et publie la Release ; les PC équipés se mettent à jour tout seuls.

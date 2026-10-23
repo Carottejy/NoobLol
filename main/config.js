@@ -11,6 +11,7 @@ const DEFAULTS = {
   riotId: { gameName: '', tagLine: '' },
   collector: { autoStart: false, tiers: ['CHALLENGER', 'GRANDMASTER', 'MASTER'], days: 14, timeline: true },
   minimap: { displayId: null, sourceDisplayId: null, crop: { x: 0.857, y: 0.745, w: 0.14, h: 0.25 }, alwaysOnTop: true },
+  overlay: { enabled: true, x: null, y: null },
   autoMode: true,
 };
 
@@ -37,7 +38,7 @@ class Config {
     return d;
   }
   set(patch) {
-    const allowed = ['platform', 'lolPath', 'riotId', 'collector', 'minimap', 'autoMode'];
+    const allowed = ['platform', 'lolPath', 'riotId', 'collector', 'minimap', 'overlay', 'autoMode'];
     for (const k of Object.keys(patch || {})) if (allowed.includes(k)) this.data[k] = (typeof patch[k] === 'object' && patch[k] && !Array.isArray(patch[k])) ? merge(this.data[k] || {}, patch[k]) : patch[k];
     this.save();
     return this.public();

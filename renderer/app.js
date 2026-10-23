@@ -19,7 +19,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], ed: null,
+    game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, ed: null,
   });
   function load() {
     try {
@@ -28,7 +28,7 @@
       const d = defaults();
       Object.assign(d, raw);
       ['cf', 'itf', 'rune', 'opt', 'view', 'select'].forEach((k) => { d[k] = Object.assign(defaults()[k], raw[k] || {}); });
-      if (!Array.isArray(d.myRunes)) d.myRunes = []; if (!Array.isArray(d.myItems)) d.myItems = [];
+      if (!d.selItems || typeof d.selItems !== 'object') d.selItems = {}; if (!Array.isArray(d.myRunes)) d.myRunes = []; if (!Array.isArray(d.myItems)) d.myItems = [];
       d.game = Object.assign(newGame(), raw.game || {});
       if (!Array.isArray(d.game.enemies) || d.game.enemies.length !== 5) d.game.enemies = newGame().enemies;
       return d;
@@ -430,7 +430,10 @@
     let h = `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">⭐ Mes builds · ${esc(c.name)}</h2><span class="small muted">${sd.myRole ? ROLE_NAME[sd.myRole] : ''}</span></div>`;
     h += r.map((b) => { const done = R.applied.runes === 'my-' + b.id; const ok = runeComplete(b);
       return `<button class="rbtn ${done ? 'done' : ''}" ${canApply && ok ? `data-act="applyMyRunes" data-val="${b.id}"` : 'disabled'}><div class="row sp nw"><span class="small"><b>${esc(b.name || 'Ma page')}</b> · ${rolesLabel(b)}</span><span class="small apply">${done ? '✅ Appliquée' : !ok ? '⚠️ incomplète' : canApply ? '⤴ Appliquer runes' + (spellsOf(b).length === 2 ? ' + sorts' : '') : ''}</span></div><div class="rpage">${myRunePreview(b)}${spellsOf(b).length ? '<span class="rsep"></span>' + spellPair(spellsOf(b).join(',')) : ''}</div></button>`; }).join('');
-    if (it.length) h += `<p class="small" style="margin-top:6px">🛒 En partie, Noob LOL suivra ton build <b>${esc(it[0].name || 'perso')}</b> : ${it[0].core.map((i) => itIcon(i)).join('')}</p>`;
+    if (it.length) {
+      const sel = it.find((b) => b.id === S.selItems[c.id]) || it[0];
+      h += `<p class="small" style="margin:8px 0 4px">🛒 Build d'objets suivi en partie <span class="muted">(affiché dans l'écran « En jeu » et dans l'encart par-dessus le jeu)</span> :</p><div class="chips">${it.map((b) => `<button class="chip ibsel ${b.id === sel.id ? 'on' : ''}" data-act="selItemBuild" data-val="${esc(b.id)}" data-champ="${esc(c.id)}">${b.id === sel.id ? '✅ ' : ''}<b>${esc(b.name || 'Build perso')}</b> <span class="row nw" style="gap:2px">${b.core.map((i) => itIcon(i, 'ico sm')).join('')}</span></button>`).join('')}</div>`;
+    }
     return h + '</div>';
   }
 
@@ -753,7 +756,7 @@
   function onLive(L) {
     const was = R.live;
     R.live = L;
-    if (!L) { if (was) { renderTop(); if (S.mode === 'game' && !busy()) render(true); } return; }
+    if (!L) { R.ovKey = ''; if (was) { renderTop(); if (S.mode === 'game' && !busy()) render(true); } return; }
     const g = S.game;
     const enemyTeam = L.me ? (L.me.team === 'ORDER' ? 'CHAOS' : 'ORDER') : 'CHAOS';
     const enemies = L.players.filter((p) => p.team === enemyTeam);
@@ -795,6 +798,7 @@
       const O = Builds.objectives(L, L.me ? L.me.team : 'ORDER');
       for (const r of O.rows) R.prevObj[r.id] = r.state;
     } catch (e) { /* ignoré */ }
+    try { overlaySync(L); } catch (e) { /* ignoré */ }
     renderTop();
     if (S.mode === 'game' && !busy()) render(true); else save();
   }
@@ -870,8 +874,7 @@
     else if (e.name === 'HeraldKill') speak(us ? 'Nous avons pris le Héraut.' : 'L\'ennemi a pris le Héraut.', key);
     else if (e.name === 'HordeKill') speak(us ? 'Nous prenons les larves du Néant.' : 'L\'ennemi prend les larves du Néant.', 'horde-' + Math.floor(e.t / 30));
     else if (e.name === 'InhibKilled') speak(us ? 'Inhibiteur ennemi détruit !' : 'Notre inhibiteur est tombé. Attention aux super-sbires.', key);
-    else if (e.name === 'Ace') speak(us ? 'Toute l\'équipe adverse est morte. Prenez un objectif !' : 'Toute notre équipe est morte. Défendez la base.', key);
-    else if (e.name === 'FirstBlood') speak('Premier sang.', key);
+    /* Pas d'annonce pour les éliminations (premier sang, équipe entière) */
   }
 
   /* ---------- Mon build pendant la partie ---------- */
@@ -882,13 +885,15 @@
     const c = D.champs[L.me.champ];
     if (!c || !meP) return null;
     const lp = S.lastPick && S.lastPick.champ === +c.key ? S.lastPick : null;
-    const role = LIVE_POS[meP.position] || (lp && lp.role) || '';
+    const LR = liveRoles(L);
+    const role = LR.get(meP.name) || (lp && lp.role) || '';
     const owned0 = meP.items.map((i) => i.id);
-    const personal = forChamp(S.myItems, c.id, role).sort((a, b) => (b.roles.includes(role) ? 1 : 0) - (a.roles.includes(role) ? 1 : 0))[0];
+    const chosen = S.myItems.find((b) => b.id === S.selItems[c.id] && b.champ === c.id);
+    const personal = chosen || forChamp(S.myItems, c.id, role).sort((a, b) => (b.roles.includes(role) ? 1 : 0) - (a.roles.includes(role) ? 1 : 0))[0];
     if (personal) return { c, role, personal, owned: owned0, next: Builds.nextItem(itemPlan(personal), owned0, D) };
     if (!role) return { c, role: '' };
     const enemies = L.players.filter((p) => p.team !== L.me.team);
-    const oppP = enemies.find((p) => LIVE_POS[p.position] === role);
+    const oppP = enemies.find((p) => LR.get(p.name) === role);
     const opp = oppP && D.champs[oppP.champ] ? +D.champs[oppP.champ].key : (lp && lp.opp) || 0;
     const ekeys = enemies.map((p) => (D.champs[p.champ] ? +D.champs[p.champ].key : 0)).filter(Boolean);
     const rows = cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30));
@@ -931,6 +936,24 @@
     return h + '</div>';
   }
 
+  /* Encart par-dessus le jeu : seulement quand un build perso est suivi */
+  function overlaySync(L) {
+    if (!NB || !NB.overlay) return;
+    let d = null;
+    const b = L ? liveBuild(L) : null;
+    if (b && b.personal && D.items) {
+      const P = b.personal, own = new Set((b.owned || []).map(Number));
+      const it = (id) => { const x = D.items[String(id)]; return x ? { src: Dd.img.item(x), name: x.name, own: own.has(+id) } : null; };
+      const nx = b.next && D.items[String(b.next.item)];
+      d = { name: P.name || 'Mon build', champ: b.c.name, core: P.core.map(it).filter(Boolean), boots: P.boots ? it(P.boots) : null,
+        next: nx ? { src: Dd.img.item(nx), name: b.next.name, miss: Math.max(0, b.next.cost - ((L.me && L.me.gold) || 0)) } : null };
+    }
+    const k = JSON.stringify(d);
+    if (k === R.ovKey) return;
+    R.ovKey = k;
+    NB.overlay.update(d).catch(() => {});
+  }
+
   /* ---------- Profil de dégâts AD / AP ----------
      Estimé d'après les objets (valeur en or des statistiques offensives), mélangé au profil du champion
      tant que le joueur a peu d'objets. */
@@ -952,32 +975,87 @@
   }
   const dmgBar = (v, label = true) => { const a = Math.round(v * 100); return `<div class="dmg" title="${a} % AD / ${100 - a} % AP"><div class="dmgbar"><i class="phy" style="width:${a}%"></i><i class="mag" style="width:${100 - a}%"></i></div>${label ? `<span class="${a >= 50 ? 'tphy' : 'tmag'}">${a >= 50 ? a + ' % AD' : 100 - a + ' % AP'}</span>` : ''}</div>`; };
   function teamValue(players) { return players.reduce((sum, p) => sum + p.items.reduce((s, i) => s + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0), 0); }
+  /* ---------- Rôles des 10 joueurs en jeu ----------
+     Le jeu donne la position en partie classée ; sinon on la déduit (Châtiment = jungle, puis statistiques et classe du champion). */
+  function liveRoles(L) {
+    const keyOf = (p) => (D.champs && D.champs[p.champ] ? +D.champs[p.champ].key : 0);
+    const keys = L.players.map(keyOf).filter(Boolean);
+    const dist = NB && keys.length ? cached('rd:' + keys.slice().sort().join(','), () => NB.stats.roleDist(keys)) : null;
+    const sig = L.players.map((p) => `${p.name}:${p.champ}:${p.position}:${p.spells.join('/')}`).join('|') + (dist ? ':d' : '');
+    if (R.roleMemo && R.roleMemo.sig === sig) return R.roleMemo.map;
+    const map = new Map();
+    for (const team of ['ORDER', 'CHAOS']) {
+      const ps = L.players.filter((p) => p.team === team);
+      const fixed = {};
+      ps.forEach((p) => { const r = LIVE_POS[p.position]; if (r && keyOf(p)) fixed[keyOf(p)] = r; });
+      if (!Object.values(fixed).includes('jungle')) { const sm = ps.find((p) => keyOf(p) && !fixed[keyOf(p)] && p.spells.some((x) => /Smite/i.test(x))); if (sm) fixed[keyOf(sm)] = 'jungle'; }
+      let as = {};
+      try { as = Builds.assignRoles(ps.map(keyOf).filter(Boolean), D, dist || {}, fixed); } catch (e) { as = fixed; }
+      const used = new Set();
+      ps.forEach((p) => { const r = as[keyOf(p)]; if (r && !used.has(r)) { map.set(p.name, r); used.add(r); } });
+      ps.forEach((p) => { if (!map.has(p.name)) { const r = ROLE_ORDER.find((x) => !used.has(x)); if (r) { map.set(p.name, r); used.add(r); } } });
+    }
+    R.roleMemo = { sig, map };
+    return map;
+  }
+  /* Or gagné : exact pour toi (or en poche + objets), estimé pour les autres
+     (le jeu ne publie pas l'or des autres joueurs : on prend le plus grand entre la valeur de leurs objets
+     et une estimation d'après le temps, les sbires/monstres, kills et assistances). */
+  const itemsValue = (p) => p.items.reduce((s, i) => s + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0);
+  function goldOf(p, L) {
+    const items = itemsValue(p);
+    if (L.me && p.name === L.me.name) return { v: items + (L.me.gold || 0), exact: true, items };
+    const est = 500 + Math.max(0, L.time - 65) * 2.04 + p.cs * 21 + p.k * 300 + p.a * 150;
+    return { v: Math.round(Math.max(items, est)), exact: false, items };
+  }
+  const k1g = (n) => (Math.abs(n) >= 1000 ? (n / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(n)));
+  /* Qui domine la voie : écart d'or + écart de niveau (1 niveau ≈ 300 po) */
+  function laneLead(a, e, L) {
+    if (!a || !e) return null;
+    const ga = goldOf(a, L).v, ge = goldOf(e, L).v;
+    const score = (ga - ge) + 300 * ((a.level || 0) - (e.level || 0));
+    const m = Math.abs(score);
+    const lvl = m < 400 ? 0 : m < 1200 ? 1 : 2;
+    const side = lvl === 0 ? '' : score > 0 ? 'us' : 'them';
+    const label = lvl === 0 ? 'Égalité' : lvl === 1 ? 'Avantage' : 'Domine';
+    return { score, gold: ga - ge, lvl, side, label, pct: Math.min(50, (m / 3000) * 50) };
+  }
   function playersPanel(L) {
     const myTeam = L.me ? L.me.team : 'ORDER';
     const teams = [L.players.filter((p) => p.team === myTeam), L.players.filter((p) => p.team !== myTeam)];
-    const val = teams.map(teamValue);
+    const gold = teams.map((t) => t.reduce((s, p) => s + goldOf(p, L).v, 0));
     const kills = teams.map((t) => t.reduce((s, p) => s + p.k, 0));
-    const diff = val[0] - val[1];
+    const diff = gold[0] - gold[1];
     const gp = (R.lcu.game && R.lcu.game.players) || [];
     const puuidOf = (p) => { const c = D.champs[p.champ]; const g = c && gp.find((x) => x.team === p.team && +x.champ === +c.key); return g ? g.puuid : ''; };
     wantInfo(L.players.map(puuidOf));
-    const row = (p) => {
-      const c = D.champs[p.champ]; const pr = dmgProfile(p);
-      const items = p.items.filter((i) => i.slot < 6).sort((a, b) => a.slot - b.slot);
+    /* Lignes par voie : top, jungle, mid, support, adc */
+    const LR = liveRoles(L);
+    const rows = ROLE_ORDER.map((r) => ({ r, a: teams[0].find((p) => LR.get(p.name) === r) || null, e: teams[1].find((p) => LR.get(p.name) === r) || null }));
+    const half = (p, side) => {
+      if (!p) return `<div class="lp ${side} empty"><span class="muted small">—</span></div>`;
+      const c = D.champs[p.champ]; const pr = dmgProfile(p); const g = goldOf(p, L);
+      const items = p.items.filter((i) => i.slot < 6).sort((x, y) => x.slot - y.slot);
       const trinket = p.items.find((i) => i.slot === 6);
-      return `<div class="prow ${p.dead ? 'dead' : ''} ${L.me && p.name === L.me.name ? 'me' : ''}">
+      return `<div class="lp ${side} ${p.dead ? 'dead' : ''} ${L.me && p.name === L.me.name ? 'me' : ''}">
         <div class="pic">${cIcon(c, 'ico')}<span class="lvl">${p.level}</span>${p.dead ? `<span class="resp">${Math.ceil(p.respawn)}</span>` : ''}</div>
-        <div class="pname"><b>${esc(c ? c.name : p.champName)}</b><span class="small pmeta"><span class="muted">${esc(p.gameName)}</span>${rankTag(puuidOf(p))}</span></div>
-        <div class="kda"><b>${p.k}/<span class="neg">${p.d}</span>/${p.a}</b><span class="muted small">${p.cs} CS</span></div>
-        <div class="build">${[0, 1, 2, 3, 4, 5].map((k) => (items[k] ? itIcon(items[k].id) : '<span class="ico sm ph"></span>')).join('')}${trinket ? itIcon(trinket.id, 'ico sm trk') : ''}</div>
-        ${dmgBar(pr.ad)}</div>`;
+        <div class="pname"><b>${esc(c ? c.name : p.champName)}</b><span class="small pmeta"><span class="muted">${esc(p.gameName)}</span>${rankTag(puuidOf(p))}</span>${dmgBar(pr.ad, false)}</div>
+        <div class="kda"><b>${p.k}/<span class="neg">${p.d}</span>/${p.a}</b><span class="muted small">${p.cs} CS</span><span class="pgold" title="${g.exact ? 'Or gagné (objets + or en poche)' : `Or gagné estimé · objets : ${nf(g.items)} po`}">${g.exact ? '' : '≈'}${k1g(g.v)} 🪙</span></div>
+        <div class="build">${[0, 1, 2, 3, 4, 5].map((k) => (items[k] ? itIcon(items[k].id) : '<span class="ico sm ph"></span>')).join('')}${trinket ? itIcon(trinket.id, 'ico sm trk') : ''}</div></div>`;
+    };
+    const mid = (x) => {
+      const d = laneLead(x.a, x.e, L);
+      const meter = d ? `<div class="lead ${d.side}" title="${d.label}${d.side ? (d.side === 'us' ? ' pour nous' : ' pour eux') : ''} · écart d'or ${d.gold >= 0 ? '+' : ''}${nf(d.gold)} po (estimé)"><div class="lbar"><i style="${d.side === 'them' ? 'left' : 'right'}:50%;width:${d.side ? Math.max(6, d.pct) : 0}%"></i></div><span class="ltxt">${d.side === 'us' ? '◀ ' : ''}${d.label}${d.side === 'them' ? ' ▶' : ''}</span><span class="lgold">${d.gold >= 0 ? '+' : '−'}${k1g(Math.abs(d.gold))}</span></div>` : '';
+      return `<div class="lmid"><span class="lrole" title="${ROLE_NAME[x.r]}">${ROLE_IC[x.r]} ${ROLE_NAME[x.r]}</span>${meter}</div>`;
     };
     const teamDmg = (t) => (t.length ? t.reduce((s, p) => s + dmgProfile(p).ad, 0) / t.length : 0.5);
     const advice = (v) => (v >= 0.62 ? 'surtout physique : l\'<b>armure</b> est rentable' : v <= 0.38 ? 'surtout magique : la <b>résistance magique</b> est rentable' : 'mixte : équilibre armure et résistance magique');
-    return `<div class="card players"><div class="row sp"><h2 style="margin:0">👥 Joueurs</h2><span class="small">Kills <b>${kills[0]}</b> – <b>${kills[1]}</b> · Objets <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${nf(diff)}</b> po</span></div>
-      ${teams.map((t, i) => { const td = teamDmg(t); return `<div class="tdhead"><b>${i ? '🟥 Adversaires' : '🟦 Mon équipe'}</b><span class="muted small">${nf(val[i])} po</span>${i ? `<span class="small tipline ell">→ ${advice(td)}</span>` : ''}${dmgBar(td)}</div>
-        ${t.map(row).join('')}`; }).join('')}
-      <p class="muted small">AD / AP estimé d'après les objets achetés (et le profil du champion en début de partie).</p></div>`;
+    const tdA = teamDmg(teams[0]), tdE = teamDmg(teams[1]);
+    return `<div class="card players"><div class="row sp"><h2 style="margin:0">👥 Joueurs</h2><span class="small">Kills <b>${kills[0]}</b> – <b>${kills[1]}</b> · Or <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${nf(diff)}</b> po</span></div>
+      <div class="lhead"><div class="lh us"><b>🟦 Mon équipe</b><span class="muted small">≈ ${nf(gold[0])} po</span>${dmgBar(tdA)}</div><div class="lmid"></div><div class="lh them"><b>🟥 Adversaires</b><span class="muted small">≈ ${nf(gold[1])} po</span>${dmgBar(tdE)}</div></div>
+      ${rows.map((x) => `<div class="lane ${x.a && L.me && x.a.name === L.me.name ? 'mine' : ''}">${half(x.a, 'us')}${mid(x)}${half(x.e, 'them')}</div>`).join('')}
+      <p class="small tipline">Adversaires → ${advice(tdE)}</p>
+      <p class="muted small">Or des autres joueurs estimé (le jeu ne publie que le tien). Domination = écart d'or + écart de niveau.</p></div>`;
   }
 
   /* ---------- Mini-carte intégrée (capture de la zone de l'écran du jeu) ---------- */
@@ -1258,6 +1336,10 @@
     if (R.shot) h += `<div class="cropper" id="cropper"><img src="${R.shot}" alt="Capture" draggable="false"><div class="crop" id="cropBox" style="left:${crop.x * 100}%;top:${crop.y * 100}%;width:${crop.w * 100}%;height:${crop.h * 100}%"></div></div>
       <div class="row"><button class="btn small" data-act="miniSaveCrop">Enregistrer la zone</button><span class="muted small">Glisse sur l'image pour tracer la zone.</span></div>`;
     h += `<div class="row" style="margin-top:10px"><button class="btn ${R.miniOpen ? 'danger' : 'hex'}" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}">🗺️ ${R.miniOpen ? 'Fermer la mini-carte' : 'Ouvrir la mini-carte'}</button></div></div>`;
+    const ov = c.overlay || { enabled: true };
+    h += `<div class="card"><h2>⭐ Encart « Mon build » par-dessus le jeu</h2>
+      <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. <b>Glisse-le à la souris</b> pour le déplacer, sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
+      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div></div>`;
     return h;
   }
 
@@ -1351,6 +1433,9 @@
       }
       case 'edRm': { const d = S.ed.draft, sec = el.dataset.sec, i = +el.dataset.i; if (sec === 'boots') d.boots = 0; else d[sec].splice(i, 1); render(true); break; }
       case 'edMv': { const L2 = S.ed.draft[el.dataset.sec], i = +el.dataset.i; if (i > 0) [L2[i - 1], L2[i]] = [L2[i], L2[i - 1]]; render(true); break; }
+      case 'selItemBuild': S.selItems[el.dataset.champ] = v; R.ovKey = ''; save(); render(true); break;
+      case 'ovToggle': { const on = !(((R.cfg || {}).overlay || {}).enabled !== false); NB.config.set({ overlay: { enabled: on } }).then((c) => { R.cfg = c; R.ovKey = ''; render(true); }).catch(() => {}); break; }
+      case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {
         const b = S.myRunes.find((x) => x.id === v); if (!b) break;
         el.classList.add('busy');

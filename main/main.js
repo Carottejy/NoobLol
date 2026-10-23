@@ -12,7 +12,7 @@ const { KeyWatch } = require('./keyrenew');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let win = null, mini = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
+let win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
 const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
@@ -31,7 +31,7 @@ function createWindow() {
   /* Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli. */
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) { e.preventDefault(); if (/^https:\/\//.test(url)) shell.openExternal(url); } });
-  win.on('closed', () => { win = null; if (mini && !mini.isDestroyed()) mini.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
+  win.on('closed', () => { win = null; if (mini && !mini.isDestroyed()) mini.close(); if (overlay && !overlay.isDestroyed()) overlay.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
 }
 
 /* ---------- Mini-carte sur un deuxième écran ---------- */
@@ -68,6 +68,45 @@ async function openMinimap() {
   return true;
 }
 
+/* ---------- Encart « Mon build » par-dessus le jeu ----------
+   Petite fenêtre transparente, toujours au premier plan, placée par défaut en bas de l'écran du jeu
+   entre la barre des compétences et la mini-carte. Elle se déplace à la souris ; sa position est retenue.
+   Elle n'affiche que ton propre build (aucune information cachée du jeu). */
+const OV_W = 300, OV_H = 104;
+function gameDisplay() {
+  const id = cfg.data.minimap.sourceDisplayId;
+  return screen.getAllDisplays().find((d) => String(d.id) === String(id)) || screen.getPrimaryDisplay();
+}
+function overlayBounds() {
+  const o = cfg.data.overlay || {};
+  const onScreen = o.x != null && o.y != null && screen.getAllDisplays().some((d) => o.x + OV_W > d.bounds.x + 20 && o.x < d.bounds.x + d.bounds.width - 20 && o.y + OV_H > d.bounds.y + 20 && o.y < d.bounds.y + d.bounds.height - 20);
+  if (onScreen) return { x: Math.round(o.x), y: Math.round(o.y), width: OV_W, height: OV_H };
+  const b = gameDisplay().bounds, crop = cfg.data.minimap.crop || { x: 0.857 };
+  return { x: Math.round(b.x + crop.x * b.width - OV_W - 16), y: Math.round(b.y + b.height - OV_H - 10), width: OV_W, height: OV_H };
+}
+function setOverlay(data) {
+  overlayData = data || null;
+  const want = !!(overlayData && cfg.data.overlay.enabled);
+  if (!want) { if (overlay && !overlay.isDestroyed() && overlay.isVisible()) overlay.hide(); return; }
+  if (!overlay || overlay.isDestroyed()) {
+    overlay = new BrowserWindow(Object.assign(overlayBounds(), {
+      frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
+      skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, title: 'Noob LOL — Mon build', webPreferences: secureWebPrefs(),
+    }));
+    overlay.setAlwaysOnTop(true, 'screen-saver');
+    overlay.loadFile(path.join(RENDERER, 'overlay.html'));
+    overlay.webContents.on('did-finish-load', () => { if (overlay && !overlay.isDestroyed() && overlayData) { overlay.webContents.send('overlay:data', overlayData); overlay.showInactive(); } });
+    overlay.on('move', () => {
+      clearTimeout(ovSaveT);
+      ovSaveT = setTimeout(() => { if (overlay && !overlay.isDestroyed()) { const b = overlay.getBounds(); cfg.set({ overlay: { x: b.x, y: b.y } }); } }, 400);
+    });
+    overlay.on('closed', () => { overlay = null; });
+    return;
+  }
+  overlay.webContents.send('overlay:data', overlayData);
+  if (!overlay.isVisible()) { overlay.showInactive(); overlay.setAlwaysOnTop(true, 'screen-saver'); }
+}
+
 /* ---------- IPC (seul pont entre l'interface et le PC) ---------- */
 function handlers() {
   const h = (ch, fn) => ipcMain.handle(ch, async (e, ...a) => {
@@ -81,6 +120,7 @@ function handlers() {
     if (mini && patch && patch.minimap) miniConfig().then((c) => mini && mini.webContents.send('minimap:config', c));
     if (patch && patch.minimap && 'alwaysOnTop' in patch.minimap && mini) mini.setAlwaysOnTop(!!patch.minimap.alwaysOnTop);
     if (patch && patch.platform && patch.platform !== before && collector.running) { collector.stop(); }
+    if (patch && patch.overlay && 'enabled' in patch.overlay) setOverlay(overlayData);
     return out;
   });
   h('config:setKey', async (key) => { cfg.setApiKey(key); if (!key) { keys.set('missing'); return { valid: false }; } await api.status(); return { valid: true }; });
@@ -151,6 +191,8 @@ function handlers() {
   h('minimap:open', () => openMinimap());
   h('minimap:close', () => { if (mini && !mini.isDestroyed()) mini.close(); return true; });
   h('minimap:isOpen', () => !!(mini && !mini.isDestroyed()));
+  h('overlay:update', (d) => { setOverlay(d); return true; });
+  h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
   h('open:external', (url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return true; });
   h('update:install', () => { try { require('electron-updater').autoUpdater.quitAndInstall(); } catch (e) { /* ignoré */ } return true; });
 }
@@ -191,6 +233,7 @@ app.whenReady().then(async () => {
     }
   });
   live.on('data', (d) => {
+    if (!d) setOverlay(null);
     if (d) lastLive = d;
     /* Le jeu se ferme sans que le client l'ait signalé (ex. client non détecté) : on garde au moins le dernier état */
     else if (lastLive && !lcu.state.connected) { post.start({ gameId: 0, live: lastLive, puuid: '', hasKey: false }); }

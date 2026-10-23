@@ -1,6 +1,13 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.7.1';
+var APP_VERSION = '2.8.0';
 var APP_RELEASES = [
+  { v: '2.8.0', date: '2026-10-23', notes: [
+    'En jeu : les joueurs sont rangés par voie (top, jungle, mid, support, adc) et placés face à face, ton équipe à gauche, l\'adversaire à droite.',
+    'En jeu : or gagné de chaque joueur (exact pour toi, estimé pour les autres car le jeu ne publie que le tien) et indicateur de domination de chaque voie (égalité, avantage, domine) d\'après l\'écart d\'or et de niveau.',
+    'En jeu : nouvel encart « Mon build » par-dessus le jeu, en bas entre tes compétences et la mini-carte : prochain objet, or manquant, objets achetés cochés. Il se déplace à la souris et sa position est retenue (Réglages pour le désactiver ou le replacer).',
+    'Sélection : choix du build d\'objets que Noob LOL suivra en partie quand tu en as plusieurs pour ton champion.',
+    'Annonces vocales : plus d\'annonce pour le premier sang ni pour les éliminations.',
+  ]},
   { v: '2.7.1', date: '2026-10-23', notes: [
     'Infobulles détaillées partout : en gardant la souris plus d\'une seconde sur une icône d\'objet (prix, recette, effets, composants, améliorations), de rune (voie, ligne, effet complet), de voie de runes (runes clés) ou de sort d\'invocateur (recharge, effet).',
   ]},
