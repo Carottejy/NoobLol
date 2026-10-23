@@ -1,6 +1,13 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.5.0';
+var APP_VERSION = '3.5.1';
 var APP_RELEASES = [
+  { v: '3.5.1', date: '2026-10-23', notes: [
+    'Écran de chargement : les infos de chaque joueur sont maintenant posées SUR la carte de son champion (même disposition que le jeu : 2 rangées de 5 cartes, taille selon la hauteur de l\'écran). Réglage fin dans Réglages → « Placer les infos sur les cartes du chargement », avec un aperçu qui dessine le contour des cartes sur l\'écran du jeu.',
+    'Type de dégâts officiel de Riot (AD, AP ou Mixte) au lieu d\'un pourcentage estimé : Séraphine est bien AP. Il vient des données du client LoL (sinon de leur copie publique) et sert aussi en sélection et pour les profils d\'équipe.',
+    'Build conseillé complet : départ, objets principaux, bottes, puis objets suivants (d\'abord ceux qui répondent à l\'équipe adverse). Les objets cités dans les conseils sont exactement ceux du build.',
+    'Conseils : l\'image et le nom de chaque objet conseillé (un clic ouvre sa fiche).',
+    'Simulateur : écran de chargement plein écran avec la même disposition que le jeu, pour vérifier le calage de l\'encart.',
+  ]},
   { v: '3.5.0', date: '2026-10-23', notes: [
     'Écran de chargement, par-dessus le jeu : pour chaque joueur, son rang, son niveau, ses victoires et son KDA moyen sur ses 10 dernières parties, et le type de dégâts (AD/AP) de son champion. Une bande en haut pour l\'équipe bleue, une en bas pour l\'équipe rouge ; elle disparaît dès que la partie commence et laisse passer les clics. Désactivable dans Réglages.',
     'Dans l\'appli, nouvel écran « Chargement de la partie » (onglet En jeu) : les mêmes infos pour les 10 joueurs (🔥 pour ceux qui sont en forme), et un clic sur un adversaire le désigne comme ton adversaire de voie.',

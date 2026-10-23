@@ -733,3 +733,17 @@ button.bi:hover .ico, .mybuild .next.sm:hover { outline: 2px solid var(--accent)
 .ldh .ico { width: 38px; height: 38px; flex: none; }
 .ldh .grow { display: flex; flex-direction: column; min-width: 0; }
 .ldr { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: .84rem; min-width: 0; flex-wrap: wrap; }
+
+/* Type de dégâts officiel */
+.dt { display: inline-flex; align-items: center; gap: 3px; font-size: .78rem; font-weight: 800; padding: 1px 8px; border-radius: 99px; border: 1px solid; white-space: nowrap; }
+.dt.ad { color: var(--phy); border-color: var(--phy); } .dt.ap { color: var(--mag); border-color: var(--mag); } .dt.mixed { color: var(--accent2); border-color: var(--accent2); }
+.vs-cell .dt { margin-top: 3px; }
+
+.laygrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; margin: 6px 0; }
+.laygrid label { display: flex; flex-direction: column; gap: 3px; }
+.laygrid input[type=range] { width: 100%; accent-color: var(--accent); }
+
+.tipit { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tipit .bi { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); font-size: .8rem; color: var(--text); }
+.ico.xxs { width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; }
+.mybuild .brow.sub { border-top: 0; padding: 0 0 2px; }

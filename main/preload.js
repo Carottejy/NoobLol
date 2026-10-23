@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('noob', {
     onState: on('minimap:state'), onConfig: on('minimap:config'),
   },
   key: { status: () => call('key:status'), renew: () => call('key:renew'), on: on('keystatus'), onRenewed: on('keyrenewed') },
+  champ: { damage: (keys) => call('champ:damage', keys) },
   loadov: { update: (d) => call('loadov:update', d), onData: on('loadov:data') },
   overlay: { update: (d) => call('overlay:update', d), reset: () => call('overlay:reset'), onData: on('overlay:data'), openItem: (id) => call('overlay:openItem', id), onOpenItem: on('open:item') },
   players: { info: (ids) => call('players:info', ids), recent: (ids) => call('players:recent', ids) },

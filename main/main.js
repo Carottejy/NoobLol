@@ -12,10 +12,11 @@ const { PostGame } = require('./postgame');
 const { KeyWatch } = require('./keyrenew');
 const { History } = require('./history');
 const { SimServer } = require('./simulator');
+const { DamageTypes } = require('./damage');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let loadov = null, loadovData = null, sim = null, simWin = null, hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
+let dmgTypes = null, loadov = null, loadovData = null, sim = null, simWin = null, hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
 const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
@@ -114,9 +115,10 @@ function setOverlay(data) {
 /* ---------- Infos des joueurs par-dessus l'écran de chargement ----------
    Fenêtre transparente sur tout l'écran du jeu, qui laisse passer les clics : une bande en haut (équipe bleue)
    et une en bas (équipe rouge), au-dessus et au-dessous des cartes de chargement. Elle se ferme dès que la partie commence. */
+const withLayout = (d) => Object.assign({}, d, { layout: cfg.data.overlay.layout || null });
 function setLoadOverlay(data) {
   loadovData = data || null;
-  const want = !!(loadovData && cfg.data.overlay.enabled && cfg.data.overlay.loading !== false);
+  const want = !!(loadovData && (loadovData.preview || (cfg.data.overlay.enabled && cfg.data.overlay.loading !== false)));
   if (!want) { if (loadov && !loadov.isDestroyed()) { loadov.close(); } loadov = null; return; }
   if (!loadov || loadov.isDestroyed()) {
     const b = gameDisplay().bounds;
@@ -125,11 +127,11 @@ function setLoadOverlay(data) {
     loadov.setAlwaysOnTop(true, 'screen-saver');
     loadov.setIgnoreMouseEvents(true);
     loadov.loadFile(path.join(RENDERER, 'loadov.html'));
-    loadov.webContents.on('did-finish-load', () => { if (loadov && !loadov.isDestroyed() && loadovData) { loadov.webContents.send('loadov:data', loadovData); loadov.showInactive(); } });
+    loadov.webContents.on('did-finish-load', () => { if (loadov && !loadov.isDestroyed() && loadovData) { loadov.webContents.send('loadov:data', withLayout(loadovData)); loadov.showInactive(); } });
     loadov.on('closed', () => { loadov = null; });
     return;
   }
-  loadov.webContents.send('loadov:data', loadovData);
+  loadov.webContents.send('loadov:data', withLayout(loadovData));
   if (!loadov.isVisible()) loadov.showInactive();
 }
 
@@ -172,7 +174,7 @@ function handlers() {
     if (patch && patch.minimap && 'alwaysOnTop' in patch.minimap && mini) mini.setAlwaysOnTop(!!patch.minimap.alwaysOnTop);
     if (patch && patch.platform && patch.platform !== before && collector.running) { collector.stop(); }
     if (patch && patch.overlay && 'enabled' in patch.overlay) setOverlay(overlayData);
-    if (patch && patch.overlay && ('loading' in patch.overlay || 'enabled' in patch.overlay)) setLoadOverlay(loadovData);
+    if (patch && patch.overlay && ('loading' in patch.overlay || 'enabled' in patch.overlay || 'layout' in patch.overlay)) setLoadOverlay(loadovData);
     return out;
   });
   h('config:setKey', async (key) => { cfg.setApiKey(key); if (!key) { keys.set('missing'); return { valid: false }; } await api.status(); return { valid: true }; });
@@ -277,6 +279,7 @@ function handlers() {
   h('sim:isOpen', () => !!(simWin && !simWin.isDestroyed()));
   h('sim:push', (state) => { if (sim) sim.push(state); return true; });
   h('sim:ports', () => (sim ? { lcu: sim.lcuPort, live: sim.livePort, seen: sim.seen } : null));
+  h('champ:damage', (keys) => dmgTypes.get(keys));
   h('loadov:update', (d) => { setLoadOverlay(d); return true; });
   h('overlay:openItem', (id) => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('open:item', String(id)); } return true; });
   h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
@@ -332,6 +335,7 @@ app.whenReady().then(async () => {
     if (!collector.running && (colWasRunning || cfg.data.collector.autoStart)) collector.start();
   });
   hist = new History({ api, dir: app.getPath('userData') });
+  dmgTypes = new DamageTypes({ dir: app.getPath('userData'), lcu });
   post = new PostGame({ api, getPlatform: () => cfg.data.platform, dir: app.getPath('userData') });
   post.on('update', (d) => send('postgame', d));
   let postFor = null;

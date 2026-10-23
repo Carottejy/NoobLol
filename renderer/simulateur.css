@@ -45,11 +45,9 @@ select { max-width: 100%; }
 .slot select { flex: 1 1 auto; min-width: 0; }
 .sps { display: flex; flex-direction: column; gap: 2px; }
 .timer { font-weight: 800; color: var(--accent2); font-size: 1.1rem; }
-.loading { text-align: center; }
-.lrow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-.lcard { position: relative; border-radius: 10px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); }
+.lcard { position: absolute; border-radius: 10px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); }
 .lcard.me { border-color: var(--accent); }
-.lcard > img { width: 100%; aspect-ratio: 308 / 560; object-fit: cover; display: block; max-height: 300px; }
+.lcard > img { width: 100%; height: calc(100% - 26px); object-fit: cover; display: block; }
 .lname { position: absolute; left: 0; right: 0; bottom: 22px; padding: 6px; background: linear-gradient(transparent, rgba(0,0,0,.85)); display: flex; flex-direction: column; font-size: .8rem; }
 .lsp { display: flex; justify-content: center; gap: 3px; margin-top: 3px; }
 .lbar { height: 6px; background: #000; margin: 0; } .lbar i { display: block; height: 100%; background: var(--accent); transition: width .25s; }
@@ -67,3 +65,7 @@ select { max-width: 100%; }
 .ctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; }
 .clock { font-size: 1.4rem; color: var(--accent2); }
 .ready { color: var(--good); font-weight: 700; }
+
+.lscreen { position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at center, #10192c 0%, #05080f 75%); overflow: hidden; }
+.lmid { position: absolute; left: 0; right: 0; transform: translateY(-50%); display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .8rem; }
+.lcard .lname { bottom: 26px; }

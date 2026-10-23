@@ -752,7 +752,31 @@
     return ['', ''];
   }
   /* Profil AD / AP d'un champion (sans objets : d'après ses caractéristiques Riot) */
-  const champAd = (c) => (c ? (c.info.attack + 0.01) / (c.info.attack + c.info.magic + 0.02) : 0.5);
+  /* Type de dégâts du champion : officiel (données Riot du client : physique / magique / mixte), sinon estimé */
+  const DMG_Q = new Set(); let dmgTimer = 0;
+  function wantDmg(key) {
+    if (!NB || !NB.champ || !key || (R.dmg && key in R.dmg) || DMG_Q.has(key)) return;
+    DMG_Q.add(key);
+    clearTimeout(dmgTimer);
+    dmgTimer = setTimeout(() => {
+      const keys = [...DMG_Q]; DMG_Q.clear();
+      NB.champ.damage(keys).then((m) => { R.dmg = Object.assign(R.dmg || {}, m || {}); keys.forEach((k) => { if (!(k in R.dmg)) R.dmg[k] = null; }); soon(); })
+        .catch(() => { keys.forEach((k) => { R.dmg[k] = null; }); });
+    }, 60);
+  }
+  function dmgOf(c) {
+    if (!c) return { t: '', official: false };
+    if (!R.dmg) R.dmg = {};
+    wantDmg(c.key);
+    const o = R.dmg[c.key];
+    if (o) return { t: o, official: true };
+    const a = c.info.attack || 0, m = c.info.magic || 0;
+    let v = a + m > 0 ? a / (a + m) : c.tags.includes('Marksman') ? 0.85 : c.tags.includes('Mage') ? 0.15 : 0.5;
+    return { t: v >= 0.62 ? 'AD' : v <= 0.38 ? 'AP' : 'MIXED', official: false };
+  }
+  const champAd = (c) => { if (!c) return 0.5; const d = dmgOf(c); if (d.official) return d.t === 'AD' ? 0.85 : d.t === 'AP' ? 0.15 : 0.5; const a = c.info.attack || 0, m = c.info.magic || 0; return a + m > 0 ? (a + 0.01) / (a + m + 0.02) : d.t === 'AD' ? 0.85 : d.t === 'AP' ? 0.15 : 0.5; };
+  const DMG_FR = { AD: 'AD', AP: 'AP', MIXED: 'Mixte' };
+  const dmgTag = (c) => { const d = dmgOf(c); return d.t ? `<span class="dt ${d.t.toLowerCase()}" title="${d.official ? 'Type de dégâts officiel (Riot)' : 'Type de dégâts estimé'}">${d.t === 'AD' ? '⚔️' : d.t === 'AP' ? '🔮' : '⚔️🔮'} ${DMG_FR[d.t]}${d.official ? '' : ' ?'}</span>` : ''; };
   const ROLE_ORDER = ['top', 'jungle', 'mid', 'support', 'adc'];
   function selectionData() {
     const cs = R.lcu.champSelect;
@@ -802,7 +826,7 @@
     eLeft.forEach((k) => { const row = rows.find((x) => !x.enemy); if (row) row.enemy = k; });
     const teamAd = (keys) => { const cs2 = keys.map(byKey).filter(Boolean); return cs2.length ? cs2.reduce((s2, c) => s2 + champAd(c), 0) / cs2.length : null; };
     const aAd = teamAd(sd.allies.map((p) => p.champ).filter(Boolean)), eAd = teamAd(sd.enemies);
-    const cell = (c, cls, extra, attrs, rank) => `<div class="vs-cell ${cls}" ${attrs || ''}>${cIcon(c, 'ico')}<div class="grow"><div class="vs-name"><b class="ell">${c ? esc(c.name) : '…'}</b>${extra || ''}</div>${rank ? `<div class="vs-rank">${rank}</div>` : ''}${c ? dmgBar(champAd(c)) : ''}</div></div>`;
+    const cell = (c, cls, extra, attrs, rank) => `<div class="vs-cell ${cls}" ${attrs || ''}>${cIcon(c, 'ico')}<div class="grow"><div class="vs-name"><b class="ell">${c ? esc(c.name) : '…'}</b>${extra || ''}</div>${rank ? `<div class="vs-rank">${rank}</div>` : ''}${c ? dmgTag(c) : ''}</div></div>`;
     let h = `<div class="card vs"><div class="vs-row vs-head"><div class="vs-cell ally"><div class="grow"><b>🟦 Mon équipe</b>${aAd != null ? dmgBar(aAd) : ''}</div></div><div class="vs-role"></div><div class="vs-cell enemy"><div class="grow"><b>🟥 Adversaires</b>${eAd != null ? dmgBar(eAd) : ''}</div></div></div>`;
     h += rows.map((x) => {
       const a = x.ally, ac = a ? byKey(a.champ) : null, ec = x.enemy ? byKey(x.enemy) : null;
@@ -1510,37 +1534,68 @@
       <div class="ldr">${rankTag(p.puuid) || '<span class="rk unr">…</span>'}</div>
       <div class="ldr"><span class="muted small">10 dernières</span><b class="${f === 'hot' ? 'pos' : f === 'cold' ? 'neg' : ''}">${recentTxt(r)}${f === 'hot' ? ' 🔥' : ''}</b></div>
       <div class="ldr"><span class="muted small">KDA moyen</span><span>${kdaTxt(r)}</span></div>
-      ${c ? dmgBar(champAd(c)) : ''}</div>`;
+      <div class="ldr"><span class="muted small">Dégâts</span>${c ? dmgTag(c) : ''}</div></div>`;
   }
-  /* Build conseillé : statistiques du collecteur si disponibles, sinon règles générales (classe, match-up, équipe adverse) */
+  /* ---------- Recommandations d'objets (une seule source pour le build ET les conseils) ---------- */
   const legOf = (f) => D.itemList.filter((it) => Builds.isLegendary(it) && f(it)).sort((a, b) => a.gold.total - b.gold.total);
-  function generalBuild(c, role, oc, enemyKeys) {
-    const ex = (id) => (D.items && D.items[String(id)] ? +id : 0);
-    const ad = champAd(c) >= 0.5, tank = c.tags.includes('Tank'), melee = (c.stats.attackrange || 500) < 300;
-    let start;
-    if (role === 'support') start = [3865, 2003];
-    else if (role === 'jungle') start = [ex(1102) || ex(1101) || ex(1103), 2003];
-    else if (!ad && !tank) start = [1056, 2003, 2003];
-    else if (tank || (melee && oc && (oc.stats.attackrange || 0) >= 400)) start = [1054, 2003];
-    else start = [1055, 2003];
-    const prof = Builds.teamProfile(enemyKeys, D) || { ap: 0.5, tanks: [], healers: [] };
-    const boots = role === 'support' ? 3158 : prof.ap >= 0.6 ? 3111 : prof.ap <= 0.4 && !c.tags.includes('Marksman') ? 3047 : c.tags.includes('Marksman') ? 3006 : ad ? 3047 : 3020;
-    const myTag = tank ? 'Health' : ad ? 'Damage' : 'SpellDamage';
-    const typed = (it) => (it.tags || []).includes(myTag);
-    const counters = [];
-    const add = (why, list) => { const items = list.slice(0, 2).map((it) => +it.id); if (items.length) counters.push({ why, items }); };
-    if (prof.healers.length) add(`Soins importants en face (${prof.healers.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : un objet anti-soins`, legOf((it) => /blessures graves|grievous/i.test(it.description || '') && (typed(it) || tank)));
-    if (prof.ap >= 0.58) add(`Équipe adverse surtout magique (${Math.round(prof.ap * 100)} % AP) : de la résistance magique`, legOf((it) => (it.tags || []).includes('SpellBlock') && (typed(it) || (tank && (it.tags || []).includes('Health')))));
-    if (prof.ap <= 0.42) add(`Équipe adverse surtout physique (${Math.round((1 - prof.ap) * 100)} % AD) : de l'armure`, legOf((it) => (it.tags || []).includes('Armor') && (typed(it) || (tank && (it.tags || []).includes('Health')))));
-    if (prof.tanks.length >= 2 && !tank) add(`${prof.tanks.length} tanks en face (${prof.tanks.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : de la pénétration`, legOf((it) => (it.tags || []).includes(ad ? 'ArmorPenetration' : 'MagicPenetration')));
-    return { start: start.filter(ex), boots: ex(boots), counters };
+  const okItem = (id) => { const it = D.items && D.items[String(id)]; return it && it.gold && it.gold.purchasable !== false && it.maps && it.maps['11'] ? +id : 0; };
+  const firstOk = (ids, fallback) => { for (const id of ids) if (okItem(id)) return +id; const f = fallback ? fallback() : null; return f ? +f.id : 0; };
+  const itemNm = (id) => ((D.items || {})[String(id)] || {}).name || '';
+  /* Profil de mon champion pour choisir des objets : AP, AD tireur, AD combattant/assassin, tank, support */
+  function myKit(c, role) {
+    const t = dmgOf(c).t, tags = c.tags || [];
+    const tank = tags.includes('Tank') && !tags.includes('Mage');
+    const kind = role === 'support' && !tags.includes('Mage') && !tank ? 'enchanter' : tank ? 'tank' : t === 'AP' || (t !== 'AD' && tags.includes('Mage')) ? 'ap' : tags.includes('Marksman') ? 'marksman' : tags.includes('Assassin') ? 'assassin' : 'fighter';
+    return { kind, ap: kind === 'ap' || kind === 'enchanter', tag: kind === 'tank' ? 'Health' : kind === 'ap' || kind === 'enchanter' ? 'SpellDamage' : 'Damage' };
+  }
+  const CORE = { ap: [6655, 4645, 3089, 6653, 3116, 3165], marksman: [6672, 3031, 3094, 3046, 3036], assassin: [3142, 6694, 6692, 3814, 6676], fighter: [3078, 3071, 3053, 6333, 3074], tank: [3068, 3075, 3065, 3143, 2502], enchanter: [6617, 3107, 2065, 3504, 3222] };
+  const DEF = {
+    armor: { ap: [3157], marksman: [3026, 6333], assassin: [3026, 6333], fighter: [6333, 3026], tank: [3075, 3143], enchanter: [3190, 3109] },
+    mr: { ap: [3102], marksman: [3139, 3156], assassin: [3156, 3139], fighter: [3156, 3065], tank: [4401, 3065], enchanter: [3222, 3190] },
+    heal: { ap: [3165], marksman: [3033], assassin: [6609, 3033], fighter: [6609, 3075], tank: [3075, 6609], enchanter: [3011, 3165] },
+    pen: { ap: [3135, 4645], marksman: [3036, 6694], assassin: [6694, 3036], fighter: [3071, 6694], tank: [], enchanter: [3135] },
+    burst: { ap: [3157, 3102], marksman: [3026, 3139], assassin: [3026, 3156], fighter: [3053, 6333], tank: [], enchanter: [3190] },
+  };
+  function teamRecos(ld, c, role) {
+    const en = ld.teams[1].map((p) => byKey(p.champ)).filter(Boolean);
+    if (!en.length || !c) return [];
+    const K = myKit(c, role);
+    const ad = en.map((x) => champAd(x)), apShare = 1 - ad.reduce((a, b) => a + b, 0) / ad.length;
+    const prof = Builds.teamProfile(en.map((x) => +x.key), D) || { tanks: [], healers: [] };
+    const nm = (ids) => ids.map((id) => (D.champs[id] || {}).name || id).join(', ');
+    const out = [];
+    const add = (id, text, ids, f) => { const items = [...new Set(ids.map(okItem).filter(Boolean))].slice(0, 2); if (!items.length && f) { const x = legOf(f)[0]; if (x) items.push(+x.id); } if (items.length) out.push({ id, text, items }); };
+    if (prof.healers.length) add('heal', `Soins importants en face (${nm(prof.healers)}) : prends un objet anti-soins`, DEF.heal[K.kind], (it) => /blessures graves|grievous/i.test(it.description || ''));
+    if (apShare >= 0.58) add('mr', `Équipe surtout magique (${Math.round(apShare * 100)} % AP) : de la résistance magique`, DEF.mr[K.kind], (it) => (it.tags || []).includes('SpellBlock'));
+    else if (apShare <= 0.42) add('armor', `Équipe surtout physique (${Math.round((1 - apShare) * 100)} % AD) : de l'armure`, DEF.armor[K.kind], (it) => (it.tags || []).includes('Armor'));
+    if (prof.tanks.length >= 2 && K.kind !== 'tank') add('pen', `${prof.tanks.length} tanks en face (${nm(prof.tanks)}) : de la pénétration`, DEF.pen[K.kind], (it) => (it.tags || []).includes(K.ap ? 'MagicPenetration' : 'ArmorPenetration'));
+    const ass = en.filter((x) => x.tags.includes('Assassin'));
+    if (ass.length >= 2 && K.kind !== 'tank') add('burst', `${ass.length} assassins (${ass.map((x) => x.name).join(', ')}) : un objet qui te sauve d'un burst`, DEF.burst[K.kind]);
+    return out;
+  }
+  /* Bottes : selon les dégâts de l'équipe adverse (et de mon adversaire de voie) */
+  function bootsFor(c, role, ld) {
+    const K = myKit(c, role);
+    if (K.kind === 'enchanter') return firstOk([3158, 3020]);
+    const en = ld.teams[1].map((p) => byKey(p.champ)).filter(Boolean);
+    const apShare = en.length ? 1 - en.map(champAd).reduce((a, b) => a + b, 0) / en.length : 0.5;
+    if (apShare >= 0.6) return firstOk([3111]);
+    if (apShare <= 0.4 && K.kind !== 'marksman') return firstOk([3047]);
+    return firstOk(K.kind === 'marksman' ? [3006] : K.kind === 'ap' ? [3020, 3158] : [3047, 3111]);
+  }
+  function startFor(c, role, oc) {
+    const K = myKit(c, role), melee = (c.stats.attackrange || 500) < 300;
+    if (role === 'support') return [firstOk([3865]), 2003].filter(Boolean);
+    if (role === 'jungle') return [firstOk([1102, 1101, 1103]), 2003].filter(Boolean);
+    if (K.ap) return [firstOk([1056]), 2003, 2003].filter(Boolean);
+    if (K.kind === 'tank' || (melee && oc && (oc.stats.attackrange || 0) >= 400)) return [firstOk([1054]), 2003].filter(Boolean);
+    return [firstOk([1055]), 2003].filter(Boolean);
   }
   function loadBuild(ld) {
     if (!ld.meG || !D.champs) return null;
     const c = byKey(ld.meG.champ); if (!c) return null;
     const role = ld.myRole, oc = ld.oppG ? byKey(ld.oppG.champ) : null;
     const enemyKeys = ld.teams[1].map((p) => +p.champ).filter(Boolean);
-    const G0 = generalBuild(c, role, oc, enemyKeys);
     const rows = role && NB ? cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30)) : null;
     if (rows === undefined) return { c, role, oc, loading: true };
     let A = null;
@@ -1549,66 +1604,72 @@
       if (R.loadMemo && R.loadMemo.k === mk) A = R.loadMemo.A; else { A = Builds.analyze(rows, D, { opp: oc ? +oc.key : 0, enemies: enemyKeys }); R.loadMemo = { k: mk, A }; }
     }
     const fromStats = !!(A && A.games);
-    const counters = fromStats ? (A.situational || []).filter((x) => x.items.length).map((x) => ({ why: x.why, items: x.items.map((o) => o.item) })) : [];
-    return { c, role, oc, fromStats, games: fromStats ? A.games : 0, adapted: fromStats && A.adapted,
-      start: fromStats && A.start && A.start[0] ? A.start[0].items : G0.start,
-      core: fromStats && A.core && A.core[0] ? A.core[0].items.slice(0, 3) : [],
-      boots: fromStats && A.boots && A.boots[0] ? A.boots[0].item : G0.boots,
-      counters: counters.length ? counters : G0.counters, countersGeneral: !counters.length };
+    const K = myKit(c, role);
+    const recos = teamRecos(ld, c, role);
+    /* Statistiques : objets adaptés à l'équipe adverse trouvés dans les parties des bons joueurs, ajoutés aux recommandations */
+    if (fromStats) (A.situational || []).forEach((x) => { const r = recos.find((y) => y.id === x.id); const ids = x.items.map((o) => o.item).filter(okItem); if (r) r.items = [...new Set(ids.concat(r.items))].slice(0, 2); else if (ids.length) recos.push({ id: x.id, text: x.why, items: ids.slice(0, 2) }); });
+    const start = fromStats && A.start && A.start[0] ? A.start[0].items : startFor(c, role, oc);
+    let core = fromStats && A.core && A.core[0] ? A.core[0].items.slice() : [];
+    if (fromStats && A.later) A.later.forEach((x) => { if (core.length < 3 && !core.includes(x.item)) core.push(x.item); });
+    if (core.length < 3) CORE[K.kind].map(okItem).filter(Boolean).forEach((id) => { if (core.length < 3 && !core.includes(id)) core.push(id); });
+    if (core.length < 3) legOf((it) => (it.tags || []).includes(K.tag)).forEach((it) => { if (core.length < 3 && !core.includes(+it.id)) core.push(+it.id); });
+    const boots = fromStats && A.boots && A.boots[0] ? A.boots[0].item : bootsFor(c, role, ld);
+    /* Objets suivants : d'abord ceux qui répondent à l'équipe adverse, puis la suite habituelle */
+    const next = [];
+    recos.forEach((r) => r.items.forEach((id) => { if (!core.includes(id) && !next.includes(id)) next.push(id); }));
+    (fromStats && A.later ? A.later.map((x) => x.item) : CORE[K.kind].map(okItem)).forEach((id) => { if (id && next.length < 5 && !core.includes(id) && !next.includes(id)) next.push(id); });
+    return { c, role, oc, K, fromStats, games: fromStats ? A.games : 0, adapted: fromStats && A.adapted, start, core: core.slice(0, 3), boots, next: next.slice(0, 5), recos };
   }
-  /* Conseils pour mon match-up */
+  /* Conseils pour mon match-up : texte + objets (images) */
   function matchupTips(ld, b) {
     const c = b && b.c, oc = b && b.oc;
     if (!c || !oc) return [];
     wantFull(oc.id); wantFull(c.id);
-    const fo = R.full[oc.id], tips = [];
+    const fo = R.full[oc.id], tips = [], K = b.K;
+    const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
     const rc = c.stats.attackrange || 0, ro = oc.stats.attackrange || 0;
-    if (rc - ro >= 150) tips.push(`Tu as plus de portée (${rc} contre ${ro}) : touche-le avec tes attaques quand il s'approche de tes sbires pour les achever.`);
-    else if (ro - rc >= 150) tips.push(`Il a plus de portée (${ro} contre ${rc}) : ne reste pas à sa portée sans raison, échange seulement quand tes sorts sont prêts, et accepte de perdre quelques sbires plutôt que ta vie.`);
-    const ad = champAd(oc);
-    if (ad >= 0.65) tips.push('Ses dégâts sont surtout physiques : un fragment d\'armure et, plus tard, des Coques en acier t\'aideront.');
-    else if (ad <= 0.35) tips.push('Ses dégâts sont surtout magiques : un fragment de résistance magique et, plus tard, des Sandales de Mercure t\'aideront.');
-    if (oc.tags.includes('Assassin')) tips.push('C\'est un assassin : il cherche à te tuer d\'un coup. Garde Saut éclair pour fuir et ne reste pas à moitié de vie dans ta voie.');
-    else if (oc.tags.includes('Tank')) tips.push('C\'est un tank : il encaisse beaucoup. Ne t\'acharne pas sur lui, farme et va aider ailleurs quand il ne fait rien.');
-    else if (oc.tags.includes('Marksman')) tips.push('C\'est un tireur : très fort en fin de partie. Prends l\'avantage tôt, avant qu\'il ait ses objets.');
-    else if (oc.tags.includes('Mage')) tips.push('C\'est un mage : déplace-toi de côté pour esquiver ses sorts, et attaque juste après qu\'il les a utilisés.');
-    else if (oc.tags.includes('Fighter')) tips.push('C\'est un combattant : les combats longs l\'avantagent souvent. Fais des échanges courts puis recule.');
-    if (fo && fo.spells && fo.spells[3]) tips.push(`Méfie-toi à partir du niveau 6 : son ultime « ${fo.spells[3].name} » change les combats.`);
-    if (fo && (fo.enemytips || []).length) fo.enemytips.slice(0, 3).forEach((t) => tips.push('Conseil de Riot : ' + Dd.plain(t)));
+    if (rc - ro >= 150) T(`Tu as plus de portée (${rc} contre ${ro}) : touche-le avec tes attaques quand il s'approche de tes sbires pour les achever.`);
+    else if (ro - rc >= 150) T(`Il a plus de portée (${ro} contre ${rc}) : échange seulement quand tes sorts sont prêts, et accepte de perdre quelques sbires plutôt que ta vie.${startFor(c, b.role, oc).includes(1054) ? ` L'${itemNm(1054)} t'aide à tenir la voie.` : ''}`, startFor(c, b.role, oc).includes(1054) ? [1054] : []);
+    const od = dmgOf(oc).t;
+    if (od === 'AD') { const bo = okItem(3047); T(`Ses dégâts sont physiques : prends le fragment d'armure${bo && K.kind !== 'marksman' && K.kind !== 'enchanter' ? ` et, plus tard, les ${itemNm(bo)}` : ''}.`, bo && K.kind !== 'marksman' && K.kind !== 'enchanter' ? [bo] : []); }
+    else if (od === 'AP') { const bo = okItem(3111); T(`Ses dégâts sont magiques : prends le fragment de résistance magique${bo && K.kind !== 'enchanter' ? ` et, plus tard, les ${itemNm(bo)}` : ''}.`, bo && K.kind !== 'enchanter' ? [bo] : []); }
+    if (oc.tags.includes('Assassin')) { const d = DEF.burst[K.kind].map(okItem).filter(Boolean)[0]; T(`C'est un assassin : il cherche à te tuer d'un coup. Garde Saut éclair pour fuir et ne reste pas à moitié de vie dans ta voie${d ? `. Contre lui, ${itemNm(d)} est très utile` : ''}.`, d ? [d] : []); }
+    else if (oc.tags.includes('Tank')) T('C\'est un tank : il encaisse beaucoup. Ne t\'acharne pas sur lui, farme et va aider ailleurs quand il ne fait rien.');
+    else if (oc.tags.includes('Marksman')) T('C\'est un tireur : très fort en fin de partie. Prends l\'avantage tôt, avant qu\'il ait ses objets.');
+    else if (oc.tags.includes('Mage')) T('C\'est un mage : déplace-toi de côté pour esquiver ses sorts, et attaque juste après qu\'il les a utilisés.');
+    else if (oc.tags.includes('Fighter')) T('C\'est un combattant : les combats longs l\'avantagent souvent. Fais des échanges courts puis recule.');
+    if (fo && fo.spells && fo.spells[3]) T(`Méfie-toi à partir du niveau 6 : son ultime « ${fo.spells[3].name} » change les combats.`);
+    if (fo && (fo.enemytips || []).length) fo.enemytips.slice(0, 3).forEach((t) => T('Conseil de Riot : ' + Dd.plain(t)));
     const mu = NB && b.role ? cached(`mu:${c.key}:${oc.key}:${b.role}`, () => NB.stats.matchup(+c.key, +oc.key, b.role, 30)) : null;
-    if (mu && mu.games >= 5) tips.push(`D'après le collecteur : ${c.name} gagne ${Math.round((100 * mu.wins) / mu.games)} % de ses parties contre ${oc.name} (${mu.games} parties de très bons joueurs).`);
+    if (mu && mu.games >= 5) T(`D'après le collecteur : ${c.name} gagne ${Math.round((100 * mu.wins) / mu.games)} % de ses parties contre ${oc.name} (${mu.games} parties de très bons joueurs).`);
     const r = ld.oppG && R.recent[ld.oppG.puuid];
-    if (formOf(r) === 'hot') tips.push(`Ton adversaire est en forme : ${r.wins} victoires sur ses ${r.games} dernières parties. Joue prudemment au début.`);
-    if (formOf(r) === 'cold') tips.push(`Ton adversaire est en difficulté : seulement ${r.wins} victoires sur ses ${r.games} dernières parties.`);
+    if (formOf(r) === 'hot') T(`Ton adversaire est en forme : ${r.wins} victoires sur ses ${r.games} dernières parties. Joue prudemment au début.`);
+    if (formOf(r) === 'cold') T(`Ton adversaire est en difficulté : seulement ${r.wins} victoires sur ses ${r.games} dernières parties.`);
     return tips;
   }
-  /* Conseils face à l'ensemble de l'équipe adverse */
-  const SCALERS = new Set(['Kayle', 'Kassadin', 'Vayne', 'Jinx', 'Veigar', 'Nasus', 'Smolder', 'KogMaw', 'Aurelion Sol', 'AurelionSol', 'Azir', 'Cassiopeia', 'Senna', 'Twitch', 'Viktor', 'Ryze', 'Kindred', 'Gangplank', 'Jax', 'Zeri', 'Aphelios']);
-  function teamTips(ld) {
+  /* Conseils face à l'ensemble de l'équipe adverse : mêmes objets que dans le build conseillé */
+  const SCALERS = new Set(['Kayle', 'Kassadin', 'Vayne', 'Jinx', 'Veigar', 'Nasus', 'Smolder', 'KogMaw', 'AurelionSol', 'Azir', 'Cassiopeia', 'Senna', 'Twitch', 'Viktor', 'Ryze', 'Kindred', 'Gangplank', 'Jax', 'Zeri', 'Aphelios']);
+  function teamTips(ld, b) {
     const en = ld.teams[1].map((p) => ({ p, c: byKey(p.champ) })).filter((x) => x.c);
     if (!en.length) return [];
     const names = (l) => l.map((x) => x.c.name).join(', ');
     const tips = [];
-    const prof = Builds.teamProfile(en.map((x) => +x.c.key), D) || { ap: 0.5, tanks: [], healers: [] };
-    if (prof.ap >= 0.6) tips.push(`Équipe surtout magique (${Math.round(prof.ap * 100)} % AP) : la résistance magique est très rentable pour toute ton équipe.`);
-    else if (prof.ap <= 0.4) tips.push(`Équipe surtout physique (${Math.round((1 - prof.ap) * 100)} % AD) : l'armure est très rentable pour toute ton équipe.`);
-    else tips.push('Dégâts mixtes : équilibre armure et résistance magique.');
-    const ass = en.filter((x) => x.c.tags.includes('Assassin'));
-    if (ass.length >= 2) tips.push(`${ass.length} assassins (${names(ass)}) : ne te promène pas seul sur la carte, reste près de ton équipe et pense à un objet défensif.`);
+    const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
+    (b && b.recos ? b.recos : []).forEach((r) => T(`${r.text} : ${r.items.map(itemNm).join(' ou ')}.`, r.items));
+    if (!(b && b.recos && b.recos.some((r) => r.id === 'mr' || r.id === 'armor'))) T('Dégâts mixtes en face : équilibre armure et résistance magique.');
     const engage = en.filter((x) => x.c.tags.includes('Tank') && (x.c.tags.includes('Support') || x.c.tags.includes('Fighter')));
-    if (engage.length) tips.push(`Ils peuvent engager fort (${names(engage)}) : reste derrière tes tanks en combat et garde Saut éclair pour te dégager.`);
+    if (engage.length) T(`Ils peuvent engager fort (${names(engage)}) : reste derrière tes tanks en combat et garde Saut éclair pour te dégager.`);
     const poke = en.filter((x) => (x.c.stats.attackrange || 0) >= 500 && (x.c.tags.includes('Mage') || x.c.tags.includes('Marksman')));
-    if (poke.length >= 3) tips.push(`Composition à distance (${names(poke)}) : évitez de rester dans leur portée ; foncez sur eux tous ensemble ou passez par les côtés.`);
-    if (prof.tanks.length >= 2) tips.push(`${prof.tanks.length} tanks (${prof.tanks.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : vos dégâts doivent passer par la pénétration ; frappez ce qui est derrière eux si possible.`);
-    if (prof.healers.length) tips.push(`Soins importants (${prof.healers.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : il faut au moins un objet anti-soins dans ton équipe.`);
+    if (poke.length >= 3) T(`Composition à distance (${names(poke)}) : évitez de rester dans leur portée ; foncez sur eux tous ensemble ou passez par les côtés.`);
     const sc = en.filter((x) => SCALERS.has(x.c.id));
-    if (sc.length) tips.push(`${names(sc)} devien${sc.length > 1 ? 'nent' : 't'} très fort${sc.length > 1 ? 's' : ''} en fin de partie : prenez de l'avance tôt et essayez de finir avant 30 min.`);
+    if (sc.length) T(`${names(sc)} devien${sc.length > 1 ? 'nent' : 't'} très fort${sc.length > 1 ? 's' : ''} en fin de partie : prenez de l'avance tôt et essayez de finir avant 30 min.`);
     const hot = ld.teams[1].filter((p) => formOf(R.recent[p.puuid]) === 'hot');
-    if (hot.length) tips.push(`En forme en face : ${hot.map((p) => `${(byKey(p.champ) || {}).name} (${R.recent[p.puuid].wins}/${R.recent[p.puuid].games})`).join(', ')}.`);
-    const kd = ld.teams[1].filter((p) => R.recent[p.puuid]).sort((a, b) => R.recent[b.puuid].kda - R.recent[a.puuid].kda)[0];
-    if (kd && R.recent[kd.puuid].kda >= 3.5) tips.push(`Le joueur le plus dangereux semble être ${(byKey(kd.champ) || {}).name} (KDA moyen ${f1(R.recent[kd.puuid].kda)} sur ses dernières parties).`);
+    if (hot.length) T(`En forme en face : ${hot.map((p) => `${(byKey(p.champ) || {}).name} (${R.recent[p.puuid].wins}/${R.recent[p.puuid].games})`).join(', ')}.`);
+    const kd = ld.teams[1].filter((p) => R.recent[p.puuid]).sort((a, c2) => R.recent[c2.puuid].kda - R.recent[a.puuid].kda)[0];
+    if (kd && R.recent[kd.puuid].kda >= 3.5) T(`Le joueur le plus dangereux semble être ${(byKey(kd.champ) || {}).name} (KDA moyen ${f1(R.recent[kd.puuid].kda)} sur ses dernières parties).`);
     return tips;
   }
+  const tipLi = (x) => `<li>${esc(x.t)}${x.items.length ? `<span class="tipit">${x.items.map((id) => `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}<span>${esc(itemNm(id))}</span></button>`).join('')}</span>` : ''}</li>`;
   function viewLoading() {
     const ld = loadingData();
     wantInfo(ld.g.players.map((p) => p.puuid)); wantRecent(ld.g.players.map((p) => p.puuid));
@@ -1624,19 +1685,20 @@
     else {
       const following = S.gameBuild && S.gameBuild.gameId === ld.g.gameId && S.gameBuild.champ === b.c.id;
       h += `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">🛒 Build conseillé · ${esc(b.c.name)}${b.oc ? ' vs ' + esc(b.oc.name) : ''}</h2></div>
-        <p class="small muted">${b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire et à l\'équipe adverse' : ''}.` : 'Règles générales (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
+        <p class="small muted">${b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
         <div class="mybuild compact" style="border:0;padding:0;background:none">
         <div class="brow"><span class="small muted">Départ</span><div class="bis">${b.start.map(ic).join('')}</div></div>
-        ${b.core.length || b.boots ? `<div class="brow"><span class="small muted">Principaux</span><div class="bis">${b.core.map(ic).join('<span class="arrow">›</span>')}${b.boots ? `<span class="rsep"></span>${ic(b.boots)}` : ''}</div></div>` : ''}
-        ${b.counters.map((x) => `<div class="brow"><span class="small muted" title="${esc(x.why)}">Contre eux</span><div class="bis">${x.items.map(ic).join('')}<span class="small muted ell" style="margin-left:6px">${esc(x.why)}</span></div></div>`).join('')}
+        <div class="brow"><span class="small muted">Principaux</span><div class="bis">${b.core.map(ic).join('<span class="arrow">›</span>')}${b.boots ? `<span class="rsep"></span>${ic(b.boots)}` : ''}</div></div>
+        ${b.next.length ? `<div class="brow"><span class="small muted">Ensuite</span><div class="bis">${b.next.map(ic).join('')}</div></div>` : ''}
+        ${b.recos.map((x) => `<div class="brow sub"><span></span><div class="bis small muted">↳ ${x.items.map((id) => itIcon(id, 'ico xxs')).join('')} ${esc(x.text)}</div></div>`).join('')}
         </div>
         <div class="row" style="margin-top:8px">${following ? '<span class="pill on">✅ Suivi dans l\'encart en jeu</span><button class="btn ghost small" data-act="unfollowGameBuild">Ne plus suivre</button>' : `<button class="btn small" data-act="followGameBuild">⭐ Suivre ce build dans l'encart en jeu</button>`}</div></div>`;
     }
     h += '</div><div>';
     const mt = matchupTips(ld, b);
-    h += `<div class="card"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu : clique un adversaire ci-dessus.</p>'}</div>`;
-    const tt = teamTips(ld);
-    h += `<div class="card"><h2>🛡️ Face à l'équipe adverse</h2><ul class="tips">${tt.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
+    h += `<div class="card"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map(tipLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu : clique un adversaire ci-dessus.</p>'}</div>`;
+    const tt = teamTips(ld, b && !b.loading ? b : null);
+    h += `<div class="card"><h2>🛡️ Face à l'équipe adverse</h2><ul class="tips">${tt.map(tipLi).join('')}</ul></div>`;
     h += '</div></div>';
     R.loadBuildCur = b;
     return h;
@@ -1652,7 +1714,7 @@
         return { champ: c ? c.name : '?', icon: c ? Dd.img.champ(c) : '', name: p.name || '', role: role ? ROLE_NAME[role] : '', me: p === ld.meG,
           rank: q ? `${TIER[q.tier] || q.tier}${q.division ? ' ' + q.division : ''}` : i === undefined ? '…' : 'Non classé', level: i && i.level ? i.level : 0,
           wr: r === undefined ? '…' : r ? `${r.wins} V / ${r.games - r.wins} D` : '—', wrClass: formOf(r) === 'hot' ? 'pos' : formOf(r) === 'cold' ? 'neg' : '',
-          kda: r === undefined ? '…' : r ? `${f1(r.k)}/${f1(r.d)}/${f1(r.a)} (${f1(r.kda)})` : '—', ad: c ? Math.round(champAd(c) * 100) : 50 };
+          kda: r === undefined ? '…' : r ? `${f1(r.k)}/${f1(r.d)}/${f1(r.a)} (${f1(r.kda)})` : '—', dmg: c ? dmgOf(c).t : '' };
       };
       d = { teams: ld.teams.map((t, i) => ({ side: t[0] ? t[0].team : (i ? 'CHAOS' : 'ORDER'), mine: i === 0, players: t.map((p) => P(p)) })) };
     }
@@ -2006,6 +2068,26 @@
       <div class="chips" style="margin-top:8px"><button class="chip ${S.opt.reminders !== false ? 'on' : ''}" data-act="remToggle">💡 Rappels : ultime (niveaux 6, 11, 16), balise de contrôle après un achat, Lentille d'oracle pour les supports</button></div>
       ${!vs.length ? '<p class="small warn">Aucune voix française trouvée : ajoute-en une dans Windows (Paramètres → Heure et langue → Voix).</p>' : ''}</div>`;
   }
+  /* Réglage fin de l'encart de chargement : caler les infos sur les cartes du jeu */
+  const LAY_DEF = { cardW: 0.23, cardH: 0.42, gap: 0.018, row1: 0.05, row2: 0.52, box: 'top' };
+  const LAY_SL = [['cardW', 'Largeur des cartes', 0.15, 0.32, 0.002], ['gap', 'Écart entre les cartes', 0, 0.06, 0.001], ['row1', 'Hauteur de la rangée du haut', 0, 0.25, 0.002], ['row2', 'Hauteur de la rangée du bas', 0.35, 0.7, 0.002], ['cardH', 'Hauteur des cartes', 0.3, 0.5, 0.002]];
+  const layNow = () => Object.assign({}, LAY_DEF, ((R.cfg || {}).overlay || {}).layout || {}, R.layDraft || {});
+  function layoutSettings() {
+    const L2 = layNow();
+    return `<h3>📐 Placer les infos sur les cartes du chargement</h3>
+      <p class="muted small">Lance <b>« Aperçu »</b> pendant un écran de chargement (ou une capture plein écran) : les contours des cartes calculées s'affichent en pointillés sur l'écran du jeu. Ajuste les curseurs jusqu'à ce qu'ils tombent sur les images des champions.</p>
+      <div class="laygrid">${LAY_SL.map(([k, l, mn, mx, st]) => `<label class="small">${l} <b>${Math.round(L2[k] * 1000) / 10} %</b><input type="range" data-lay="${k}" min="${mn}" max="${mx}" step="${st}" value="${L2[k]}"></label>`).join('')}</div>
+      <div class="row"><span class="small muted">Infos placées</span><button class="chip ${L2.box !== 'bottom' ? 'on' : ''}" data-act="layBox" data-val="top">en haut de la carte</button><button class="chip ${L2.box === 'bottom' ? 'on' : ''}" data-act="layBox" data-val="bottom">en bas de la carte</button></div>
+      <div class="row"><button class="btn small" data-act="layPreview">👁️ Aperçu sur l'écran du jeu (20 s)</button><button class="btn ghost small" data-act="layReset">Valeurs par défaut</button></div>`;
+  }
+  function layPreview() {
+    if (!NB || !NB.loadov || !D.champList) return;
+    const pick = D.champList.slice().sort(() => Math.random() - 0.5).slice(0, 10);
+    const P = (c, i) => ({ champ: c.name, name: 'Joueur ' + (i + 1), role: ['Top', 'Jungle', 'Mid', 'ADC', 'Support'][i % 5], me: i === 2, rank: ['Or II', 'Argent I', 'Platine IV', 'Bronze I', 'Émeraude III'][i % 5], level: 30 + i * 37, wr: `${4 + (i % 5)} V / ${6 - (i % 5)} D`, wrClass: i % 3 === 0 ? 'pos' : '', kda: '5,2/4,1/7,3 (3,0)', dmg: dmgOf(c).t });
+    NB.loadov.update({ preview: true, teams: [{ side: 'ORDER', mine: true, players: pick.slice(0, 5).map(P) }, { side: 'CHAOS', mine: false, players: pick.slice(5).map((c, i) => P(c, i + 5)) }] }).catch(() => {});
+    clearTimeout(R.layTimer);
+    R.layTimer = setTimeout(() => { R.loadovKey = ''; NB.loadov.update(null).catch(() => {}); if (isLoading()) loadovSync(loadingData()); }, 20000);
+  }
   function miniSettings() {
     const c = R.cfg || {}, m = c.minimap || {};
     if (!R.displays) { R.displays = []; NB.minimap.displays().then((d) => { R.displays = d; soon(); }).catch(() => {}); }
@@ -2027,7 +2109,8 @@
       <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. <b>Glisse-le à la souris</b> pour le déplacer, sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
       <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div>
       <p class="muted small" style="margin-top:8px">Pendant l'écran de chargement, Noob LOL affiche aussi par-dessus le jeu le rang, le niveau, les victoires et le KDA moyen des 10 dernières parties de chaque joueur, et le type de dégâts de son champion.</p>
-      <div class="row"><button class="chip ${ov.loading !== false ? 'on' : ''}" data-act="ovLoadToggle">${ov.loading !== false ? '✅ Infos sur l\'écran de chargement' : 'Infos sur l\'écran de chargement : désactivées'}</button></div></div>`;
+      <div class="row"><button class="chip ${ov.loading !== false ? 'on' : ''}" data-act="ovLoadToggle">${ov.loading !== false ? '✅ Infos sur l\'écran de chargement' : 'Infos sur l\'écran de chargement : désactivées'}</button></div>
+      ${layoutSettings(ov)}</div>`;
     return h;
   }
 
@@ -2130,6 +2213,9 @@
       case 'edMv': { const L2 = S.ed.draft[el.dataset.sec], i = +el.dataset.i; if (i > 0) [L2[i - 1], L2[i]] = [L2[i], L2[i - 1]]; render(true); break; }
       case 'selItemBuild': S.selItems[el.dataset.champ] = v; R.ovKey = ''; save(); render(true); break;
       case 'ovToggle': { const on = !(((R.cfg || {}).overlay || {}).enabled !== false); NB.config.set({ overlay: { enabled: on } }).then((c) => { R.cfg = c; R.ovKey = ''; render(true); }).catch(() => {}); break; }
+      case 'layBox': { const l = Object.assign({}, layNow(), { box: v }); R.layDraft = null; NB.config.set({ overlay: { layout: l } }).then((c) => { R.cfg = c; render(true); layPreview(); }).catch(() => {}); break; }
+      case 'layReset': R.layDraft = null; NB.config.set({ overlay: { layout: Object.assign({}, LAY_DEF) } }).then((c) => { R.cfg = c; render(true); layPreview(); }).catch(() => {}); break;
+      case 'layPreview': layPreview(); break;
       case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {
@@ -2227,7 +2313,7 @@
       case 'goalStep': { const G0 = ((R.hist && R.hist.games) || []).filter((g) => !S.progRole || MATCH_ROLE[g.role] === S.progRole); const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goals[g.rk] = { metric: g.metric, target: t, custom: true }; save(); render(true); break; }
       case 'loadOpp': R.loadOpp = +v; render(true); break;
       case 'followGameBuild': { const b = R.loadBuildCur, g = R.lcu.game; if (!b || !g) break;
-        S.gameBuild = { gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: [...new Set(b.counters.flatMap((x) => x.items))] } };
+        S.gameBuild = { gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: b.next.slice() } };
         save(); R.ovKey = ''; toast('⭐ Ce build sera suivi dans l\'encart en jeu'); render(true); break; }
       case 'unfollowGameBuild': S.gameBuild = null; save(); R.ovKey = ''; render(true); break;
       case 'simOpen': NB.sim.open().catch((e) => toast('❌ ' + e.message)); break;
@@ -2265,6 +2351,14 @@
   });
   document.addEventListener('mouseup', () => { if (dragStart && pendingCrop && (pendingCrop.w < 0.01 || pendingCrop.h < 0.01)) pendingCrop = null; dragStart = null; });
 
+  /* Curseurs de l'encart de chargement : enregistrés et prévisualisés en direct */
+  document.addEventListener('input', (ev) => {
+    const t = ev.target; if (!t.dataset || !t.dataset.lay) return;
+    R.layDraft = Object.assign({}, R.layDraft || {}, { [t.dataset.lay]: +t.value });
+    const lab = t.parentElement && t.parentElement.querySelector('b'); if (lab) lab.textContent = `${Math.round(+t.value * 1000) / 10} %`;
+    clearTimeout(R.laySave);
+    R.laySave = setTimeout(() => { const l = layNow(); NB.config.set({ overlay: { layout: l } }).then((c) => { R.cfg = c; R.layDraft = null; layPreview(); }).catch(() => {}); }, 150);
+  });
   document.addEventListener('input', (ev) => {
     const el = ev.target;
     if (el.dataset.ed && S.ed) {

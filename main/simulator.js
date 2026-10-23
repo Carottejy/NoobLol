@@ -71,6 +71,9 @@ class SimServer extends EventEmitter {
         participants: [{ participantId: 1, championId: g.champ || 0, stats: { win: !!g.win, kills: g.k, deaths: g.d, assists: g.a } }] }));
       return this.send(res, 200, { accountId: 0, games: { gameCount: games.length, games } });
     }
+    /* Données de jeu d'un champion (type de dégâts officiel), fournies par la fenêtre du simulateur */
+    mm = url.match(/^\/lol-game-data\/assets\/v1\/champions\/(\d+)\.json$/);
+    if (m === 'GET' && mm) { const t = (S.damage || {})[mm[1]]; return t ? this.send(res, 200, { id: +mm[1], tacticalInfo: { damageType: t } }) : this.send(res, 404, {}); }
     /* Pages de runes */
     if (m === 'GET' && url === '/lol-perks/v1/pages') return this.send(res, 200, this.perks);
     if (m === 'GET' && url === '/lol-perks/v1/currentpage') return this.send(res, 200, this.perks.find((p) => p.current) || null);

@@ -26,7 +26,7 @@
 
   /* ---------------- État ---------------- */
   const SIM = {
-    step: 'lobby', queue: 420, positions: true, nameMode: 'legacy', auto: true, autoBuy: true, speed: 10,
+    layout: null, step: 'lobby', queue: 420, positions: true, nameMode: 'legacy', auto: true, autoBuy: true, speed: 10,
     me: { gameName: 'Carotte', tagLine: 'EUW', level: 87, tier: 'SILVER', division: 'II', role: 'middle' },
     players: [], bans: [], timerEnd: 0, gameId: 0,
     applied: { runes: null, spells: null }, load: null, game: null, log: [],
@@ -304,13 +304,16 @@
         <p>${runes ? `✅ Page de runes créée : <b>${esc(runes.name)}</b> · ${(runes.selectedPerkIds || []).slice(0, 6).map(perkName).map(esc).join(', ')}` : '<span class="muted">Aucune page de runes appliquée pour l\'instant.</span>'}</p>
         <p>${SIM.applied.spells ? `✅ Sorts choisis : ${spellIcon(SIM.applied.spells[0])}${spellIcon(SIM.applied.spells[1])}` : '<span class="muted">Aucun sort d\'invocateur appliqué pour l\'instant.</span>'}</p></div>`;
   }
+  /* Écran de chargement plein écran, disposé comme celui du jeu (mêmes proportions que l'encart de Noob LOL) */
   function viewLoading() {
-    const L = SIM.load;
-    const card = (p) => { const c = champ(p.champ); const pr = Math.min(100, Math.round(L.prog[p.cell])); return `<div class="lcard ${p.isMe ? 'me' : ''}" data-cell="${p.cell}">${c ? `<img alt="" src="${Dd.img.loading(c.id)}">` : ''}<div class="lname"><b>${esc(c ? c.name : '?')}</b><span>${esc(p.gameName)}</span><span class="lsp">${spellIcon(p.spells[0])}${spellIcon(p.spells[1])}</span></div><div class="lbar"><i style="width:${pr}%"></i></div><span class="lpct">${pr} %</span></div>`; };
-    return `<div class="loading"><h2>Écran de chargement <span class="muted">(Noob LOL voit la phase « GameStart » : partie trouvée, pas encore de données en jeu)</span></h2>
-      <div class="lrow">${byTeam('ORDER').map(card).join('')}</div><div class="vs">VS</div><div class="lrow">${byTeam('CHAOS').map(card).join('')}</div>
-      <div class="row center">${L.done ? '<span class="ready">✅ Tout le monde est prêt.</span>' : '<button class="btn ghost" data-act="fillLoading">⏩ Terminer le chargement</button>'}<button class="btn hex" data-act="skipLoading">▶ Lancer la partie</button></div>
-      <p class="muted">La partie ne commence que lorsque tu cliques sur « Lancer la partie », même quand le chargement est terminé.</p></div>`;
+    const L = SIM.load, W = window.innerWidth, H = window.innerHeight;
+    const { rows, o } = LoadLayout.cards(W, H, SIM.layout);
+    const card = (p, r) => { const c = champ(p.champ); const pr = Math.min(100, Math.round(L.prog[p.cell]));
+      return `<div class="lcard ${p.isMe ? 'me' : ''}" data-cell="${p.cell}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">${c ? `<img alt="" src="${Dd.img.loading(c.id)}">` : ''}<div class="lname"><b>${esc(c ? c.name : '?')}</b><span>${esc(p.gameName)}</span><span class="lsp">${spellIcon(p.spells[0])}${spellIcon(p.spells[1])}</span></div><div class="lbar"><i style="width:${pr}%"></i></div><span class="lpct">${pr} %</span></div>`; };
+    const midY = ((o.row1 + o.cardH) * H + o.row2 * H) / 2;
+    return `<div class="lscreen">${byTeam('ORDER').map((p, i) => card(p, rows[0][i])).join('')}${byTeam('CHAOS').map((p, i) => card(p, rows[1][i])).join('')}
+      <div class="lmid" style="top:${Math.round(midY)}px">${L.done ? '<span class="ready">✅ Tout le monde est prêt.</span>' : '<button class="btn ghost sm" data-act="fillLoading">⏩ Terminer le chargement</button>'}<button class="btn hex sm" data-act="skipLoading">▶ Lancer la partie</button>
+      <span class="muted">Phase « GameStart » · mets le simulateur en plein écran (F11) pour caler l'encart de Noob LOL sur les cartes</span></div></div>`;
   }
   function boardHtml() {
     const G = SIM.game, S = G.st;
@@ -446,6 +449,10 @@
     }).catch(() => {});
   }, 2000);
 
+  /* Même disposition des cartes que celle réglée dans Noob LOL */
+  const syncLayout = () => { if (NB && NB.config) NB.config.get().then((c) => { const l = (c && c.overlay && c.overlay.layout) || null; if (JSON.stringify(l) !== JSON.stringify(SIM.layout)) { SIM.layout = l; if (SIM.step === 'loading') render(); } }).catch(() => {}); };
+  syncLayout(); setInterval(syncLayout, 3000);
+  window.addEventListener('resize', () => { if (SIM.step === 'loading') render(); });
   Dd.load().then(() => { render(); push(); }).catch((e) => { app.innerHTML = `<div class="card"><h2>Données Riot indisponibles</h2><p>${esc(e.message)}</p></div>`; });
   render(); push();
 })();
