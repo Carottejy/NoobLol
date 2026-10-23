@@ -1,6 +1,13 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.2.0';
+var APP_VERSION = '3.3.0';
 var APP_RELEASES = [
+  { v: '3.3.0', date: '2026-10-23', notes: [
+    'Ma progression : objectif selon ton rang. Noob LOL affiche ton rang actuel et le rang cible (par défaut le rang au-dessus : Fer → Bronze, Argent → Or…), que tu peux changer.',
+    'Les objectifs prennent par défaut le repère du rang cible pour ton rôle (CS/min, morts, vision/min, participation, KDA, or/min). Avec − et +, tu passes en valeur personnalisée ; « ↺ repère » revient au repère du rang.',
+    'Sous chaque indicateur, le repère du rang cible, coché ✓ quand ta moyenne l\'atteint.',
+    'En jeu, le point farm à 10 et 20 min compare tes CS/min au repère de ton rang cible.',
+    'Les repères sont des estimations de valeurs typiques par rang et par rôle (Riot ne publie pas de moyennes par rang).',
+  ]},
   { v: '3.2.0', date: '2026-10-23', notes: [
     'Ma progression par rôle : un filtre (Tous les rôles, Top, Jungle, Mid, ADC, Support, avec le nombre de parties) change les indicateurs, la courbe et l\'objectif.',
     'Un objectif différent pour chaque rôle (par défaut : vision/min en support, participation en jungle, CS/min ailleurs). En jeu, le point farm utilise l\'objectif CS/min du rôle que tu joues.',
