@@ -1788,7 +1788,7 @@
       ${updBlock()}
       <p class="muted small">Données des champions, objets et runes : Data Dragon (Riot Games). Compte et statistiques : API officielle de Riot. En jeu : API officielle « Live Client Data ».</p>
       <details class="flat"><summary class="small">📝 Notes de version</summary>${APP_RELEASES.map((r) => `<h3>${esc(r.v)} <span class="muted small">${esc(r.date)}</span></h3><ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</details>
-      <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button>${NB && NB.openData ? '<button class="btn ghost small" data-act="openData" title="Contient diagnostic-evenements.json : les événements bruts de ta dernière partie">📂 Dossier de l\'appli (diagnostic)</button>' : ''}<button class="btn danger small" data-act="wipe">Effacer favoris et notes (garde mes builds)</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button>${NB && NB.sim ? '<button class="btn ghost small" data-act="simOpen" title="Ouvre une fenêtre qui imite le client LoL et le jeu (sélection, chargement, partie) pour tester Noob LOL sans jouer">🧪 Simulateur de partie</button>' : ''}${NB && NB.openData ? '<button class="btn ghost small" data-act="openData" title="Contient diagnostic-evenements.json : les événements bruts de ta dernière partie">📂 Dossier de l\'appli (diagnostic)</button>' : ''}<button class="btn danger small" data-act="wipe">Effacer favoris et notes (garde mes builds)</button></div>
       <p class="muted small" style="margin-top:8px">Noob LOL n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ou de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.</p></div>`;
   }
   function voiceSettings() {
@@ -2019,6 +2019,7 @@
       case 'goalReset': { goalOf('all'); const k = S.progRole || 'all'; S.goals[k] = { metric: (S.goals[k] || {}).metric }; save(); render(true); break; }
       case 'targetTier': S.targetTier = v; save(); render(true); break;
       case 'goalStep': { const G0 = ((R.hist && R.hist.games) || []).filter((g) => !S.progRole || MATCH_ROLE[g.role] === S.progRole); const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goals[g.rk] = { metric: g.metric, target: t, custom: true }; save(); render(true); break; }
+      case 'simOpen': NB.sim.open().catch((e) => toast('❌ ' + e.message)); break;
       case 'openData': NB.openData().catch(() => {}); break;
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;

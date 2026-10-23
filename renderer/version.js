@@ -1,6 +1,14 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.3.0';
+var APP_VERSION = '3.4.0';
 var APP_RELEASES = [
+  { v: '3.4.0', date: '2026-10-23', notes: [
+    'Nouveau : Simulateur de partie (Réglages → 🧪 Simulateur de partie). Une fenêtre joue le rôle du client League of Legends et du jeu : Noob LOL s\'y connecte comme au vrai client, ce qui permet de tout tester sans lancer de partie.',
+    '• Salon : ton nom, ton rang, ton rôle, la file (classée, normale draft ou aveugle), les rôles fournis ou non, et le format des noms dans les événements du jeu (ancien nom d\'invocateur, nom de jeu ou Riot ID).',
+    '• Sélection des champions : bannissements, survol et verrouillage pour chaque joueur, picks automatiques dans l\'ordre officiel, chrono. Les pages de runes et les sorts appliqués par Noob LOL s\'affichent dans le simulateur.',
+    '• Écran de chargement : les 10 cartes avec leur progression (Noob LOL voit la phase « partie trouvée »).',
+    '• Partie : temps accéléré (×1 à ×30, +1 min, +5 min), progression réaliste (sbires, niveaux, or, achats), événements automatiques, et boutons pour déclencher kills, dragon, larves, Héraut, Nashor, tours, inhibiteurs, vie ou mana basses, or, mort, adversaire de voie qui prend des niveaux ou finit un objet.',
+    '• Fin de partie : Noob LOL affiche l\'état final. Fermer la fenêtre du simulateur rebranche Noob LOL sur le vrai client.',
+  ]},
   { v: '3.3.0', date: '2026-10-23', notes: [
     'Ma progression : objectif selon ton rang. Noob LOL affiche ton rang actuel et le rang cible (par défaut le rang au-dessus : Fer → Bronze, Argent → Or…), que tu peux changer.',
     'Les objectifs prennent par défaut le repère du rang cible pour ton rôle (CS/min, morts, vision/min, participation, KDA, or/min). Avec − et +, tu passes en valeur personnalisée ; « ↺ repère » revient au repère du rang.',

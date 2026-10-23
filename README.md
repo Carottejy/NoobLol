@@ -19,6 +19,9 @@ Compagnon de jeu **League of Legends** pour débutants, en français. Applicatio
 ### Le collecteur de statistiques
 Il récupère des parties classées solo/duo récentes de joueurs **Maître, Grand maître et Challenger** de ton serveur (`league-v4` → `match-v5`), puis enregistre pour chaque joueur : champion, rôle, victoire, adversaire de voie, runes, objets de fin de partie, sorts. Les statistiques (taux de victoire, runes les plus jouées, match-ups…) sont calculées dans une base **SQLite locale** (`%APPDATA%\Noob LOL\stats.sqlite`). Il récupère aussi la **chronologie** de chaque partie (`match-v5 timeline`) : ordre des achats, objets de départ, montée des sorts, composition adverse. C'est ce qui permet de conseiller les deux premiers objets contre un adversaire précis et les objets adaptés à l'équipe adverse. Avec une clé de développement (100 requêtes / 2 min, 2 requêtes par partie), compte environ 1 500 parties par heure tant que la clé est valide (elle expire au bout de 24 h).
 
+## 🧪 Simulateur de partie (pour tester)
+Réglages → **🧪 Simulateur de partie**, ou en développement `npm run simulateur`. Une fenêtre imite le client League of Legends (API locale : phase de jeu, sélection, runes, sorts, rangs) et le jeu (« Live Client Data ») sur des ports locaux aléatoires : Noob LOL s'y connecte au lieu du vrai client tant qu'elle est ouverte. Étapes : salon → sélection des champions → écran de chargement → partie (temps accéléré, événements automatiques ou déclenchés à la main) → fin de partie.
+
 ## Installer
 Voir [INSTALLER.md](INSTALLER.md).
 
@@ -32,8 +35,8 @@ npm run dist     # fabrique l'installeur Windows dans dist/
 
 | Dossier | Contenu |
 |---|---|
-| `main/` | Processus principal : `main.js` (fenêtres, IPC), `preload.js` (pont sécurisé), `lcu.js` (client LoL), `live.js` (données en jeu), `riotapi.js` (API Riot + limiteur), `collector.js`, `db.js` (SQLite), `config.js` |
-| `renderer/` | Interface : `app.js` (3 parties + réglages), `ddragon.js`, `guide.js` (textes), `style.css`, `minimap.html/js`, `overlay.html/js` (encart par-dessus le jeu) |
+| `main/` | Processus principal : `main.js` (fenêtres, IPC), `preload.js` (pont sécurisé), `lcu.js` (client LoL), `live.js` (données en jeu), `riotapi.js` (API Riot + limiteur), `collector.js`, `db.js` (SQLite), `config.js`, `simulator.js` (faux client et faux jeu), `history.js` |
+| `renderer/` | Interface : `app.js` (3 parties + réglages), `ddragon.js`, `guide.js` (textes), `style.css`, `minimap.html/js`, `overlay.html/js` (encart par-dessus le jeu), `simulateur.html/js/css` (simulateur de partie) |
 | `test/` | Tests Node (`node --test`) |
 
 Pour publier une mise à jour : augmenter `version` dans `package.json` (et les notes dans `renderer/version.js`), puis lancer le workflow « Installeur Windows » (onglet Actions → Run workflow) ou pousser un tag `vX.Y.Z`. GitHub Actions fabrique l'installeur et publie la Release ; les PC équipés se mettent à jour tout seuls.

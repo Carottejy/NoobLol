@@ -18,10 +18,10 @@ class PostGame extends EventEmitter {
   matchIdFor(gameId) { return `${String(this.getPlatform() || 'euw1').toUpperCase()}_${gameId}`; }
 
   /* Fin de partie détectée */
-  async start({ gameId, live, puuid, hasKey }) {
+  async start({ gameId, live, puuid, hasKey, reason }) {
     const token = ++this.token;
     const matchId = gameId ? this.matchIdFor(gameId) : null;
-    this.set({ status: matchId && hasKey ? 'waiting' : 'live-only', matchId, live: live || null, puuid: puuid || '', at: Date.now(), reason: !hasKey ? 'nokey' : !gameId ? 'nogame' : '' });
+    this.set({ status: matchId && hasKey ? 'waiting' : 'live-only', matchId, live: live || null, puuid: puuid || '', at: Date.now(), reason: reason || (!hasKey ? 'nokey' : !gameId ? 'Partie sans identifiant : statistiques complètes indisponibles.' : '') });
     if (!matchId || !hasKey) return;
     for (let i = 0; i < this.tries; i++) {
       if (token !== this.token) return;

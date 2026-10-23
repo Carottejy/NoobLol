@@ -481,3 +481,33 @@ test('patch : différences entre deux fiches champion', () => {
   assert.strictEqual(by('recharge').good, false); assert.strictEqual(by('recharge').after, '9/8/7');
   assert.ok(by('description')); assert.strictEqual(d.length, 4);
 });
+
+test('simulateur : faux client LoL et faux jeu, au format des API de Riot', async () => {
+  const { SimServer } = require('../main/simulator');
+  const { localGet, localRequest, LcuWatcher } = require('../main/lcu');
+  const { simplify } = require('../main/live');
+  const sim = new SimServer();
+  const info = await sim.start();
+  try {
+    await assert.rejects(localGet(info.lcu.port, '/lol-gameflow/v1/gameflow-phase', 'mauvais-mot-de-passe'), (e) => e.status === 401);
+    sim.push({ phase: 'ChampSelect', summoner: { gameName: 'Carotte', tagLine: 'EUW', puuid: 'sim-moi' }, session: { localPlayerCellId: 0, myTeam: [{ cellId: 0, championId: 103, assignedPosition: 'middle', spell1Id: 4, spell2Id: 14 }], theirTeam: [], actions: [], bans: {} },
+      players: { 'sim-moi': { tier: 'GOLD', division: 'II', lp: 40, wins: 10, losses: 8, level: 87, gameName: 'Carotte', tagLine: 'EUW' } } });
+    const w = new LcuWatcher(() => null); w.simCreds = info.lcu;
+    const states = []; w.on('state', (s) => states.push(JSON.parse(JSON.stringify(s))));
+    await w.loop(); w.stop();
+    const st = states.pop();
+    assert.strictEqual(st.phase, 'ChampSelect'); assert.strictEqual(st.summoner.gameName, 'Carotte');
+    assert.strictEqual(st.champSelect.myTeam[0].champ, 103); assert.strictEqual(st.champSelect.myRole, 'mid');
+    const acts = []; sim.on('action', (a) => acts.push(a));
+    w.creds = info.lcu; w.state.phase = 'ChampSelect';
+    await w.applySpells([4, 12]);
+    await w.applyRunes({ name: 'Noob LOL Test', primaryStyleId: 8100, subStyleId: 8300, selectedPerkIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] });
+    assert.deepStrictEqual(acts.map((a) => a.type), ['spells', 'runes']); assert.deepStrictEqual(acts[0].spells, [4, 12]);
+    assert.strictEqual((await w.playerInfo('sim-moi')).solo.tier, 'GOLD');
+    assert.strictEqual(await localGet(info.livePort, '/liveclientdata/allgamedata'), null, 'pas de partie : 404');
+    sim.push({ live: { gameData: { gameTime: 61 }, activePlayer: { riotId: 'Carotte#EUW', level: 2, currentGold: 300 }, allPlayers: [{ riotId: 'Carotte#EUW', riotIdGameName: 'Carotte', team: 'ORDER', championName: 'Ahri', rawChampionName: 'game_character_displayname_Ahri', items: [], scores: {}, summonerSpells: {} }], events: { Events: [] } } });
+    const L = simplify(await localGet(info.livePort, '/liveclientdata/allgamedata'));
+    assert.strictEqual(L.time, 61); assert.strictEqual(L.me.champ, 'Ahri');
+    await assert.rejects(localRequest(info.lcu.port, 'POST', '/lol-perks/v1/pages', info.lcu.password, {}).then(() => localRequest(info.lcu.port, 'POST', '/lol-perks/v1/pages', info.lcu.password, {})), /maximum/);
+  } finally { sim.stop(); }
+});

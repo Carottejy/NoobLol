@@ -89,6 +89,8 @@ class LcuWatcher extends EventEmitter {
   emitState() { this.emit('state', this.state); }
 
   async findCreds() {
+    /* Simulateur de partie actif : on se connecte à lui plutôt qu'au vrai client */
+    if (this.simCreds) return this.simCreds;
     const dirs = [this.getPath(), 'C:\\Riot Games\\League of Legends', 'D:\\Riot Games\\League of Legends', 'E:\\Riot Games\\League of Legends', '/Applications/League of Legends.app/Contents/LoL'].filter(Boolean);
     for (const d of dirs) {
       try { const c = parseLockfile(fs.readFileSync(path.join(d, 'lockfile'), 'utf8')); if (c) return c; } catch (e) { /* pas ici */ }
