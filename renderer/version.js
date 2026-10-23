@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.7.0';
+var APP_VERSION = '2.7.1';
 var APP_RELEASES = [
+  { v: '2.7.1', date: '2026-10-23', notes: [
+    'Infobulles détaillées partout : en gardant la souris plus d\'une seconde sur une icône d\'objet (prix, recette, effets, composants, améliorations), de rune (voie, ligne, effet complet), de voie de runes (runes clés) ou de sort d\'invocateur (recharge, effet).',
+  ]},
   { v: '2.7.0', date: '2026-10-23', notes: [
     'Préparation : nouvel onglet « Mes builds » pour créer tes propres pages de runes (voie principale, secondaire, fragments, sorts d\'invocateur) et tes builds d\'objets (départ, objets principaux dans l\'ordre, bottes, situationnels). Chaque build est associé à un champion et à un ou plusieurs rôles.',
     'Sélection : tes pages de runes pour ton champion et ton rôle apparaissent en premier ; un clic les applique dans le client avec tes sorts d\'invocateur.',

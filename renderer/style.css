@@ -539,3 +539,18 @@ body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 .edit-it:hover .eia, .edsec.on .eia { display: flex; }
 .eia button { width: 18px; height: 18px; border-radius: 50%; border: 0; background: #111c2e; color: var(--text); font-size: .62rem; cursor: pointer; padding: 0; line-height: 18px; box-shadow: 0 0 0 1px var(--line); }
 @media (max-width: 760px) { .ed-grid { grid-template-columns: 1fr; } .mb-row { flex-wrap: wrap; } .mb-act { margin-left: auto; } }
+
+/* ===== Infobulles détaillées ===== */
+.tt { position: fixed; z-index: 100; display: none; max-width: 360px; padding: 10px 12px; border-radius: 10px; background: #0b1424; border: 1px solid #6b5a33; box-shadow: 0 10px 30px rgba(0,0,0,.6); color: var(--text); font-size: .86rem; line-height: 1.4; pointer-events: none; }
+.tt-head { display: flex; gap: 10px; align-items: center; margin-bottom: 6px; }
+.tt-head img { width: 40px; height: 40px; border-radius: 8px; border: 1px solid #000; background: #0a1220; flex: 0 0 auto; }
+.tt-head img.round, .tt-mini.round { border-radius: 50%; background: #000; }
+.tt-head > div { display: flex; flex-direction: column; min-width: 0; }
+.tt-head b { color: var(--accent2); font-size: .95rem; }
+.tt-gold { color: var(--accent2); font-weight: 700; font-size: .84rem; }
+.tt-muted { color: var(--muted); font-weight: 400; font-size: .8rem; }
+.tt-plain { color: #cfd6e2; font-style: italic; margin: 0 0 6px; }
+.tt-desc { color: #d9d2c2; }
+.tt-desc .dd-stats { margin-bottom: 6px; }
+.tt-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.tt-mini { width: 22px; height: 22px; border-radius: 5px; border: 1px solid #000; }
