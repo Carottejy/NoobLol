@@ -168,24 +168,40 @@ var Builds = (() => {
   /* ---------- Objectifs de la Faille (saison 2026) à partir des événements officiels du jeu ---------- */
   const OBJ = { drake: { first: 300, respawn: 300 }, elder: { respawn: 360 }, grubs: { first: 480, end: 885 }, herald: { first: 900, end: 1185 }, baron: { first: 1200, respawn: 360 } };
   const DRAKE_FR = { Fire: 'infernal', Water: 'océans', Earth: 'montagnes', Air: 'nuages', Hextech: 'hextech', Chemtech: 'chemtech' };
+  /* Équipe d'un joueur d'après son nom, quel que soit le format (Riot ID, nom de jeu, ancien nom d'invocateur) */
+  const normName = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+  const resolvers = new WeakMap();
+  function teamResolver(L) {
+    if (L && resolvers.has(L)) return resolvers.get(L);
+    const m = {};
+    for (const p of (L && L.players) || []) for (const a of [p.name, p.gameName].concat(p.aliases || [])) { if (!a) continue; const k = normName(a); m[k] = p.team; m[k.split('#')[0]] = p.team; }
+    const f = (n) => { if (!n) return ''; const k = normName(n); return m[k] || m[k.split('#')[0]] || (/_t100|^order$/.test(k) ? 'ORDER' : /_t200|^chaos$/.test(k) ? 'CHAOS' : ''); };
+    if (L) resolvers.set(L, f);
+    return f;
+  }
+  /* Équipe qui a réalisé un événement : le tueur, sinon un des joueurs qui ont aidé */
+  function eventTeam(e, L) {
+    const r = teamResolver(L);
+    let t = r(e.killer);
+    if (!t) for (const a of e.assisters || []) { t = r(a); if (t) break; }
+    return t;
+  }
   function objectives(L, myTeam) {
     const t = L ? L.time : 0;
     const me = myTeam || 'ORDER';
-    const teamOf = {};
-    if (L) for (const p of L.players || []) { teamOf[p.name] = p.team; teamOf[p.gameName] = p.team; }
     const side = (team) => (!team ? null : team === me ? 'us' : 'them');
-    const sideOfKiller = (n) => side(teamOf[n] || teamOf[String(n || '').split('#')[0]] || (/_T100|Order/i.test(n) ? 'ORDER' : /_T200|Chaos/i.test(n) ? 'CHAOS' : ''));
+    const sideOf = (e) => side(eventTeam(e, L));
     const ownerSide = (name) => { const m = String(name || '').match(/_T([12])_/); if (!m) return null; return side(m[1] === '1' ? 'ORDER' : 'CHAOS'); };
     const S = { drake: { us: 0, them: 0, types: { us: [], them: [] } }, elder: { us: 0, them: 0 }, grubs: { us: 0, them: 0 }, herald: { us: 0, them: 0 }, baron: { us: 0, them: 0 }, turret: { us: 0, them: 0 }, inhib: { us: 0, them: 0 } };
     let lastDrake = null, lastElder = null, lastBaron = null, soulAt = null, heraldDone = false, grubsKilled = 0;
     for (const e of (L && L.events) || []) {
       if (e.name === 'DragonKill') {
-        const sd = sideOfKiller(e.killer);
+        const sd = sideOf(e);
         if (/elder/i.test(e.dragon)) { lastElder = e.t; if (sd) S.elder[sd]++; }
         else { lastDrake = e.t; if (sd) { S.drake[sd]++; S.drake.types[sd].push(DRAKE_FR[e.dragon] || e.dragon); if (S.drake[sd] === 4 && soulAt == null) soulAt = e.t; } }
-      } else if (e.name === 'BaronKill') { lastBaron = e.t; const sd = sideOfKiller(e.killer); if (sd) S.baron[sd]++; }
-      else if (e.name === 'HeraldKill') { heraldDone = true; const sd = sideOfKiller(e.killer); if (sd) S.herald[sd]++; }
-      else if (e.name === 'HordeKill') { grubsKilled++; const sd = sideOfKiller(e.killer); if (sd) S.grubs[sd]++; }
+      } else if (e.name === 'BaronKill') { lastBaron = e.t; const sd = sideOf(e); if (sd) S.baron[sd]++; }
+      else if (e.name === 'HeraldKill') { heraldDone = true; const sd = sideOf(e); if (sd) S.herald[sd]++; }
+      else if (e.name === 'HordeKill') { grubsKilled++; const sd = sideOf(e); if (sd) S.grubs[sd]++; }
       else if (e.name === 'TurretKilled') { const o = ownerSide(e.turret); if (o) S.turret[o === 'us' ? 'them' : 'us']++; }
       else if (e.name === 'InhibKilled') { const o = ownerSide(e.inhib); if (o) S.inhib[o === 'us' ? 'them' : 'us']++; }
     }
@@ -219,7 +235,7 @@ var Builds = (() => {
 
   /* ---------- Fin de partie : analyse complète d'une partie match-v5 (+ chronologie) ---------- */
   const POS_ORDER = { TOP: 0, JUNGLE: 1, MIDDLE: 2, BOTTOM: 3, UTILITY: 4 };
-  function postgame(match, timeline, puuid) {
+  function postgame(match, timeline, puuid, ids) {
     const info = match.info || {};
     let dur = info.gameDuration || 0;
     if (!info.gameEndTimestamp && dur > 100000) dur = Math.round(dur / 1000);
@@ -229,7 +245,14 @@ var Builds = (() => {
       items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5].filter(Boolean), trinket: p.item6 || 0,
       name: p.riotIdGameName || p.summonerName || '', tag: p.riotIdTagline || '',
     }));
-    const me = ps.find((p) => p.puuid === puuid) || null;
+    /* Moi : par identifiant de compte, sinon par Riot ID, sinon par champion joué (partie qui vient de finir) */
+    const n = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+    let me = (puuid && ps.find((p) => p.puuid === puuid)) || null;
+    for (const id of ids || []) {
+      if (me) break;
+      if (id.gameName) me = ps.find((p) => n(p.riotIdGameName || p.summonerName) === n(id.gameName) && (!id.tagLine || !p.riotIdTagline || n(p.riotIdTagline) === n(id.tagLine))) || null;
+      else if (id.champ) { const c = ps.filter((p) => p.championId === id.champ); if (c.length === 1) me = c[0]; }
+    }
     const myTeamId = me ? me.teamId : 100;
     const teamIds = [myTeamId, myTeamId === 100 ? 200 : 100];
     const teams = teamIds.map((id) => {
@@ -259,6 +282,60 @@ var Builds = (() => {
       }
     }
     const at = (arr, m) => (arr.length > m ? arr[m] : null);
+    /* Séries détaillées issues de la chronologie (minute par minute + événements) */
+    const sideOfTeam = (tid) => (tid === myTeamId ? 'us' : 'them');
+    const byPid = {}; ps.forEach((p) => { byPid[p.participantId] = p; });
+    const frames = ((timeline || {}).info || {}).frames || [];
+    const T = { xp: [], kills: { us: [], them: [] }, gold: { us: [], them: [] }, me: { gold: [], cs: [], xp: [], lvl: [], dmg: [] }, opp: { gold: [], cs: [], xp: [], lvl: [], dmg: [] },
+      killEv: [], objEv: [], buildEv: [], myEv: [], plates: { us: 0, them: 0 }, wards: { us: 0, them: 0 }, firsts: {} };
+    let kUs = 0, kThem = 0;
+    const csOf = (x) => (x.minionsKilled || 0) + (x.jungleMinionsKilled || 0);
+    const firstOf = (k, side, t) => { if (!T.firsts[k]) T.firsts[k] = { side, t }; };
+    for (const f of frames) {
+      const pf = f.participantFrames || {};
+      for (const e of f.events || []) {
+        const t = (e.timestamp || 0) / 1000;
+        if (e.type === 'CHAMPION_KILL') {
+          const k = byPid[e.killerId], v = byPid[e.victimId];
+          const side = k ? sideOfTeam(k.teamId) : v ? (sideOfTeam(v.teamId) === 'us' ? 'them' : 'us') : '';
+          if (side === 'us') kUs++; else if (side === 'them') kThem++;
+          if (side) firstOf('blood', side, t);
+          const ev = { t, side, x: e.position ? e.position.x : null, y: e.position ? e.position.y : null, killer: e.killerId, victim: e.victimId, assists: e.assistingParticipantIds || [] };
+          T.killEv.push(ev);
+          if (me) {
+            const id = me.participantId;
+            if (e.killerId === id) T.myEv.push({ t, kind: 'kill', x: ev.x, y: ev.y });
+            else if (e.victimId === id) T.myEv.push({ t, kind: 'death', x: ev.x, y: ev.y });
+            else if ((e.assistingParticipantIds || []).includes(id)) T.myEv.push({ t, kind: 'assist', x: ev.x, y: ev.y });
+          }
+        } else if (e.type === 'ELITE_MONSTER_KILL') {
+          const side = e.killerTeamId ? sideOfTeam(e.killerTeamId) : byPid[e.killerId] ? sideOfTeam(byPid[e.killerId].teamId) : '';
+          const kind = { DRAGON: /ELDER/.test(e.monsterSubType || '') ? 'elder' : 'drake', BARON_NASHOR: 'baron', RIFTHERALD: 'herald', HORDE: 'grubs', ATAKHAN: 'atakhan' }[e.monsterType] || 'other';
+          T.objEv.push({ t, side, kind, sub: e.monsterSubType || '' });
+          if (side) firstOf(kind, side, t);
+        } else if (e.type === 'BUILDING_KILL') {
+          const side = e.teamId ? (sideOfTeam(e.teamId) === 'us' ? 'them' : 'us') : '';
+          const kind = e.buildingType === 'INHIBITOR_BUILDING' ? 'inhib' : 'tower';
+          T.buildEv.push({ t, side, kind, lane: e.laneType || '' });
+          if (side) firstOf(kind, side, t);
+        } else if (e.type === 'TURRET_PLATE_DESTROYED') {
+          if (e.teamId) T.plates[sideOfTeam(e.teamId) === 'us' ? 'them' : 'us']++;
+        } else if (e.type === 'WARD_PLACED') {
+          const c = byPid[e.creatorId]; if (c) T.wards[sideOfTeam(c.teamId)]++;
+        }
+      }
+      let xa = 0, xb = 0, ga = 0, gb = 0;
+      for (const p of ps) { const x = pf[p.participantId]; if (!x) continue; if (p.teamId === myTeamId) { xa += x.xp || 0; ga += x.totalGold || 0; } else { xb += x.xp || 0; gb += x.totalGold || 0; } }
+      T.xp.push(xa - xb); T.gold.us.push(ga); T.gold.them.push(gb);
+      T.kills.us.push(kUs); T.kills.them.push(kThem);
+      for (const [who, p] of [['me', me], ['opp', opp]]) {
+        const x = p && pf[p.participantId]; if (!x) continue;
+        T[who].gold.push(x.totalGold || 0); T[who].cs.push(csOf(x)); T[who].xp.push(x.xp || 0); T[who].lvl.push(x.level || 0);
+        T[who].dmg.push(((x.damageStats || {}).totalDamageDoneToChampions) || 0);
+      }
+    }
+    const goldDiff = curve;
+    const lead = goldDiff.length ? { max: Math.max(0, ...goldDiff), min: Math.min(0, ...goldDiff), maxAt: goldDiff.indexOf(Math.max(0, ...goldDiff)), minAt: goldDiff.indexOf(Math.min(0, ...goldDiff)) } : null;
     /* Conseils simples pour progresser */
     const tips = [];
     if (me) {
@@ -271,11 +348,12 @@ var Builds = (() => {
       if (at(meVs.cs, 10) != null && at(meVs.cs, 10) <= -15) tips.push(`À 10 min, tu avais ${(-at(meVs.cs, 10) / 10).toFixed(1).replace('.', ',')} CS/min de moins que ton adversaire.`);
       if (!tips.length) tips.push('Belle partie, rien de flagrant à corriger. Continue comme ça !');
     }
-    return { matchId: (match.metadata || {}).matchId, queue: info.queueId, dur, created: info.gameCreation, me, opp, teams, curve, meVs,
+    for (const t of teams) { const g = t.gold || 1; for (const p of t.players) p.goldShare = (p.goldEarned || 0) / g; }
+    return { matchId: (match.metadata || {}).matchId, queue: info.queueId, dur, created: info.gameCreation, me, opp, teams, curve, meVs, T, lead, min,
       at10: { gold: at(meVs.gold, 10), cs: at(meVs.cs, 10) }, at15: { gold: at(meVs.gold, 15), cs: at(meVs.cs, 15) }, tips,
       best: { damage: ps.slice().sort((a, b) => (b.totalDamageDealtToChampions || 0) - (a.totalDamageDealtToChampions || 0))[0], vision: ps.slice().sort((a, b) => b.visionScore - a.visionScore)[0], kda: ps.slice().sort((a, b) => b.kda - a.kda)[0] } };
   }
 
-  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, ROLES5, nextItem, postgame };
+  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, teamResolver, eventTeam, ROLES5, nextItem, postgame };
 })();
 if (typeof module !== 'undefined') module.exports = Builds;

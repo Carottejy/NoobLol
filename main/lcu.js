@@ -70,7 +70,8 @@ function simplifySession(s) {
 /* Session de partie (gameflow) : équipes avec puuid et champion */
 function simplifyGame(gs) {
   const gd = gs.gameData || {};
-  const map = (arr, team) => (arr || []).map((p) => ({ puuid: p.puuid || '', champ: p.championId || 0, team, name: p.gameName || p.summonerName || '', tag: p.tagLine || '' }));
+  const map = (arr, team) => (arr || []).map((p) => ({ puuid: p.puuid || '', champ: p.championId || 0, team, name: p.gameName || p.summonerName || '', tag: p.tagLine || '',
+    aliases: [...new Set([p.gameName, p.summonerName, p.internalName, p.gameName && p.tagLine ? `${p.gameName}#${p.tagLine}` : ''].filter(Boolean))] }));
   return { gameId: gd.gameId || 0, queueId: (gd.queue || {}).id || 0, players: map(gd.teamOne, 'ORDER').concat(map(gd.teamTwo, 'CHAOS')), ended: false };
 }
 

@@ -1,6 +1,14 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.8.1';
+var APP_VERSION = '2.9.0';
 var APP_RELEASES = [
+  { v: '2.9.0', date: '2026-10-23', notes: [
+    'Correction : en jeu, les objectifs (dragons, larves, Héraut, Nashor) sont de nouveau comptés pour la bonne équipe, et l\'annonce vocale ne dit plus « l\'ennemi » à tort. Le jeu nomme parfois les joueurs par leur ancien nom d\'invocateur dans ses événements : Noob LOL reconnaît maintenant tous les noms (Riot ID, nom de jeu, ancien nom, et ceux du client LoL), puis les joueurs qui ont aidé. Si l\'équipe reste inconnue, l\'annonce ne dit pas qui.',
+    'Correction : dans l\'historique des parties, ton équipe et les adversaires ne sont plus inversés (tu es retrouvé par ton compte, sinon par ton Riot ID).',
+    'Fin de partie : nouvel onglet « Équipe » (plus grande avance et plus grand retard, kills, or et dégâts par minute, plaques, 16 comparaisons équipe contre équipe, les « premiers » : premier sang, première tour, premier dragon…, répartition des dégâts, de l\'or et des dégâts subis par joueur, courbes des kills, de l\'or, des écarts d\'or et d\'expérience, frise des objectifs).',
+    'Fin de partie : nouvel onglet « Carte » (toutes les éliminations sur la carte, tes kills, morts et assistances, et la liste de tes actions dans le temps).',
+    'Ma partie : 20 indicateurs (dégâts/min, part de l\'or, vision/min, dégâts pour 1 000 po, kills en solo, plaques, CS à 10 min, avance max. en CS et en niveaux, sorts touchés et esquivés, soins utiles, temps mort, plus longue survie, premier sang), un radar « Mon profil » contre ton adversaire et 3 courbes minute par minute (sbires, expérience, dégâts).',
+    'Résumé : frise des objectifs de la partie.',
+  ]},
   { v: '2.8.1', date: '2026-10-23', notes: [
     'Sbires : partout dans l\'application (en jeu, fin de partie, Mon compte), les sbires sont affichés en CS par minute au lieu du total (le total reste visible au survol).',
   ]},

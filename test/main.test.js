@@ -372,3 +372,41 @@ test('clé Riot : détection de l\'expiration et renouvellement assisté', async
   cfg.data.keySavedAt = Date.now() - 26 * 3600000; kw.state = 'unknown'; kw.set('ok');
   assert.strictEqual(cfg.data.keyPermanent, true);
 });
+
+test('en jeu : équipe retrouvée même quand l\'événement utilise l\'ancien nom d\'invocateur', () => {
+  const Builds = require('../renderer/builds.js');
+  const { simplify } = require('../main/live');
+  const d = { gameData: { gameTime: 900 }, activePlayer: { riotId: 'Carotte#EUW', riotIdGameName: 'Carotte', summonerName: 'VieuxNom' },
+    allPlayers: [
+      { riotId: 'Carotte#EUW', riotIdGameName: 'Carotte', riotIdTagLine: 'EUW', summonerName: 'VieuxNom', team: 'CHAOS', championName: 'Swain', rawChampionName: 'game_character_displayname_Swain', items: [], scores: {}, summonerSpells: {} },
+      { riotId: 'Allie#1', riotIdGameName: 'Allie', summonerName: 'AncienAllie', team: 'CHAOS', championName: 'Lux', rawChampionName: 'game_character_displayname_Lux', items: [], scores: {}, summonerSpells: {} },
+      { riotId: 'Bad#2', riotIdGameName: 'Bad', summonerName: 'AncienBad', team: 'ORDER', championName: 'Zed', rawChampionName: 'game_character_displayname_Zed', items: [], scores: {}, summonerSpells: {} }],
+    events: { Events: [
+      { EventID: 1, EventName: 'HordeKill', EventTime: 500, KillerName: 'AncienAllie', Assisters: [] },
+      { EventID: 2, EventName: 'DragonKill', EventTime: 600, KillerName: 'inconnu', Assisters: ['vieuxnom'], DragonType: 'Fire' },
+      { EventID: 3, EventName: 'BaronKill', EventTime: 1300, KillerName: 'AncienBad', Assisters: [] }] } };
+  const L = simplify(d);
+  assert.strictEqual(L.me.team, 'CHAOS', 'je suis côté rouge');
+  const o = Builds.objectives(L, L.me.team);
+  const row = (id) => o.rows.find((r) => r.id === id);
+  assert.deepStrictEqual([row('grubs').score.us, row('grubs').score.them], [1, 0]);
+  assert.deepStrictEqual([row('drake').score.us, row('drake').score.them], [1, 0], 'retrouvé par un assistant');
+  assert.deepStrictEqual([row('baron').score.us, row('baron').score.them], [0, 1]);
+  assert.strictEqual(Builds.eventTeam({ killer: 'personne', assisters: [] }, L), '');
+});
+
+test('fin de partie : je suis retrouvé par Riot ID, côté rouge, avec séries détaillées', () => {
+  const Builds = require('../renderer/builds.js');
+  const P = (id, team, pos, name, puuid) => ({ participantId: id, teamId: team, teamPosition: pos, kills: 1, deaths: 1, assists: 1, totalMinionsKilled: 10, neutralMinionsKilled: 0, goldEarned: 5000, totalDamageDealtToChampions: 1000, visionScore: 5, puuid, riotIdGameName: name, riotIdTagline: 'EUW' });
+  const match = { info: { gameDuration: 600, gameEndTimestamp: 1, teams: [{ teamId: 100, win: true }, { teamId: 200, win: false }],
+    participants: [P(1, 100, 'MIDDLE', 'Bad', 'enc-1'), P(6, 200, 'MIDDLE', 'Carotte', 'enc-6')] } };
+  const tl = { info: { frames: [{ participantFrames: { 1: { totalGold: 500, xp: 0 }, 6: { totalGold: 500, xp: 0 } }, events: [] },
+    { participantFrames: { 1: { totalGold: 900, xp: 300 }, 6: { totalGold: 1400, xp: 500 } }, events: [
+      { type: 'CHAMPION_KILL', timestamp: 70000, killerId: 6, victimId: 1, position: { x: 7000, y: 7000 } },
+      { type: 'ELITE_MONSTER_KILL', timestamp: 80000, killerTeamId: 200, monsterType: 'HORDE' },
+      { type: 'BUILDING_KILL', timestamp: 90000, teamId: 100, buildingType: 'TOWER_BUILDING' }] }] } };
+  const G = Builds.postgame(match, tl, 'puuid-du-client-qui-ne-correspond-pas', [{ gameName: 'carotte', tagLine: 'EUW' }]);
+  assert.strictEqual(G.me.participantId, 6); assert.strictEqual(G.teams[0].id, 200); assert.strictEqual(G.teams[0].win, false);
+  assert.deepStrictEqual(G.T.kills.us, [0, 1]); assert.strictEqual(G.T.firsts.blood.side, 'us'); assert.strictEqual(G.T.firsts.grubs.side, 'us'); assert.strictEqual(G.T.firsts.tower.side, 'us');
+  assert.deepStrictEqual(G.T.me.gold, [500, 1400]); assert.deepStrictEqual(G.T.xp, [0, 200]); assert.strictEqual(G.T.myEv[0].kind, 'kill');
+});

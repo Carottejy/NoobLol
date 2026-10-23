@@ -615,3 +615,44 @@ body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 .lp.them { grid-template-columns: auto 72px minmax(0, 1fr) 38px; }
 @container (max-width: 760px) { .lp { grid-template-columns: 34px minmax(0, 1fr) 72px; } .lp.them { grid-template-columns: 72px minmax(0, 1fr) 34px; } }
 @container (max-width: 520px) { .lp.them { grid-template-columns: 34px minmax(0, 1fr) 72px; } }
+
+/* v2.9 : graphiques de fin de partie */
+.post-wrap, .card { --us: #4f8fe8; --them: #e8606a; }
+.chart svg { height: 170px; }
+.curve .sr { fill: none; stroke-width: 2.2; vector-effect: non-scaling-stroke; stroke: var(--accent2); }
+.curve .sr.us { stroke: var(--us); } .curve .sr.them { stroke: var(--them); }
+.curve .tk.end { text-anchor: end; font-weight: 700; } .curve .tk.mid { text-anchor: middle; }
+.curve .tk.us { fill: var(--us); } .curve .tk.them { fill: var(--them); }
+.lgd { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .78rem; color: var(--muted); margin-top: 4px; }
+.lgd i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; background: var(--accent2); }
+.lgd i.us, .lgd i.k-us { background: var(--us); } .lgd i.them, .lgd i.k-them { background: var(--them); }
+.lgd i.ev-kill { background: #5fd18a; border-radius: 50%; } .lgd i.ev-death { background: #e8606a; border-radius: 50%; } .lgd i.ev-assist { background: #f0d58c; border-radius: 50%; }
+.strip svg { width: 100%; height: auto; display: block; }
+.strip .axis { fill: var(--panel2); stroke: var(--line); }
+.strip .emo { font-size: 17px; text-anchor: middle; cursor: default; }
+.kmap { margin: 0; } .kmap svg { width: 100%; max-width: 520px; display: block; margin: 0 auto; border-radius: 10px; background: #050a12; }
+.kmap circle { stroke: #000; stroke-width: 1; opacity: .9; }
+.kmap .k-us { fill: var(--us); } .kmap .k-them { fill: var(--them); }
+.kmap .ev-kill { fill: #5fd18a; } .kmap .ev-death { fill: #e8606a; } .kmap .ev-assist { fill: #f0d58c; }
+.radar { margin: 0; } .radar svg { width: 100%; max-width: 340px; display: block; margin: 0 auto; overflow: visible; }
+.radar .rg { fill: none; stroke: var(--line); } .radar .tk { fill: var(--muted); font-size: 10px; }
+.radar .rp { stroke-width: 2; } .radar .rp.us { fill: rgba(79,143,232,.3); stroke: var(--us); } .radar .rp.them { fill: rgba(232,96,106,.22); stroke: var(--them); }
+.vslist { display: flex; flex-direction: column; gap: 6px; }
+.vsr { display: grid; grid-template-columns: 64px minmax(0, 1fr) 64px; gap: 8px; align-items: center; }
+.vsr > b { font-size: .9rem; } .vsr > b.us { text-align: right; color: var(--us); } .vsr > b.them { color: var(--them); }
+.vsr span { display: block; text-align: center; font-size: .78rem; color: var(--muted); }
+.vsbar { display: flex; height: 7px; border-radius: 99px; overflow: hidden; background: var(--panel); }
+.vsbar .us { background: var(--us); } .vsbar .them { background: var(--them); }
+.firsts { display: flex; flex-direction: column; gap: 4px; }
+.firsts > div { display: flex; justify-content: space-between; padding: 4px 8px; border-radius: 8px; background: var(--panel2); font-size: .86rem; }
+.firsts > div.us { box-shadow: inset 3px 0 0 var(--us); } .firsts > div.them { box-shadow: inset 3px 0 0 var(--them); }
+.share { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin: 3px 0 6px; font-size: .68rem; font-weight: 700; }
+.share i { display: flex; align-items: center; justify-content: center; font-style: normal; white-space: nowrap; overflow: hidden; color: #fff; border-right: 1px solid rgba(0,0,0,.35); }
+.share.us .s0 { background: #2f5fa8; } .share.us .s1 { background: #3b74c7; } .share.us .s2 { background: #4f8fe8; } .share.us .s3 { background: #6fa6f0; } .share.us .s4 { background: #93bcf5; color: #0b1422; }
+.share.them .s0 { background: #9c3540; } .share.them .s1 { background: #bd4651; } .share.them .s2 { background: #e8606a; } .share.them .s3 { background: #ef858c; } .share.them .s4 { background: #f5aab0; color: #0b1422; }
+.myev { display: flex; flex-wrap: wrap; gap: 6px; }
+.myev .ev { font-size: .8rem; padding: 3px 8px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--line); }
+.myev .ev.kill { border-color: #5fd18a; } .myev .ev.death { border-color: #e8606a; } .myev .ev.assist { border-color: #f0d58c; }
+.kpis small { font-size: .7rem; color: var(--muted); font-weight: 400; }
+.ptabs { flex-wrap: wrap; }
+.strip { overflow-x: auto; } .strip svg { min-width: 720px; }

@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('noob', {
   key: { status: () => call('key:status'), renew: () => call('key:renew'), on: on('keystatus'), onRenewed: on('keyrenewed') },
   overlay: { update: (d) => call('overlay:update', d), reset: () => call('overlay:reset'), onData: on('overlay:data') },
   players: { info: (ids) => call('players:info', ids) },
-  postgame: { get: () => call('postgame:get'), load: (id) => call('postgame:load', id), on: on('postgame') },
+  postgame: { get: () => call('postgame:get'), load: (id, puuid) => call('postgame:load', id, puuid), on: on('postgame') },
   openExternal: (u) => call('open:external', u),
   onUpdate: on('update'), installUpdate: () => call('update:install'),
 });

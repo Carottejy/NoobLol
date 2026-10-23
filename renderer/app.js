@@ -757,6 +757,7 @@
   /* Données officielles du jeu en direct : horloge, ennemis, objectifs tués. */
   function onLive(L) {
     const was = R.live;
+    if (L) enrichLive(L);
     R.live = L;
     if (!L) { R.ovKey = ''; if (was) { renderTop(); if (S.mode === 'game' && !busy()) render(true); } return; }
     const g = S.game;
@@ -772,11 +773,10 @@
     const G = S.game;
     G.lastTime = L.time;
     G.start = now() - L.time * 1000;
-    const nameTeam = {}; L.players.forEach((p) => { nameTeam[p.name] = p.team; nameTeam[p.gameName] = p.team; });
     for (const e of L.events) {
       if (G.seenEv.includes(e.id)) continue;
       G.seenEv.push(e.id);
-      const team = nameTeam[e.killer] || nameTeam[String(e.killer).split('#')[0]];
+      const team = Builds.eventTeam(e, L);
       const who = !team ? '' : (L.me && team === L.me.team ? 'Nous' : 'Eux');
       let side = who === 'Nous' ? 'us' : who === 'Eux' ? 'them' : '';
       if (e.name === 'InhibKilled') { const m = String(e.inhib).match(/_T([12])_/); if (m) side = ((m[1] === '1' ? 'ORDER' : 'CHAOS') === (L.me ? L.me.team : 'ORDER')) ? 'them' : 'us'; }
@@ -803,6 +803,30 @@
     try { overlaySync(L); } catch (e) { /* ignoré */ }
     renderTop();
     if (S.mode === 'game' && !busy()) render(true); else save();
+  }
+  /* Complète les données du jeu avec celles du client LoL : autres noms des joueurs (les événements
+     utilisent parfois l'ancien nom d'invocateur) et, si besoin, quel joueur tu es. */
+  function enrichLive(L) {
+    const gp = (R.lcu.game && R.lcu.game.players) || [];
+    const keyOf = (p) => (D.champs && D.champs[p.champ] ? +D.champs[p.champ].key : 0);
+    for (const p of L.players) {
+      const g = gp.find((x) => x.team === p.team && +x.champ === keyOf(p));
+      if (g) { p.aliases = [...new Set((p.aliases || []).concat(g.aliases || [], [g.name, g.name && g.tag ? g.name + '#' + g.tag : ''].filter(Boolean)))]; p.puuid = g.puuid; }
+    }
+    if ((!L.me || !L.me.team) && R.lcu.summoner && R.lcu.summoner.puuid) {
+      const mine = L.players.find((p) => p.puuid && p.puuid === R.lcu.summoner.puuid);
+      if (mine) L.me = Object.assign({ level: mine.level, gold: 0, stats: null }, L.me || {}, { name: mine.name, champ: mine.champ, team: mine.team });
+    }
+  }
+  /* Qui je suis : compte du client LoL, sinon compte affiché dans « Mon compte », sinon Riot ID des réglages */
+  const myPuuid = () => (R.lcu.summoner && R.lcu.summoner.puuid) || (R.profile && R.profile.account && R.profile.account.puuid) || '';
+  function myIds(P) {
+    const ids = [];
+    if (R.lcu.summoner && R.lcu.summoner.gameName) ids.push({ gameName: R.lcu.summoner.gameName, tagLine: R.lcu.summoner.tagLine || '' });
+    if (R.profile && R.profile.account) ids.push({ gameName: R.profile.account.gameName, tagLine: R.profile.account.tagLine });
+    const c = (R.cfg || {}).riotId; if (c && c.gameName) ids.push({ gameName: c.gameName, tagLine: c.tagLine || '' });
+    if (P && P.live && P.live.me && D.champs && D.champs[P.live.me.champ]) ids.push({ champ: +D.champs[P.live.me.champ].key });
+    return ids;
   }
   const dragonName = (t) => ({ Fire: 'infernal', Water: 'des océans', Earth: 'des montagnes', Air: 'des nuages', Hextech: 'hextech', Chemtech: 'chemtech' })[t] || '';
   function logEv(t, txt) { S.game.log.unshift({ t, txt }); S.game.log = S.game.log.slice(0, 30); }
@@ -869,6 +893,12 @@
     if (!S.opt.voice || L.time - e.t > 15) return;
     const us = side === 'us';
     const key = 'ev-' + e.id;
+    /* Équipe inconnue : on annonce sans dire qui (jamais « l'ennemi » par défaut) */
+    if (!side) {
+      const N = { DragonKill: /elder/i.test(e.dragon) ? 'Le dragon ancestral a été pris.' : `Le dragon ${dragonName(e.dragon)} a été pris.`, BaronKill: 'Le Nashor a été pris.', HeraldKill: 'Le Héraut a été pris.', HordeKill: 'Les larves du Néant sont attaquées.' };
+      if (N[e.name]) speak(N[e.name], e.name === 'HordeKill' ? 'horde-' + Math.floor(e.t / 30) : key);
+      return;
+    }
     if (e.name === 'DragonKill') {
       if (/elder/i.test(e.dragon)) speak(us ? 'Nous avons pris le dragon ancestral !' : 'L\'ennemi a pris le dragon ancestral. Évitez les combats.', key);
       else speak(`${us ? 'Nous avons pris' : 'L\'ennemi a pris'} le dragon ${dragonName(e.dragon)}${e.stolen ? ', volé' : ''}.`, key);
@@ -1152,7 +1182,7 @@
   /* =====================================================================
      FIN DE PARTIE : toutes les statistiques, en onglets
      ===================================================================== */
-  const POST_TABS = [['resume', '🏁', 'Résumé'], ['moi', '🙋', 'Ma partie'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds']];
+  const POST_TABS = [['resume', '🏁', 'Résumé'], ['equipe', '📈', 'Équipe'], ['moi', '🙋', 'Ma partie'], ['carte', '🗺️', 'Carte'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds']];
   const k1 = (n) => (n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(n || 0)));
   function curveSvg(vals, { title = '', unit = 'po' } = {}) {
     if (!vals || vals.length < 2) return '<p class="muted small">Courbe indisponible.</p>';
@@ -1167,6 +1197,74 @@
       <polygon points="${x(0)},${H / 2} ${pts} ${x(vals.length - 1)},${H / 2}" class="aup" clip-path="url(#cup)"/><polygon points="${x(0)},${H / 2} ${pts} ${x(vals.length - 1)},${H / 2}" class="adn" clip-path="url(#cdn)"/>
       <polyline points="${pts}" class="ln"/><text x="${P}" y="12" class="tk">+${k1(max)} ${unit}</text><text x="${P}" y="${H - 16}" class="tk">−${k1(max)} ${unit}</text></svg></figure>`;
   }
+  /* ---------- Graphiques de fin de partie (SVG, sans bibliothèque) ---------- */
+  const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+  const pctS = (v) => `${Math.round((v || 0) * 100)} %`;
+  /* Plusieurs courbes sur la même échelle, en minutes */
+  function lineChart(series, { title = '', unit = '', H = 170, fmtY = k1, legend = true } = {}) {
+    const ss = series.filter((x) => x.vals && x.vals.length > 1);
+    if (!ss.length) return '<p class="muted small">Courbe indisponible (chronologie de la partie non publiée).</p>';
+    const W = 640, P = 34, n = Math.max(...ss.map((x) => x.vals.length));
+    const all = ss.flatMap((x) => x.vals); const max = Math.max(1, ...all), min = Math.min(0, ...all);
+    const x = (i) => P + (i * (W - P - 8)) / Math.max(1, n - 1), y = (v) => H - 16 - ((v - min) / (max - min || 1)) * (H - 30);
+    const ticks = []; for (let m = 0; m < n; m += 5) ticks.push(`<line x1="${x(m)}" x2="${x(m)}" y1="10" y2="${H - 16}" class="gl"/><text x="${x(m)}" y="${H - 3}" class="tk">${m}'</text>`);
+    const lines = ss.map((sr) => `<polyline points="${sr.vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}" class="sr ${sr.cls || ''}"${sr.dash ? ' stroke-dasharray="5 4"' : ''}/>`).join('');
+    /* valeurs finales, écartées si elles se chevauchent */
+    const ends = ss.map((sr) => ({ sr, v: sr.vals[sr.vals.length - 1], yy: y(sr.vals[sr.vals.length - 1]) - 4 })).sort((a, b) => a.yy - b.yy);
+    for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 13) ends[i].yy = ends[i - 1].yy + 13;
+    const last = ends.map((e) => `<text x="${W - 6}" y="${Math.min(H - 18, e.yy).toFixed(1)}" class="tk end ${e.sr.cls || ''}">${esc(fmtY(e.v))}</text>`).join('');
+    return `<figure class="curve chart"><figcaption class="small muted">${esc(title)}</figcaption><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(title)}">${ticks.join('')}
+      ${min < 0 ? `<line x1="${P}" x2="${W - 8}" y1="${y(0)}" y2="${y(0)}" class="zero"/>` : ''}<text x="2" y="16" class="tk">${esc(fmtY(max))}${unit ? ' ' + unit : ''}</text><text x="2" y="${H - 18}" class="tk">${esc(fmtY(min))}</text>${lines}${last}</svg>
+      ${legend && ss.length > 1 ? `<div class="lgd">${ss.map((sr) => `<span><i class="${sr.cls || ''}"></i>${esc(sr.label || '')}</span>`).join('')}</div>` : ''}</figure>`;
+  }
+  /* Frise des objectifs : en haut ceux de mon équipe, en bas ceux des adversaires */
+  const OBJ_EMO = { drake: '🐉', elder: '🔥', baron: '👾', herald: '🦀', grubs: '🪲', atakhan: '🦅', tower: '🏰', inhib: '💎', other: '⭐' };
+  function objStrip(G) {
+    const evs = G.T.objEv.concat(G.T.buildEv).filter((e) => e.side);
+    if (!evs.length) return '<p class="muted small">Aucun objectif dans la chronologie.</p>';
+    const W = 1100, H = 96, P = 16, x = (t) => P + (t / Math.max(60, G.dur)) * (W - 2 * P);
+    const ticks = []; for (let m = 0; m * 60 <= G.dur; m += 5) ticks.push(`<line x1="${x(m * 60)}" x2="${x(m * 60)}" y1="40" y2="52" class="gl"/><text x="${x(m * 60)}" y="${H / 2 + 4}" class="tk mid">${m}'</text>`);
+    /* on décale les icônes qui se chevauchent */
+    const lanes = { us: [], them: [] };
+    const icons = evs.sort((a, b) => a.t - b.t).map((e) => {
+      const L = lanes[e.side]; let row = 0; while (L[row] != null && x(e.t) - L[row] < 15) row++; L[row] = x(e.t);
+      const yy = e.side === 'us' ? 30 - row * 13 : 66 + row * 13;
+      return `<text x="${x(e.t).toFixed(1)}" y="${yy}" class="emo"><title>${fmt(e.t)} · ${esc({ drake: 'Dragon ' + (e.sub || '').replace(/_DRAGON/, '').toLowerCase(), elder: 'Dragon ancestral', baron: 'Baron Nashor', herald: 'Héraut', grubs: 'Larve du Néant', atakhan: 'Atakhan', tower: 'Tour', inhib: 'Inhibiteur', other: 'Objectif' }[e.kind])} (${e.side === 'us' ? 'nous' : 'eux'})</title>${OBJ_EMO[e.kind] || '⭐'}</text>`;
+    }).join('');
+    return `<figure class="curve strip"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Frise des objectifs"><rect x="${P}" y="42" width="${W - 2 * P}" height="8" rx="4" class="axis"/>${ticks.join('')}<text x="${W - P}" y="10" class="tk end us">🟦 nous</text><text x="${W - P}" y="${H - 2}" class="tk end them">🟥 eux</text>${icons}</svg></figure>`;
+  }
+  /* Barre empilée : répartition (dégâts, or…) entre les 5 joueurs d'une équipe */
+  function shareBar(t, key, side) {
+    const tot = t.players.reduce((s2, p) => s2 + (p[key] || 0), 0) || 1;
+    return `<div class="share ${side}">${t.players.map((p, i) => { const v = (p[key] || 0) / tot; const c = byKey(p.championId); return `<i class="s${i}" style="width:${(v * 100).toFixed(1)}%" title="${esc(c ? c.name : p.championName)} : ${pctS(v)}">${v > 0.09 ? `${esc((c ? c.name : p.championName).slice(0, 7))} ${Math.round(v * 100)}%` : ''}</i>`; }).join('')}</div>`;
+  }
+  /* Carte de la Faille avec les éliminations */
+  function killMap(G, onlyMe) {
+    const evs = onlyMe ? G.T.myEv.filter((e) => e.x != null) : G.T.killEv.filter((e) => e.x != null && e.side);
+    if (!evs.length) return '<p class="muted small">Positions indisponibles (chronologie de la partie non publiée).</p>';
+    const S2 = 300, X = (v) => (v / 14870) * S2, Y = (v) => S2 - (v / 14980) * S2;
+    const dots = evs.map((e) => onlyMe
+      ? `<circle cx="${X(e.x).toFixed(1)}" cy="${Y(e.y).toFixed(1)}" r="${e.kind === 'assist' ? 4 : 5.5}" class="ev-${e.kind}"><title>${fmt(e.t)} · ${{ kill: 'Kill', death: 'Mort', assist: 'Assistance' }[e.kind]}</title></circle>`
+      : `<circle cx="${X(e.x).toFixed(1)}" cy="${Y(e.y).toFixed(1)}" r="4.5" class="k-${e.side}"><title>${fmt(e.t)} · kill ${e.side === 'us' ? 'de mon équipe' : 'des adversaires'}</title></circle>`).join('');
+    return `<figure class="kmap"><svg viewBox="0 0 ${S2} ${S2}" role="img" aria-label="Carte des éliminations"><image href="https://ddragon.leagueoflegends.com/cdn/${D.version}/img/map/map11.png" x="0" y="0" width="${S2}" height="${S2}" opacity=".75"/>${dots}</svg>
+      <div class="lgd">${onlyMe ? '<span><i class="ev-kill"></i>mes kills</span><span><i class="ev-death"></i>mes morts</span><span><i class="ev-assist"></i>mes assistances</span>' : '<span><i class="k-us"></i>kills de mon équipe</span><span><i class="k-them"></i>kills adverses</span>'}</div></figure>`;
+  }
+  /* Radar : moi contre mon adversaire de voie (chaque axe est rapporté au meilleur joueur de la partie) */
+  function radar(G) {
+    const me = G.me, op = G.opp; if (!me) return '';
+    const all = G.teams.flatMap((t) => t.players);
+    const AX = [['KDA', (p) => p.kda], ['Participation', (p) => p.kp], ['CS/min', (p) => p.csm], ['Or/min', (p) => p.gpm], ['Dégâts/min', (p) => p.dpm], ['Vision/min', (p) => (p.visionScore || 0) / G.min], ['Dégâts subis', (p) => p.totalDamageTaken || 0]];
+    const R0 = 100, C = 130, n = AX.length;
+    const pt = (i, r) => [C + r * Math.sin((2 * Math.PI * i) / n), C - r * Math.cos((2 * Math.PI * i) / n)];
+    const poly = (p) => AX.map(([, f], i) => { const mx = Math.max(...all.map(f)) || 1; return pt(i, R0 * Math.max(0.04, f(p) / mx)).map((v) => v.toFixed(1)).join(','); }).join(' ');
+    const grid = [0.25, 0.5, 0.75, 1].map((k) => `<polygon points="${AX.map((_, i) => pt(i, R0 * k).join(',')).join(' ')}" class="rg"/>`).join('');
+    const labels = AX.map(([l], i) => { const [x, y] = pt(i, R0 + 18); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" class="tk mid">${l}</text>`; }).join('');
+    return `<figure class="radar"><svg viewBox="0 0 260 260" role="img" aria-label="Moi contre mon adversaire">${grid}${op ? `<polygon points="${poly(op)}" class="rp them"/>` : ''}<polygon points="${poly(me)}" class="rp us"/>${labels}</svg>
+      <div class="lgd"><span><i class="us"></i>moi</span>${op ? `<span><i class="them"></i>${esc((byKey(op.championId) || {}).name || 'adversaire')}</span>` : ''}</div></figure>`;
+  }
+  /* Comparaison équipe contre équipe, avec barre partagée */
+  const vsRow = (label, a, b, fmtV = (v) => nf(v)) => { const tot = (a || 0) + (b || 0); const pa = tot ? (100 * (a || 0)) / tot : 50; return `<div class="vsr"><b class="us">${fmtV(a || 0)}</b><div><span>${label}</span><div class="vsbar"><i class="us" style="width:${pa}%"></i><i class="them" style="width:${100 - pa}%"></i></div></div><b class="them">${fmtV(b || 0)}</b></div>`; };
+  const ch = (p, k) => ((p.challenges || {})[k]);
   const bar = (v, max, cls) => `<div class="hbar"><i class="${cls || ''}" style="width:${max ? Math.max(1, (100 * v) / max) : 0}%"></i></div>`;
   function viewPost() {
     const P = R.post;
@@ -1178,8 +1276,8 @@
       else h += '<div class="loader">Récupération…</div>';
       return h;
     }
-    const puuid = P.puuid || (R.lcu.summoner && R.lcu.summoner.puuid) || '';
-    const G = Builds.postgame(P.match, P.timeline, puuid);
+    const G = Builds.postgame(P.match, P.timeline, P.puuid || myPuuid(), myIds(P));
+    const puuid = G.me ? G.me.puuid : '';
     wantInfo(G.teams.flatMap((t) => t.players.map((p) => p.puuid)));
     const me = G.me, us = G.teams[0], them = G.teams[1];
     const tab = POST_TABS.some((t) => t[0] === S.postTab) ? S.postTab : 'resume';
@@ -1197,8 +1295,40 @@
       h += `<div class="cols"><div class="card"><h2>Équipes</h2><div class="vsstats">
         ${[['Kills', us.kills, them.kills], ['Or', k1(us.gold), k1(them.gold)], ['Dégâts aux champions', k1(us.damage), k1(them.damage)], ['Vision', us.vision, them.vision]].map(([l, a, b]) => `<div><b class="us">${a}</b><span>${l}</span><b class="them">${b}</b></div>`).join('')}
         ${OBJS.map(([ic, l, k]) => { const [a, b] = obj(k); return `<div><b class="us">${a}</b><span>${ic} ${l}</span><b class="them">${b}</b></div>`; }).join('')}</div></div>
-        <div class="card"><h2>⭐ Les meilleurs</h2>${[['Plus de dégâts', G.best.damage, (p) => k1(p.totalDamageDealtToChampions)], ['Meilleur KDA', G.best.kda, (p) => `${p.kills}/${p.deaths}/${p.assists}`], ['Meilleure vision', G.best.vision, (p) => p.visionScore]].map(([l, p, f]) => `<div class="best">${name(p)}<span class="small muted">${l}</span><b>${f(p)}</b></div>`).join('')}</div></div>`;
-      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '64px 74px 58px 1fr', (p) => `<b>${p.kills}/<span class="neg">${p.deaths}</span>/${p.assists}</b><span title="${p.cs} sbires et monstres">${p.csm.toFixed(1).replace('.', ',')} CS/min</span><span>${k1(p.goldEarned)}</span><div class="items">${p.items.map((x) => itIcon(x)).join('')}</div>`)}</div>`).join('')}</div>`;
+        <div><div class="card"><h2>⭐ Les meilleurs</h2>${[['Plus de dégâts', G.best.damage, (p) => k1(p.totalDamageDealtToChampions)], ['Meilleur KDA', G.best.kda, (p) => `${p.kills}/${p.deaths}/${p.assists}`], ['Meilleure vision', G.best.vision, (p) => p.visionScore]].map(([l, p, f]) => `<div class="best">${name(p)}<span class="small muted">${l}</span><b>${f(p)}</b></div>`).join('')}</div>
+        <div class="card">${curveSvg(G.curve, { title: 'Différence d\'or entre les équipes (au-dessus : mon équipe devant)' })}</div></div></div>`;
+      h += `<div class="card"><h2>⏱️ Objectifs dans le temps</h2>${objStrip(G)}</div>`;
+      h += `<div class="cols">${[us, them].map((t, i) => `<div class="card">${teamBlock(t, i, '64px 86px 58px 1fr', (p) => `<b>${p.kills}/<span class="neg">${p.deaths}</span>/${p.assists}</b><span title="${p.cs} sbires et monstres">${p.csm.toFixed(1).replace('.', ',')} CS/min</span><span>${k1(p.goldEarned)}</span><div class="items">${p.items.map((x) => itIcon(x)).join('')}</div>`)}</div>`).join('')}</div>`;
+    } else if (tab === 'equipe') {
+      const T = G.T, sum = (t, f) => t.players.reduce((s2, p) => s2 + (f(p) || 0), 0);
+      const FIRST = [['blood', '🩸 Premier sang'], ['tower', '🏰 Première tour'], ['drake', '🐉 Premier dragon'], ['grubs', '🪲 Premières larves'], ['herald', '🦀 Héraut'], ['baron', '👾 Premier Nashor'], ['inhib', '💎 Premier inhibiteur']];
+      h += `<div class="kpis">${[
+        ['Plus grande avance', G.lead && G.lead.max ? `+${k1(G.lead.max)} <small>à ${G.lead.maxAt}'</small>` : '—'],
+        ['Plus grand retard', G.lead && G.lead.min ? `−${k1(-G.lead.min)} <small>à ${G.lead.minAt}'</small>` : '—'],
+        ['Kills / min', `${f1(us.kills / G.min)} – ${f1(them.kills / G.min)}`],
+        ['Or / min', `${Math.round(us.gold / G.min)} – ${Math.round(them.gold / G.min)}`],
+        ['Dégâts / min', `${k1(us.damage / G.min)} – ${k1(them.damage / G.min)}`],
+        ['Plaques de tour', `${T.plates.us} – ${T.plates.them}`],
+      ].map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+      h += `<div class="cols"><div class="card"><h2>⚖️ Mon équipe contre les adversaires</h2><div class="vslist">
+        ${vsRow('Kills', us.kills, them.kills)}${vsRow('Morts', us.deaths, them.deaths)}${vsRow('Assistances', us.assists, them.assists)}
+        ${vsRow('Or gagné', us.gold, them.gold, k1)}${vsRow('Dégâts aux champions', us.damage, them.damage, k1)}${vsRow('Dégâts subis', sum(us, (p) => p.totalDamageTaken), sum(them, (p) => p.totalDamageTaken), k1)}
+        ${vsRow('Dégâts aux objectifs', sum(us, (p) => p.damageDealtToObjectives), sum(them, (p) => p.damageDealtToObjectives), k1)}${vsRow('Dégâts aux bâtiments', sum(us, (p) => p.damageDealtToBuildings), sum(them, (p) => p.damageDealtToBuildings), k1)}
+        ${vsRow('Sbires et monstres', sum(us, (p) => p.cs), sum(them, (p) => p.cs))}${vsRow('Contrôle infligé (s)', sum(us, (p) => p.timeCCingOthers), sum(them, (p) => p.timeCCingOthers))}
+        ${vsRow('Soins', sum(us, (p) => p.totalHeal), sum(them, (p) => p.totalHeal), k1)}${vsRow('Score de vision', us.vision, them.vision)}
+        ${vsRow('Balises posées', sum(us, (p) => p.wardsPlaced), sum(them, (p) => p.wardsPlaced))}${vsRow('Balises détruites', sum(us, (p) => p.wardsKilled), sum(them, (p) => p.wardsKilled))}
+        ${vsRow('Balises de contrôle', sum(us, (p) => p.visionWardsBoughtInGame), sum(them, (p) => p.visionWardsBoughtInGame))}${vsRow('Temps passé mort', sum(us, (p) => p.totalTimeSpentDead), sum(them, (p) => p.totalTimeSpentDead), (v) => fmt(v))}
+      </div></div><div><div class="card"><h2>🥇 Les premiers</h2><div class="firsts">${FIRST.map(([k, l]) => { const f = T.firsts[k]; return `<div class="${f ? f.side : ''}"><span>${l}</span><b>${f ? (f.side === 'us' ? '🟦 nous' : '🟥 eux') + ` <small class="muted">${fmt(f.t)}</small>` : '—'}</b></div>`; }).join('')}</div></div>
+        <div class="card"><h2>🍰 Répartition</h2><p class="small muted">Part des dégâts aux champions</p>${shareBar(us, 'totalDamageDealtToChampions', 'us')}${shareBar(them, 'totalDamageDealtToChampions', 'them')}
+        <p class="small muted">Part de l'or</p>${shareBar(us, 'goldEarned', 'us')}${shareBar(them, 'goldEarned', 'them')}
+        <p class="small muted">Part des dégâts subis</p>${shareBar(us, 'totalDamageTaken', 'us')}${shareBar(them, 'totalDamageTaken', 'them')}</div></div></div>`;
+      h += `<div class="cols"><div class="card">${lineChart([{ vals: T.kills.us, cls: 'us', label: 'Mon équipe' }, { vals: T.kills.them, cls: 'them', label: 'Adversaires' }], { title: 'Kills cumulés, minute par minute', fmtY: (v) => String(Math.round(v)) })}</div>
+        <div class="card">${lineChart([{ vals: T.gold.us, cls: 'us', label: 'Mon équipe' }, { vals: T.gold.them, cls: 'them', label: 'Adversaires' }], { title: 'Or total de chaque équipe', unit: 'po' })}</div></div>`;
+      h += `<div class="cols"><div class="card">${curveSvg(G.curve, { title: 'Différence d\'or entre les équipes' })}</div><div class="card">${curveSvg(T.xp, { title: 'Différence d\'expérience entre les équipes', unit: 'XP' })}</div></div>`;
+      h += `<div class="card"><h2>⏱️ Objectifs dans le temps</h2>${objStrip(G)}</div>`;
+    } else if (tab === 'carte') {
+      h += `<div class="cols"><div class="card"><h2>⚔️ Toutes les éliminations</h2>${killMap(G, false)}</div><div class="card"><h2>🙋 Mes kills, morts et assistances</h2>${me ? killMap(G, true) : '<p class="muted">Joueur introuvable dans cette partie.</p>'}</div></div>`;
+      if (me && G.T.myEv.length) h += `<div class="card"><h2>🕒 Mes actions dans le temps</h2><div class="myev">${G.T.myEv.map((e) => `<span class="ev ${e.kind}"><b>${fmt(e.t)}</b> ${{ kill: '⚔️ kill', death: '💀 mort', assist: '🤝 assistance' }[e.kind]}</span>`).join('')}</div></div>`;
     } else if (tab === 'moi') {
       if (!me) h += '<div class="card"><p class="muted">Joueur introuvable dans cette partie.</p></div>';
       else {
@@ -1206,10 +1336,23 @@
         const kp = (v) => `${Math.round(v * 100)} %`;
         const sgd = (v, min) => (v == null ? '—' : `<b class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : '−'}${Math.abs(v / min).toFixed(1).replace('.', ',')}</b>`);
         const sg = (v) => (v == null ? '—' : `<b class="${v >= 0 ? 'pos' : 'neg'}">${v >= 0 ? '+' : ''}${nf(v)}</b>`);
-        h += `<div class="kpis big">${[['KDA', me.kda.toFixed(2).replace('.', ',')], ['Participation', kp(me.kp)], ['Sbires/min', me.csm.toFixed(1).replace('.', ',')], ['Or/min', Math.round(me.gpm)], ['Part des dégâts', kp(me.dmgShare)], ['Vision', me.visionScore]].map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+        h += `<div class="kpis big">${[['KDA', me.kda.toFixed(2).replace('.', ',')], ['Participation', kp(me.kp)], ['CS/min', f1(me.csm)], ['Or/min', Math.round(me.gpm)], ['Dégâts/min', Math.round(me.dpm)], ['Part des dégâts', kp(me.dmgShare)], ['Part de l\'or', kp(me.goldShare)], ['Vision/min', f1((me.visionScore || 0) / G.min)]].map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
+        const eff = me.goldEarned ? (me.totalDamageDealtToChampions || 0) / (me.goldEarned / 1000) : 0;
+        const more = [
+          ['Dégâts pour 1 000 po', Math.round(eff)], ['Kills en solo', ch(me, 'soloKills')], ['Plaques de tour', ch(me, 'turretPlatesTaken')], ['CS à 10 min', ch(me, 'laneMinionsFirst10Minutes') != null ? Math.round((ch(me, 'laneMinionsFirst10Minutes') || 0) + (ch(me, 'jungleCsBefore10Minutes') || 0)) : null],
+          ['Avance max. en CS', ch(me, 'maxCsAdvantageOnLaneOpponent') != null ? Math.round(ch(me, 'maxCsAdvantageOnLaneOpponent')) : null], ['Avance max. en niveaux', ch(me, 'maxLevelLeadLaneOpponent')], ['Sorts touchés', ch(me, 'skillshotsHit')], ['Sorts esquivés', ch(me, 'skillshotsDodged')],
+          ['Soins et boucliers utiles', ch(me, 'effectiveHealAndShielding') != null ? k1(ch(me, 'effectiveHealAndShielding')) : null], ['Temps mort', `${fmt(me.totalTimeSpentDead || 0)} (${pctS((me.totalTimeSpentDead || 0) / Math.max(1, G.dur))})`], ['Plus longue survie', fmt(me.longestTimeSpentLiving || 0)], ['Premier sang', me.firstBloodKill ? 'oui ⚔️' : me.firstBloodAssist ? 'assistance' : 'non'],
+        ].filter(([, v]) => v != null);
+        h += `<div class="kpis">${more.map(([l, v]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
         h += '<div class="cols"><div>';
         h += `<div class="card"><h2>🎯 Contre ${oc ? esc(oc.name) : 'mon adversaire'}</h2>${G.opp ? `<div class="vsstats"><div><b class="us">${sg(G.at10.gold)}</b><span>Or à 10 min</span><b class="them"></b></div><div><b class="us">${sgd(G.at10.cs, 10)}</b><span>Écart CS/min à 10 min</span><b></b></div><div><b class="us">${sg(G.at15.gold)}</b><span>Or à 15 min</span><b></b></div><div><b class="us">${sgd(G.at15.cs, 15)}</b><span>Écart CS/min à 15 min</span><b></b></div></div>${curveSvg(G.meVs.gold, { title: 'Différence d\'or avec ton adversaire de voie, minute par minute' })}` : '<p class="muted">Pas d\'adversaire de voie identifié.</p>'}</div>`;
+        const T = G.T, on = oc ? oc.name : 'adversaire';
+        h += `<div class="card"><h2>📈 Moi contre ${esc(on)}, minute par minute</h2>
+          ${lineChart([{ vals: T.me.cs, cls: 'us', label: 'moi' }, { vals: T.opp.cs, cls: 'them', label: on }], { title: 'Sbires et monstres cumulés', fmtY: (v) => String(Math.round(v)) })}
+          ${lineChart([{ vals: T.me.xp, cls: 'us', label: 'moi' }, { vals: T.opp.xp, cls: 'them', label: on }], { title: 'Expérience', unit: 'XP' })}
+          ${lineChart([{ vals: T.me.dmg, cls: 'us', label: 'moi' }, { vals: T.opp.dmg, cls: 'them', label: on }], { title: 'Dégâts aux champions cumulés' })}</div>`;
         h += '</div><div>';
+        h += `<div class="card"><h2>🕸️ Mon profil</h2>${radar(G)}<p class="small muted">Chaque axe est comparé au meilleur joueur de la partie.</p></div>`;
         h += `<div class="card gold"><h2>💡 Pour progresser</h2><ul class="tips">${G.tips.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
         h += `<div class="card"><h2>📋 Détails</h2><div class="kv">${[['Dégâts aux champions', nf(me.totalDamageDealtToChampions)], ['Dégâts subis', nf(me.totalDamageTaken)], ['Dégâts atténués', nf(me.damageSelfMitigated)], ['Dégâts aux objectifs', nf(me.damageDealtToObjectives)], ['Soins', nf(me.totalHeal)], ['Boucliers sur alliés', nf(me.totalDamageShieldedOnTeammates)], ['Contrôle infligé (s)', nf(me.timeCCingOthers)], ['Plus grosse série', me.largestKillingSpree || 0], ['Multi-kill max', me.largestMultiKill || 0], ['Temps mort', fmt(me.totalTimeSpentDead || 0)], ['Balises posées', me.wardsPlaced || 0], ['Balises détruites', me.wardsKilled || 0]].map(([l, v]) => `<div><span>${l}</span><b>${v}</b></div>`).join('')}</div></div>`;
         h += '</div></div>';
@@ -1454,7 +1597,7 @@
         }).catch((e) => toast('❌ ' + e.message)).finally(() => render(true));
         break;
       }
-      case 'openMatch': toast('Chargement de la partie…'); NB.postgame.load(v).then((d) => { R.post = d; S.mode = 'game'; S.postTab = 'resume'; render(); }).catch((e) => toast('❌ ' + e.message)); break;
+      case 'openMatch': toast('Chargement de la partie…'); NB.postgame.load(v, myPuuid()).then((d) => { R.post = d; S.mode = 'game'; S.postTab = 'resume'; render(); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'voiceTest': speak('Le Nashor est disponible. Tu as assez d\'or pour Lame d\'infini.'); break;
       case 'voiceRate': S.opt.voiceRate = +v; render(true); speak('Vitesse de la voix.'); break;
       case 'voiceVol': S.opt.voiceVol = +v; render(true); speak('Volume.'); break;

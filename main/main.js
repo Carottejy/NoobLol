@@ -170,7 +170,7 @@ function handlers() {
     return out;
   });
   h('postgame:get', () => post.data);
-  h('postgame:load', (matchId) => post.load(matchId, lcu.state.summoner ? lcu.state.summoner.puuid : ''));
+  h('postgame:load', (matchId, puuid) => post.load(matchId, puuid || (lcu.state.summoner ? lcu.state.summoner.puuid : '')));
 
   h('stats:counts', () => db.counts());
   h('stats:champ', (champ, role, days) => db.champ(champ, role, days));
