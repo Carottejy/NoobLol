@@ -21,10 +21,10 @@ contextBridge.exposeInMainWorld('noob', {
     onState: on('minimap:state'), onConfig: on('minimap:config'),
   },
   key: { status: () => call('key:status'), renew: () => call('key:renew'), on: on('keystatus'), onRenewed: on('keyrenewed') },
-  overlay: { update: (d) => call('overlay:update', d), reset: () => call('overlay:reset'), onData: on('overlay:data') },
+  overlay: { update: (d) => call('overlay:update', d), reset: () => call('overlay:reset'), onData: on('overlay:data'), openItem: (id) => call('overlay:openItem', id), onOpenItem: on('open:item') },
   players: { info: (ids) => call('players:info', ids) },
   postgame: { get: () => call('postgame:get'), load: (id, puuid) => call('postgame:load', id, puuid), on: on('postgame') },
-  openExternal: (u) => call('open:external', u),
+  openExternal: (u) => call('open:external', u), openData: () => call('app:openData'),
   onUpdate: on('update'), installUpdate: () => call('update:install'),
   update: { check: () => call('update:check'), state: () => call('update:state'), on: on('update:state') },
 });

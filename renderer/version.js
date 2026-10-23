@@ -1,6 +1,12 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '2.9.1';
+var APP_VERSION = '2.9.2';
 var APP_RELEASES = [
+  { v: '2.9.2', date: '2026-10-23', notes: [
+    'Correction : en jeu, les compteurs de tours et d\'inhibiteurs détruits fonctionnent (le nom de la structure est reconnu sous plusieurs formats, sinon on regarde qui l\'a détruite). Le journal dit maintenant « Tour ennemie détruite » ou « Nous avons perdu une tour ».',
+    'En jeu : la carte « Mon build » est plus compacte et montre tous les objets visés (départ, principaux, bottes, selon la partie). Le prochain objet est entouré, ceux déjà achetés sont cochés. Un clic sur un objet ouvre sa fiche boutique (le bouton « Retour » ramène à la partie).',
+    'Encart par-dessus le jeu : tous les objets visés aussi, et un clic sur un objet ouvre sa fiche dans Noob LOL.',
+    'Réglages : bouton « Dossier de l\'appli (diagnostic) ». À la fin de chaque partie, Noob LOL y enregistre les événements bruts du jeu (diagnostic-evenements.json) pour comprendre un compteur qui ne marcherait pas.',
+  ]},
   { v: '2.9.1', date: '2026-10-23', notes: [
     'Réglages : bouton « Vérifier les mises à jour » avec l\'état en direct (recherche, téléchargement en %, dernière version installée, prête à installer) et bouton « Redémarrer et installer ».',
   ]},

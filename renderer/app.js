@@ -779,7 +779,7 @@
       const team = Builds.eventTeam(e, L);
       const who = !team ? '' : (L.me && team === L.me.team ? 'Nous' : 'Eux');
       let side = who === 'Nous' ? 'us' : who === 'Eux' ? 'them' : '';
-      if (e.name === 'InhibKilled') { const m = String(e.inhib).match(/_T([12])_/); if (m) side = ((m[1] === '1' ? 'ORDER' : 'CHAOS') === (L.me ? L.me.team : 'ORDER')) ? 'them' : 'us'; }
+      if (/^(Turret|Inhib)/i.test(e.name)) { const st = Builds.structureTeam(e, L); side = !st ? '' : st === (L.me ? L.me.team : 'ORDER') ? 'us' : 'them'; }
       if (e.name === 'Ace') side = e.acingTeam ? (e.acingTeam === (L.me && L.me.team === 'ORDER' ? 'ORDER' : 'CHAOS') ? 'us' : 'them') : side;
       announceEvent(e, L, side);
       const ago = Math.max(0, L.time - e.t);
@@ -789,8 +789,8 @@
       else if (e.name === 'HeraldKill') logEv(e.t, `🦀 Héraut de la Faille pris par ${who || '?'}`);
       else if (e.name === 'HordeKill') logEv(e.t, `🪲 Larve du Néant prise par ${who || '?'}`);
       else if (e.name === 'FirstBlood') logEv(e.t, '🩸 Premier sang');
-      else if (e.name === 'TurretKilled') logEv(e.t, `🏰 Tour détruite par ${who || '?'}`);
-      else if (e.name === 'InhibKilled') logEv(e.t, `💎 Inhibiteur détruit par ${who || '?'}`);
+      else if (e.name === 'TurretKilled') logEv(e.t, side === 'us' ? '🏰 Tour ennemie détruite' : side === 'them' ? '🏰 Nous avons perdu une tour' : '🏰 Tour détruite');
+      else if (e.name === 'InhibKilled') logEv(e.t, side === 'us' ? '💎 Inhibiteur ennemi détruit' : side === 'them' ? '💎 Nous avons perdu un inhibiteur' : '💎 Inhibiteur détruit');
       else if (e.name === 'Ace') logEv(e.t, '💀 Équipe entière éliminée');
     }
     if (G.seenEv.length > 400) G.seenEv = G.seenEv.slice(-300);
@@ -905,7 +905,7 @@
     } else if (e.name === 'BaronKill') speak(us ? 'Nous avons le Nashor. Poussez les voies !' : 'L\'ennemi a le Nashor. Défendez vos tours.', key);
     else if (e.name === 'HeraldKill') speak(us ? 'Nous avons pris le Héraut.' : 'L\'ennemi a pris le Héraut.', key);
     else if (e.name === 'HordeKill') speak(us ? 'Nous prenons les larves du Néant.' : 'L\'ennemi prend les larves du Néant.', 'horde-' + Math.floor(e.t / 30));
-    else if (e.name === 'InhibKilled') speak(us ? 'Inhibiteur ennemi détruit !' : 'Notre inhibiteur est tombé. Attention aux super-sbires.', key);
+    else if (e.name === 'InhibKilled' && side) speak(us ? 'Inhibiteur ennemi détruit !' : 'Notre inhibiteur est tombé. Attention aux super-sbires.', key);
     /* Pas d'annonce pour les éliminations (premier sang, équipe entière) */
   }
 
@@ -936,34 +936,34 @@
     const owned = meP.items.map((i) => i.id);
     return { c, role, opp, A, owned, next: Builds.nextItem(A, owned, D) };
   }
+  /* Carte « Mon build » en jeu : compacte, tous les objets visés ; un clic ouvre la fiche boutique de l'objet */
   function buildCard(L) {
     const b = liveBuild(L);
     if (!b) return '';
     const oc = b.opp ? byKey(b.opp) : null;
-    let h = `<div class="card mybuild"><div class="row sp nw"><h2 style="margin:0">🛒 Mon build</h2><span class="small muted ell">${esc(b.c.name)}${b.role ? ' · ' + ROLE_NAME[b.role] : ''}${oc ? ' contre ' + esc(oc.name) : ''}</span></div>`;
+    const own = new Set((b.owned || []).map(Number));
+    const nextId = b.next ? +b.next.item : 0;
+    const ic = (id) => { id = +id; if (!id) return ''; const it = D.items && D.items[String(id)]; return `<button class="bi ${own.has(id) ? 'own' : ''} ${id === nextId ? 'nx' : ''}" data-act="item" data-val="${id}" title="${esc(it ? `${it.name} · ${it.gold.total} po — clic : fiche boutique` : '')}">${itIcon(id, 'ico xs')}${own.has(id) ? '<i>✓</i>' : ''}</button>`; };
+    const row = (label, ids, sep, boots) => { const l = (ids || []).map(Number).filter(Boolean); return l.length || boots ? `<div class="brow"><span class="small muted">${label}</span><div class="bis">${l.map(ic).join(sep || '')}${boots ? `<span class="rsep"></span>${ic(boots)}` : ''}</div></div>` : ''; };
+    const nextLine = () => {
+      if (!b.next) return '<div class="next sm"><span class="small pos">✅ Build terminé !</span></div>';
+      const miss = b.next.cost - ((L.me && L.me.gold) || 0);
+      return `<button class="next sm" data-act="item" data-val="${b.next.item}" title="Clic : fiche boutique">${itIcon(b.next.item, 'ico')}<span class="grow"><b class="ell">${esc(b.next.name)}</b><span class="small ${miss <= 0 ? 'pos' : 'muted'}">${miss <= 0 ? '✅ assez d\'or' : `il manque ${nf(miss)} po`}</span></span></button>`;
+    };
+    let h = `<div class="card mybuild compact"><div class="row sp nw"><h2 class="ell" style="margin:0">${b.personal ? '⭐ ' + esc(b.personal.name || 'Mon build perso') : '🛒 Mon build'}</h2><span class="small muted ell">${esc(b.c.name)}${b.role ? ' · ' + ROLE_NAME[b.role] : ''}${oc ? ' vs ' + esc(oc.name) : ''}</span></div>`;
     if (b.personal) {
-      const P = b.personal, own = new Set(b.owned.map(Number));
-      const ic = (id, big) => `<span class="bi ${own.has(+id) ? 'own' : ''}">${itIcon(id, big ? 'ico' : 'ico sm')}${own.has(+id) ? '<i>✓</i>' : ''}</span>`;
-      h = h.replace('🛒 Mon build</h2>', `⭐ ${esc(P.name || 'Mon build perso')}</h2>`);
-      if (b.next) { const miss = b.next.cost - (L.me.gold || 0); h += `<div class="next">${itIcon(b.next.item, 'ico lg')}<div class="grow"><span class="small muted">Prochain objet</span><b>${esc(b.next.name)}</b><span class="small ${miss <= 0 ? 'pos' : 'muted'}">${miss <= 0 ? '✅ Tu as assez d\'or' : `il manque ${nf(miss)} po`}</span></div></div>`; }
-      else h += '<p class="small pos">✅ Build terminé !</p>';
-      if (P.core.length) h += `<div class="brow"><span class="small muted">Principaux</span>${P.core.map((i) => ic(i, true)).join('<span class="arrow">→</span>')}${P.boots ? `<span class="rsep"></span>${ic(P.boots, true)}` : ''}</div>`;
-      if (P.situational.length) h += `<div class="brow"><span class="small muted">Situationnels</span>${P.situational.map((i) => ic(i)).join('')}</div>`;
-      return h + '</div>';
+      const P = b.personal;
+      return h + nextLine() + row('Départ', P.start) + row('Principaux', P.core, '<span class="arrow">›</span>', P.boots) + row('Selon partie', P.situational) + '</div>';
     }
     if (!b.role) return h + '<p class="muted small">Rôle inconnu pour cette partie.</p></div>';
     if (b.loading) return h + '<div class="loader small">Calcul…</div></div>';
     if (!b.A || !b.A.games) return h + '<p class="muted small">Pas encore de parties analysées pour ce champion dans ce rôle (collecteur).</p></div>';
-    const A = b.A, own = new Set(b.owned.map(Number));
-    const ic = (id, big) => `<span class="bi ${own.has(+id) ? 'own' : ''}">${itIcon(id, big ? 'ico' : 'ico sm')}${own.has(+id) ? '<i>✓</i>' : ''}</span>`;
-    if (b.next) {
-      const miss = b.next.cost - (L.me.gold || 0);
-      h += `<div class="next">${itIcon(b.next.item, 'ico lg')}<div class="grow"><span class="small muted">Prochain objet</span><b>${esc(b.next.name)}</b><span class="small ${miss <= 0 ? 'pos' : 'muted'}">${miss <= 0 ? '✅ Tu as assez d\'or' : `il manque ${nf(miss)} po`}</span></div></div>`;
-    }
-    if (A.core && A.core[0]) h += `<div class="brow"><span class="small muted">Début</span>${ic(A.core[0].items[0], true)}<span class="arrow">→</span>${ic(A.core[0].items[1], true)}${A.boots && A.boots[0] ? `<span class="rsep"></span>${ic(A.boots[0].item, true)}` : ''}</div>`;
+    const A = b.A;
+    h += nextLine();
+    h += row('Départ', A.start && A.start[0] ? A.start[0].items : []);
+    h += row('Principaux', A.core && A.core[0] ? A.core[0].items : [], '<span class="arrow">›</span>', A.boots && A.boots[0] ? A.boots[0].item : 0);
     const sit = (A.situational || []).filter((x) => x.items.length);
-    if (sit.length) h += sit.map((x) => `<div class="brow"><span class="small muted ell" title="${esc(x.why)}">${esc(x.why.split('(')[0].trim())}</span>${x.items.map((o) => ic(o.item)).join('')}</div>`).join('');
-    else if (A.later && A.later.length) h += `<div class="brow"><span class="small muted">Ensuite</span>${A.later.slice(0, 4).map((x) => ic(x.item)).join('')}</div>`;
+    h += row('Selon partie', [...new Set(sit.flatMap((x) => x.items.map((o) => o.item)).concat((A.later || []).slice(0, 4).map((x) => x.item)))].slice(0, 8));
     if (A.skills) h += `<div class="brow"><span class="small muted">Sorts</span><span class="skillord">${esc(A.skills.order)}</span></div>`;
     return h + '</div>';
   }
@@ -975,10 +975,10 @@
     const b = L ? liveBuild(L) : null;
     if (b && b.personal && D.items) {
       const P = b.personal, own = new Set((b.owned || []).map(Number));
-      const it = (id) => { const x = D.items[String(id)]; return x ? { src: Dd.img.item(x), name: x.name, own: own.has(+id) } : null; };
+      const it = (id) => { const x = D.items[String(id)]; return x ? { id: +id, src: Dd.img.item(x), name: x.name, cost: x.gold.total, own: own.has(+id) } : null; };
       const nx = b.next && D.items[String(b.next.item)];
-      d = { name: P.name || 'Mon build', champ: b.c.name, core: P.core.map(it).filter(Boolean), boots: P.boots ? it(P.boots) : null,
-        next: nx ? { src: Dd.img.item(nx), name: b.next.name, miss: Math.max(0, b.next.cost - ((L.me && L.me.gold) || 0)) } : null };
+      d = { name: P.name || 'Mon build', champ: b.c.name, core: P.core.map(it).filter(Boolean), boots: P.boots ? it(P.boots) : null, sit: (P.situational || []).map(it).filter(Boolean),
+        next: nx ? { id: +b.next.item, src: Dd.img.item(nx), name: b.next.name, miss: Math.max(0, b.next.cost - ((L.me && L.me.gold) || 0)) } : null };
     }
     const k = JSON.stringify(d);
     if (k === R.ovKey) return;
@@ -1474,7 +1474,7 @@
       ${updBlock()}
       <p class="muted small">Données des champions, objets et runes : Data Dragon (Riot Games). Compte et statistiques : API officielle de Riot. En jeu : API officielle « Live Client Data ».</p>
       <details class="flat"><summary class="small">📝 Notes de version</summary>${APP_RELEASES.map((r) => `<h3>${esc(r.v)} <span class="muted small">${esc(r.date)}</span></h3><ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>`).join('')}</details>
-      <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button><button class="btn danger small" data-act="wipe">Effacer favoris et notes (garde mes builds)</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn ghost small" data-act="reloadData">🔄 Recharger les données Riot</button>${NB && NB.openData ? '<button class="btn ghost small" data-act="openData" title="Contient diagnostic-evenements.json : les événements bruts de ta dernière partie">📂 Dossier de l\'appli (diagnostic)</button>' : ''}<button class="btn danger small" data-act="wipe">Effacer favoris et notes (garde mes builds)</button></div>
       <p class="muted small" style="margin-top:8px">Noob LOL n'est pas approuvé par Riot Games et ne reflète pas les opinions de Riot Games ou de quiconque officiellement impliqué dans la production ou la gestion des propriétés de Riot Games. Riot Games et toutes les propriétés associées sont des marques commerciales ou des marques déposées de Riot Games, Inc.</p></div>`;
   }
   function voiceSettings() {
@@ -1689,6 +1689,7 @@
       }).catch((e) => toast(e.message)); break;
       case 'miniSaveCrop': if (pendingCrop) cfgSet({ minimap: { crop: pendingCrop } }).then(() => toast('Zone enregistrée.')); break;
       case 'installUpdate': NB.installUpdate(); break;
+      case 'openData': NB.openData().catch(() => {}); break;
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
       case 'renewKey': NB.key.renew().then(() => { R.key.renewing = true; renderTop(); if (S.mode === 'settings') render(true); }).catch((e) => toast('❌ ' + e.message)); break;
       case 'reloadData': if (window.caches) window.caches.delete('nooblol-ddragon').finally(() => location.reload()); else location.reload(); break;
@@ -1789,6 +1790,7 @@
     NB.collector.on((s) => { const grew = R.col && s.picks !== R.col.picks; R.col = s; if (grew && s.picks % 50 < 10) cache.clear(); if (S.mode === 'settings' && !busy()) render(true); });
     NB.minimap.onState((open) => { R.miniOpen = open; if (!busy()) render(true); });
     NB.onUpdate((u) => { R.update = u; renderTop(); });
+    if (NB.overlay && NB.overlay.onOpenItem) NB.overlay.onOpenItem((id) => { if (S.mode !== 'prep') lastMode = S.mode; openView('item', id); });
     if (NB.update) { NB.update.on((u) => { R.upd = u; if (S.mode === 'settings' && !busy()) render(true); }); NB.update.state().then((u) => { R.upd = u; }).catch(() => {}); }
     NB.postgame.on((d) => {
       const fresh = !R.post || R.post.at !== d.at;

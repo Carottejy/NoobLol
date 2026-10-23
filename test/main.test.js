@@ -410,3 +410,17 @@ test('fin de partie : je suis retrouvé par Riot ID, côté rouge, avec séries 
   assert.deepStrictEqual(G.T.kills.us, [0, 1]); assert.strictEqual(G.T.firsts.blood.side, 'us'); assert.strictEqual(G.T.firsts.grubs.side, 'us'); assert.strictEqual(G.T.firsts.tower.side, 'us');
   assert.deepStrictEqual(G.T.me.gold, [500, 1400]); assert.deepStrictEqual(G.T.xp, [0, 200]); assert.strictEqual(G.T.myEv[0].kind, 'kill');
 });
+
+test('en jeu : tours et inhibiteurs comptés quel que soit le format du nom', () => {
+  const Builds = require('../renderer/builds.js');
+  const L = { time: 1500, players: [{ name: 'Moi#EUW', gameName: 'Moi', team: 'CHAOS' }, { name: 'Bad#1', gameName: 'Bad', team: 'ORDER' }], events: [
+    { name: 'TurretKilled', t: 600, turret: 'Turret_T1_R_03_A', killer: 'Moi' },
+    { name: 'TurretKilled', t: 700, turret: 'Turret_T2_L_03_A', killer: 'Bad' },
+    { name: 'TurretKilled', t: 800, turret: 'Turret_TOrder_C_05', killer: '' },
+    { name: 'TurretKilled', t: 900, turret: '', killer: 'Minion_T200L1S12N0001' },
+    { name: 'TurretKilled', t: 950, turret: '', killer: 'Moi#EUW' },
+    { name: 'InhibKilled', t: 1400, inhib: 'Barracks_T1_C1', killer: 'Moi' }] };
+  const o = Builds.objectives(L, 'CHAOS');
+  assert.deepStrictEqual(o.turret, { us: 4, them: 1 });
+  assert.deepStrictEqual(o.inhib, { us: 1, them: 0 });
+});

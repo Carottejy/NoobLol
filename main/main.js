@@ -1,6 +1,7 @@
 /* Noob LOL — processus principal Electron */
 const { app, BrowserWindow, ipcMain, shell, screen, desktopCapturer, safeStorage, session, Menu } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { Config } = require('./config');
 const { LcuWatcher } = require('./lcu');
 const { LiveWatcher } = require('./live');
@@ -72,7 +73,7 @@ async function openMinimap() {
    Petite fenêtre transparente, toujours au premier plan, placée par défaut en bas de l'écran du jeu
    entre la barre des compétences et la mini-carte. Elle se déplace à la souris ; sa position est retenue.
    Elle n'affiche que ton propre build (aucune information cachée du jeu). */
-const OV_W = 300, OV_H = 104;
+const OV_W = 300, OV_H = 118;
 function gameDisplay() {
   const id = cfg.data.minimap.sourceDisplayId;
   return screen.getAllDisplays().find((d) => String(d.id) === String(id)) || screen.getPrimaryDisplay();
@@ -192,7 +193,9 @@ function handlers() {
   h('minimap:close', () => { if (mini && !mini.isDestroyed()) mini.close(); return true; });
   h('minimap:isOpen', () => !!(mini && !mini.isDestroyed()));
   h('overlay:update', (d) => { setOverlay(d); return true; });
+  h('overlay:openItem', (id) => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('open:item', String(id)); } return true; });
   h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
+  h('app:openData', () => shell.openPath(app.getPath('userData')));
   h('open:external', (url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return true; });
   h('update:check', () => checkUpdate());
   h('update:state', () => upd);
@@ -256,6 +259,11 @@ app.whenReady().then(async () => {
   });
   live.on('data', (d) => {
     if (!d) setOverlay(null);
+    /* Diagnostic : événements bruts de la dernière partie (noms des tours, des joueurs…), pour comprendre un compteur qui ne marche pas */
+    if (!d && live.lastRawEvents && live.lastRawEvents.length) {
+      try { fs.writeFileSync(path.join(app.getPath('userData'), 'diagnostic-evenements.json'), JSON.stringify({ at: new Date().toISOString(), players: (lastLive && lastLive.players || []).map((p) => ({ team: p.team, champ: p.champ, aliases: p.aliases })), events: live.lastRawEvents }, null, 1)); } catch (e) { /* ignoré */ }
+      live.lastRawEvents = null;
+    }
     if (d) lastLive = d;
     /* Le jeu se ferme sans que le client l'ait signalé (ex. client non détecté) : on garde au moins le dernier état */
     else if (lastLive && !lcu.state.connected) { post.start({ gameId: 0, live: lastLive, puuid: '', hasKey: false }); }

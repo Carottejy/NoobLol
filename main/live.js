@@ -30,7 +30,7 @@ function simplify(d) {
     me: me ? { name: me.name, champ: me.champ, team: me.team, level: ap.level, gold: Math.floor(ap.currentGold || 0),
       stats: ap.championStats ? { ad: Math.round(ap.championStats.attackDamage), ap: Math.round(ap.championStats.abilityPower), armor: Math.round(ap.championStats.armor), mr: Math.round(ap.championStats.magicResist), ms: Math.round(ap.championStats.moveSpeed), hp: Math.round(ap.championStats.currentHealth), maxHp: Math.round(ap.championStats.maxHealth) } : null } : null,
     players,
-    events: ((d.events || {}).Events || []).map((e) => ({ id: e.EventID, name: e.EventName, t: e.EventTime, killer: e.KillerName || '', victim: e.VictimName || '', dragon: e.DragonType || '', stolen: e.Stolen === 'True' || e.Stolen === true, turret: e.TurretKilled || '', inhib: e.InhibKilled || '', acingTeam: e.AcingTeam || '', assisters: Array.isArray(e.Assisters) ? e.Assisters : [] })),
+    events: ((d.events || {}).Events || []).map((e) => ({ id: e.EventID, name: e.EventName, t: e.EventTime, killer: e.KillerName || '', victim: e.VictimName || '', dragon: e.DragonType || '', stolen: e.Stolen === 'True' || e.Stolen === true, turret: e.TurretKilled || e.TurretDestroyed || '', inhib: e.InhibKilled || e.InhibitorKilled || e.InhibDestroyed || '', acingTeam: e.AcingTeam || '', assisters: Array.isArray(e.Assisters) ? e.Assisters : [] })),
   };
 }
 
@@ -43,7 +43,7 @@ class LiveWatcher extends EventEmitter {
     try {
       const d = await localGet(this.port, '/liveclientdata/allgamedata', null, 1500);
       const s = simplify(d);
-      if (s) { this.active = true; this.last = s; this.emit('data', s); delay = 1000; }
+      if (s) { this.active = true; this.last = s; this.lastRawEvents = (d.events || {}).Events || []; this.emit('data', s); delay = 1000; }
       else if (this.active) { this.active = false; this.emit('data', null); }
     } catch (e) {
       if (this.active) { this.active = false; this.last = null; this.emit('data', null); }

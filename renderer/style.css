@@ -658,3 +658,18 @@ body[data-mode=game] .keybar { max-width: none; margin: 0 14px 6px; }
 .strip { overflow-x: auto; } .strip svg { min-width: 720px; }
 
 .updbox { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+
+/* v2.9.2 : carte « Mon build » compacte et cliquable */
+.ico.xs { width: 26px; height: 26px; border-radius: 5px; }
+.mybuild.compact h2 { font-size: .92rem; }
+.mybuild.compact .next.sm { width: 100%; display: flex; align-items: center; gap: 8px; padding: 4px 8px; margin: 5px 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.mybuild.compact .next.sm .ico { width: 34px; height: 34px; }
+.mybuild.compact .next.sm .grow { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.mybuild.compact .brow { padding: 3px 0; gap: 6px; }
+.mybuild.compact .brow > .small:first-child { width: 76px; flex: 0 0 76px; font-size: .74rem; }
+.mybuild .bis { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; }
+.mybuild .bis .arrow { color: var(--muted); font-size: .8rem; }
+button.bi { background: none; border: 0; padding: 0; cursor: pointer; border-radius: 6px; }
+button.bi:hover .ico, .mybuild .next.sm:hover { outline: 2px solid var(--accent); }
+.bi.nx .ico { outline: 2px solid var(--accent); box-shadow: 0 0 6px rgba(200,170,110,.6); }
+.bi.own { opacity: .5; }

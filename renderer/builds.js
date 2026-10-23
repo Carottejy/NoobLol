@@ -186,12 +186,27 @@ var Builds = (() => {
     if (!t) for (const a of e.assisters || []) { t = r(a); if (t) break; }
     return t;
   }
+  /* Équipe propriétaire d'une tour ou d'un inhibiteur, d'après son nom dans l'événement du jeu
+     (ex. « Turret_T2_L_03_A », « Barracks_T1_C1 ») ; sinon on regarde qui l'a détruit. */
+  function structureOwner(name) {
+    const s = String(name || '');
+    const m = s.match(/_T([12])(?=_|[A-Z]|$)/i);
+    if (m) return m[1] === '1' ? 'ORDER' : 'CHAOS';
+    if (/_?T100|order/i.test(s)) return 'ORDER';
+    if (/_?T200|chaos/i.test(s)) return 'CHAOS';
+    return '';
+  }
+  /* Équipe qui a détruit la structure */
+  function structureTeam(e, L) {
+    const owner = structureOwner(e.turret || e.inhib || e.structure);
+    if (owner) return owner === 'ORDER' ? 'CHAOS' : 'ORDER';
+    return eventTeam(e, L);
+  }
   function objectives(L, myTeam) {
     const t = L ? L.time : 0;
     const me = myTeam || 'ORDER';
     const side = (team) => (!team ? null : team === me ? 'us' : 'them');
     const sideOf = (e) => side(eventTeam(e, L));
-    const ownerSide = (name) => { const m = String(name || '').match(/_T([12])_/); if (!m) return null; return side(m[1] === '1' ? 'ORDER' : 'CHAOS'); };
     const S = { drake: { us: 0, them: 0, types: { us: [], them: [] } }, elder: { us: 0, them: 0 }, grubs: { us: 0, them: 0 }, herald: { us: 0, them: 0 }, baron: { us: 0, them: 0 }, turret: { us: 0, them: 0 }, inhib: { us: 0, them: 0 } };
     let lastDrake = null, lastElder = null, lastBaron = null, soulAt = null, heraldDone = false, grubsKilled = 0;
     for (const e of (L && L.events) || []) {
@@ -202,8 +217,8 @@ var Builds = (() => {
       } else if (e.name === 'BaronKill') { lastBaron = e.t; const sd = sideOf(e); if (sd) S.baron[sd]++; }
       else if (e.name === 'HeraldKill') { heraldDone = true; const sd = sideOf(e); if (sd) S.herald[sd]++; }
       else if (e.name === 'HordeKill') { grubsKilled++; const sd = sideOf(e); if (sd) S.grubs[sd]++; }
-      else if (e.name === 'TurretKilled') { const o = ownerSide(e.turret); if (o) S.turret[o === 'us' ? 'them' : 'us']++; }
-      else if (e.name === 'InhibKilled') { const o = ownerSide(e.inhib); if (o) S.inhib[o === 'us' ? 'them' : 'us']++; }
+      else if (/^Turret(Killed|Destroyed)$/i.test(e.name)) { const sd = side(structureTeam(e, L)); if (sd) S.turret[sd]++; }
+      else if (/^Inhib(itor)?(Killed|Destroyed)$/i.test(e.name)) { const sd = side(structureTeam(e, L)); if (sd) S.inhib[sd]++; }
     }
     const timed = (next) => (t < next ? { state: 'spawn', in: next - t } : { state: 'up' });
     const rows = [];
@@ -354,6 +369,6 @@ var Builds = (() => {
       best: { damage: ps.slice().sort((a, b) => (b.totalDamageDealtToChampions || 0) - (a.totalDamageDealtToChampions || 0))[0], vision: ps.slice().sort((a, b) => b.visionScore - a.visionScore)[0], kda: ps.slice().sort((a, b) => b.kda - a.kda)[0] } };
   }
 
-  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, teamResolver, eventTeam, ROLES5, nextItem, postgame };
+  return { analyze, teamProfile, skillOrder, isLegendary, isBoots, MIN_VS, assignRoles, roleProbs, objectives, teamResolver, eventTeam, structureOwner, structureTeam, ROLES5, nextItem, postgame };
 })();
 if (typeof module !== 'undefined') module.exports = Builds;
