@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.1.0';
+var APP_VERSION = '3.1.1';
 var APP_RELEASES = [
+  { v: '3.1.1', date: '2026-10-23', notes: [
+    'Coaching « Moment pour rentrer » : alerte aussi quand il te reste moins de 10 % de mana (champions à mana seulement).',
+  ]},
   { v: '3.1.0', date: '2026-10-23', notes: [
     'Coaching en direct pendant la partie (annonce vocale + ligne 💡 dans le journal), d\'après tes propres données et ce que tout joueur voit dans le tableau des scores :',
     '• Moment pour rentrer : moins de 20 % de vie et au moins 1 800 po.',

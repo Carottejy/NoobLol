@@ -28,7 +28,8 @@ function simplify(d) {
   return {
     time: (d.gameData || {}).gameTime || 0, mode: (d.gameData || {}).gameMode, map: (d.gameData || {}).mapNumber,
     me: me ? { name: me.name, champ: me.champ, team: me.team, level: ap.level, gold: Math.floor(ap.currentGold || 0),
-      stats: ap.championStats ? { ad: Math.round(ap.championStats.attackDamage), ap: Math.round(ap.championStats.abilityPower), armor: Math.round(ap.championStats.armor), mr: Math.round(ap.championStats.magicResist), ms: Math.round(ap.championStats.moveSpeed), hp: Math.round(ap.championStats.currentHealth), maxHp: Math.round(ap.championStats.maxHealth) } : null } : null,
+      stats: ap.championStats ? { ad: Math.round(ap.championStats.attackDamage), ap: Math.round(ap.championStats.abilityPower), armor: Math.round(ap.championStats.armor), mr: Math.round(ap.championStats.magicResist), ms: Math.round(ap.championStats.moveSpeed), hp: Math.round(ap.championStats.currentHealth), maxHp: Math.round(ap.championStats.maxHealth),
+      res: Math.round(ap.championStats.resourceValue || 0), maxRes: Math.round(ap.championStats.resourceMax || 0), resType: String(ap.championStats.resourceType || '').toUpperCase() } : null } : null,
     players,
     events: ((d.events || {}).Events || []).map((e) => ({ id: e.EventID, name: e.EventName, t: e.EventTime, killer: e.KillerName || '', victim: e.VictimName || '', dragon: e.DragonType || '', stolen: e.Stolen === 'True' || e.Stolen === true, turret: e.TurretKilled || e.TurretDestroyed || '', inhib: e.InhibKilled || e.InhibitorKilled || e.InhibDestroyed || '', acingTeam: e.AcingTeam || '', assisters: Array.isArray(e.Assisters) ? e.Assisters : [] })),
   };

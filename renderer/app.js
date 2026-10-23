@@ -1052,7 +1052,7 @@
     if (lb && lb.next && L.me && L.me.gold >= lb.next.cost && !(meP && meP.dead)) speak(`Tu as assez d'or pour ${lb.next.name}. Rentre à la base si tu peux.`, `gold-${lb.next.item}`);
   }
   /* ---------- Coaching en direct : uniquement tes données et ce que tout joueur voit dans le tableau des scores (Tab) ---------- */
-  const COACH = [['back', '🏠 Moment pour rentrer (moins de 20 % de vie et au moins 1 800 po)'], ['lane', '⚔️ Ton adversaire de voie (avance de niveau, objets terminés) et tes objets terminés'], ['dead', '💀 Adversaires morts : fenêtre pour pousser ou prendre un objectif'], ['counter', '🛡️ Objets contre l\'équipe adverse (anti-soins, pénétration)'], ['cs', '🌾 Point farm à 10 et 20 min, plaques des tours à 14 min']];
+  const COACH = [['back', '🏠 Moment pour rentrer (moins de 20 % de vie et au moins 1 800 po, ou moins de 10 % de mana)'], ['lane', '⚔️ Ton adversaire de voie (avance de niveau, objets terminés) et tes objets terminés'], ['dead', '💀 Adversaires morts : fenêtre pour pousser ou prendre un objectif'], ['counter', '🛡️ Objets contre l\'équipe adverse (anti-soins, pénétration)'], ['cs', '🌾 Point farm à 10 et 20 min, plaques des tours à 14 min']];
   const coachOn = (k) => ((S.opt.coach || {})[k] !== false);
   function coachSay(L, text, key) { if (Voice.said.has(key)) return; speak(text, key); logEv(L.time, '💡 ' + text); }
   const itemName = (id) => ((D.items || {})[String(id)] || {}).name || '';
@@ -1071,6 +1071,10 @@
     const st = L.me.stats;
     if (coachOn('back') && st && st.maxHp && !meP.dead && st.hp / st.maxHp <= 0.2 && (L.me.gold || 0) >= 1800) {
       coachSay(L, `Moins de 20 % de vie et ${nf(L.me.gold)} pièces d'or : c'est le bon moment pour rentrer à la base.`, 'back-' + Math.floor(L.time / 90));
+    }
+    /* Mana presque vide (champions à mana seulement) */
+    if (coachOn('back') && st && st.resType === 'MANA' && st.maxRes > 0 && !meP.dead && st.res / st.maxRes <= 0.1) {
+      coachSay(L, 'Plus que 10 % de mana : rentre à la base dès que possible, ou joue prudemment.', 'mana-' + Math.floor(L.time / 90));
     }
     /* 4. Adversaire de voie et objets terminés */
     if (coachOn('lane')) {
