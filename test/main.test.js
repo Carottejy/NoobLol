@@ -511,3 +511,14 @@ test('simulateur : faux client LoL et faux jeu, au format des API de Riot', asyn
     await assert.rejects(localRequest(info.lcu.port, 'POST', '/lol-perks/v1/pages', info.lcu.password, {}).then(() => localRequest(info.lcu.port, 'POST', '/lol-perks/v1/pages', info.lcu.password, {})), /maximum/);
   } finally { sim.stop(); }
 });
+
+test('chargement : historique du client résumé et rôles de la session de partie', () => {
+  const { summarizeHistory, simplifyGame } = require('../main/lcu');
+  const g = (win, k, d, a, dur = 1800) => ({ gameDuration: dur, participantIdentities: [{ participantId: 1, player: { puuid: 'X' } }], participants: [{ participantId: 1, championId: 1, stats: { win, kills: k, deaths: d, assists: a } }] });
+  const r = summarizeHistory({ games: { games: [g(true, 10, 2, 5), g(false, 2, 6, 4), g(true, 0, 0, 0, 120), g(true, 6, 4, 8)] } }, 'X', 10);
+  assert.strictEqual(r.games, 3, 'partie annulée (2 min) ignorée'); assert.strictEqual(r.wins, 2);
+  assert.strictEqual(r.kda, (18 + 17) / 12);
+  assert.strictEqual(summarizeHistory({ games: { games: [] } }, 'X'), null);
+  const s = simplifyGame({ gameData: { gameId: 1, teamOne: [{ puuid: 'a', championId: 1, selectedPosition: 'MIDDLE', spell1Id: 4, spell2Id: 14 }], teamTwo: [{ puuid: 'b', championId: 2, selectedPosition: 'UTILITY' }] } });
+  assert.strictEqual(s.players[0].role, 'mid'); assert.strictEqual(s.players[1].role, 'support'); assert.deepStrictEqual(s.players[0].spells, [4, 14]);
+});

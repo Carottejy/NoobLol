@@ -32,6 +32,23 @@ function localRequest(port, method, pathname, auth, body, timeout = 4000) {
   });
 }
 
+/* Résumé de l'historique du client : victoires et KDA moyen des n dernières parties (hors parties annulées) */
+function summarizeHistory(j, puuid, n = 10) {
+  const games = ((j && j.games && j.games.games) || (j && j.games) || []).filter((g) => g && (g.gameDuration || 0) >= 300);
+  const out = [];
+  for (const g of games) {
+    if (out.length >= n) break;
+    const ids = g.participantIdentities || [];
+    const id = ids.find((x) => x.player && x.player.puuid === puuid);
+    const p = (g.participants || []).find((x) => id ? x.participantId === id.participantId : true);
+    if (!p || !p.stats) continue;
+    out.push({ win: !!p.stats.win, k: p.stats.kills || 0, d: p.stats.deaths || 0, a: p.stats.assists || 0, champ: p.championId || 0 });
+  }
+  if (!out.length) return null;
+  const sum = (k) => out.reduce((s, x) => s + x[k], 0);
+  return { games: out.length, wins: out.filter((x) => x.win).length, k: sum('k') / out.length, d: sum('d') / out.length, a: sum('a') / out.length, kda: (sum('k') + sum('a')) / Math.max(1, sum('d')) };
+}
+
 function parseLockfile(txt) {
   const p = String(txt || '').trim().split(':');
   if (p.length < 5) return null;
@@ -71,6 +88,7 @@ function simplifySession(s) {
 function simplifyGame(gs) {
   const gd = gs.gameData || {};
   const map = (arr, team) => (arr || []).map((p) => ({ puuid: p.puuid || '', champ: p.championId || 0, team, name: p.gameName || p.summonerName || '', tag: p.tagLine || '',
+    role: POS[String(p.selectedPosition || p.assignedPosition || '').toLowerCase()] || '', spells: [p.spell1Id || 0, p.spell2Id || 0],
     aliases: [...new Set([p.gameName, p.summonerName, p.internalName, p.gameName && p.tagLine ? `${p.gameName}#${p.tagLine}` : ''].filter(Boolean))] }));
   return { gameId: gd.gameId || 0, queueId: (gd.queue || {}).id || 0, players: map(gd.teamOne, 'ORDER').concat(map(gd.teamTwo, 'CHAOS')), ended: false };
 }
@@ -128,6 +146,11 @@ class LcuWatcher extends EventEmitter {
     return this.req('PATCH', '/lol-champ-select/v1/session/my-selection', { spell1Id: a, spell2Id: b });
   }
 
+  /* Ses dernières parties, lues dans l'historique du client (aucune clé Riot nécessaire) */
+  async recentStats(puuid, n = 10) {
+    const j = await this.get(`/lol-match-history/v1/products/lol/${encodeURIComponent(puuid)}/matches?begIndex=0&endIndex=${Math.max(0, n * 2 - 1)}`);
+    return summarizeHistory(j, puuid, n);
+  }
   /* Rang et niveau d'un joueur, lus dans le client (aucune clé Riot nécessaire) */
   async playerInfo(puuid) {
     const [rk, sm] = await Promise.all([this.get(`/lol-ranked/v1/ranked-stats/${puuid}`).catch(() => null), this.get(`/lol-summoner/v2/summoners/puuid/${puuid}`).catch(() => null)]);
@@ -172,4 +195,4 @@ class LcuWatcher extends EventEmitter {
   }
 }
 
-module.exports = { LcuWatcher, localGet, localRequest, parseLockfile, parseCommandLine, simplifySession, simplifyGame };
+module.exports = { LcuWatcher, localGet, localRequest, parseLockfile, parseCommandLine, simplifySession, simplifyGame, summarizeHistory };

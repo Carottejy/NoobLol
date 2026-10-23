@@ -15,7 +15,7 @@ const { SimServer } = require('./simulator');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let sim = null, simWin = null, hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
+let loadov = null, loadovData = null, sim = null, simWin = null, hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
 const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
@@ -35,7 +35,7 @@ function createWindow() {
   /* Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli. */
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) { e.preventDefault(); if (/^https:\/\//.test(url)) shell.openExternal(url); } });
-  win.on('closed', () => { win = null; if (simWin && !simWin.isDestroyed()) simWin.close(); if (mini && !mini.isDestroyed()) mini.close(); if (overlay && !overlay.isDestroyed()) overlay.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
+  win.on('closed', () => { win = null; if (loadov && !loadov.isDestroyed()) loadov.close(); if (simWin && !simWin.isDestroyed()) simWin.close(); if (mini && !mini.isDestroyed()) mini.close(); if (overlay && !overlay.isDestroyed()) overlay.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
 }
 
 /* ---------- Mini-carte sur un deuxième écran ---------- */
@@ -111,6 +111,28 @@ function setOverlay(data) {
   if (!overlay.isVisible()) { overlay.showInactive(); overlay.setAlwaysOnTop(true, 'screen-saver'); }
 }
 
+/* ---------- Infos des joueurs par-dessus l'écran de chargement ----------
+   Fenêtre transparente sur tout l'écran du jeu, qui laisse passer les clics : une bande en haut (équipe bleue)
+   et une en bas (équipe rouge), au-dessus et au-dessous des cartes de chargement. Elle se ferme dès que la partie commence. */
+function setLoadOverlay(data) {
+  loadovData = data || null;
+  const want = !!(loadovData && cfg.data.overlay.enabled && cfg.data.overlay.loading !== false);
+  if (!want) { if (loadov && !loadov.isDestroyed()) { loadov.close(); } loadov = null; return; }
+  if (!loadov || loadov.isDestroyed()) {
+    const b = gameDisplay().bounds;
+    loadov = new BrowserWindow({ x: b.x, y: b.y, width: b.width, height: b.height, frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, movable: false,
+      skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false, title: 'Noob LOL — Chargement', webPreferences: secureWebPrefs() });
+    loadov.setAlwaysOnTop(true, 'screen-saver');
+    loadov.setIgnoreMouseEvents(true);
+    loadov.loadFile(path.join(RENDERER, 'loadov.html'));
+    loadov.webContents.on('did-finish-load', () => { if (loadov && !loadov.isDestroyed() && loadovData) { loadov.webContents.send('loadov:data', loadovData); loadov.showInactive(); } });
+    loadov.on('closed', () => { loadov = null; });
+    return;
+  }
+  loadov.webContents.send('loadov:data', loadovData);
+  if (!loadov.isVisible()) loadov.showInactive();
+}
+
 /* ---------- Simulateur de partie (outil de test) ----------
    Ouvre une fenêtre qui joue le rôle du client LoL et du jeu. Tant qu'elle est ouverte, Noob LOL s'y connecte
    au lieu du vrai client ; à la fermeture, tout redevient normal. */
@@ -150,6 +172,7 @@ function handlers() {
     if (patch && patch.minimap && 'alwaysOnTop' in patch.minimap && mini) mini.setAlwaysOnTop(!!patch.minimap.alwaysOnTop);
     if (patch && patch.platform && patch.platform !== before && collector.running) { collector.stop(); }
     if (patch && patch.overlay && 'enabled' in patch.overlay) setOverlay(overlayData);
+    if (patch && patch.overlay && ('loading' in patch.overlay || 'enabled' in patch.overlay)) setLoadOverlay(loadovData);
     return out;
   });
   h('config:setKey', async (key) => { cfg.setApiKey(key); if (!key) { keys.set('missing'); return { valid: false }; } await api.status(); return { valid: true }; });
@@ -205,6 +228,28 @@ function handlers() {
     }
     return out;
   });
+  /* Dernières parties de chaque joueur (écran de chargement) : historique du client, sinon API Riot (moins de parties) */
+  const recentCache = new Map();
+  h('players:recent', async (puuids) => {
+    const out = {};
+    for (const id of (puuids || []).filter(Boolean).slice(0, 10)) {
+      const c = recentCache.get(id);
+      if (c && Date.now() - c.at < 15 * 60000) { out[id] = c.v; continue; }
+      let v = null;
+      if (lcu.creds) v = await lcu.recentStats(id, 10).catch(() => null);
+      if (!v && cfg.getApiKey() && !sim) {
+        try {
+          const ids = await api.matchIds(id, { queue: 0, count: 5 }, 4);
+          const list = [];
+          for (const mid of ids) { const m = await api.match(mid, 4).catch(() => null); const p = m && m.info.participants.find((x) => x.puuid === id); if (p && !p.gameEndedInEarlySurrender) list.push({ win: p.win, k: p.kills, d: p.deaths, a: p.assists }); }
+          if (list.length) { const s = (k) => list.reduce((a, x) => a + x[k], 0); v = { games: list.length, wins: list.filter((x) => x.win).length, k: s('k') / list.length, d: s('d') / list.length, a: s('a') / list.length, kda: (s('k') + s('a')) / Math.max(1, s('d')) }; }
+        } catch (e) { v = null; }
+      }
+      if (v) recentCache.set(id, { at: Date.now(), v });
+      out[id] = v;
+    }
+    return out;
+  });
   h('postgame:get', () => post.data);
   h('postgame:load', (matchId, puuid) => post.load(matchId, puuid || (lcu.state.summoner ? lcu.state.summoner.puuid : '')));
 
@@ -232,6 +277,7 @@ function handlers() {
   h('sim:isOpen', () => !!(simWin && !simWin.isDestroyed()));
   h('sim:push', (state) => { if (sim) sim.push(state); return true; });
   h('sim:ports', () => (sim ? { lcu: sim.lcuPort, live: sim.livePort, seen: sim.seen } : null));
+  h('loadov:update', (d) => { setLoadOverlay(d); return true; });
   h('overlay:openItem', (id) => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('open:item', String(id)); } return true; });
   h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
   h('app:openData', () => shell.openPath(app.getPath('userData')));
@@ -300,7 +346,7 @@ app.whenReady().then(async () => {
     }
   });
   live.on('data', (d) => {
-    if (!d) setOverlay(null);
+    if (!d) setOverlay(null); else if (loadov) setLoadOverlay(null);
     /* Diagnostic : événements bruts de la dernière partie (noms des tours, des joueurs…), pour comprendre un compteur qui ne marche pas */
     if (!d && live.lastRawEvents && live.lastRawEvents.length) {
       try { fs.writeFileSync(path.join(app.getPath('userData'), 'diagnostic-evenements.json'), JSON.stringify({ at: new Date().toISOString(), players: (lastLive && lastLive.players || []).map((p) => ({ team: p.team, champ: p.champ, aliases: p.aliases })), events: live.lastRawEvents }, null, 1)); } catch (e) { /* ignoré */ }

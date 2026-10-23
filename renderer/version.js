@@ -1,6 +1,14 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.4.1';
+var APP_VERSION = '3.5.0';
 var APP_RELEASES = [
+  { v: '3.5.0', date: '2026-10-23', notes: [
+    'Écran de chargement, par-dessus le jeu : pour chaque joueur, son rang, son niveau, ses victoires et son KDA moyen sur ses 10 dernières parties, et le type de dégâts (AD/AP) de son champion. Une bande en haut pour l\'équipe bleue, une en bas pour l\'équipe rouge ; elle disparaît dès que la partie commence et laisse passer les clics. Désactivable dans Réglages.',
+    'Dans l\'appli, nouvel écran « Chargement de la partie » (onglet En jeu) : les mêmes infos pour les 10 joueurs (🔥 pour ceux qui sont en forme), et un clic sur un adversaire le désigne comme ton adversaire de voie.',
+    'Build conseillé pour cette partie : objets de départ pour ton match-up, objets principaux, bottes et objets contre l\'équipe adverse (statistiques du collecteur si disponibles, sinon règles générales). Bouton « Suivre ce build dans l\'encart en jeu ».',
+    'Conseils pour ton match-up (portée, type de dégâts, style du champion, ultime, conseils officiels de Riot, taux de victoire du match-up, forme de ton adversaire) et face à l\'équipe adverse (armure ou résistance magique, assassins, engage, poke, tanks, soins, champions forts en fin de partie, joueurs en forme, joueur le plus dangereux).',
+    'Les victoires et le KDA viennent de l\'historique du client LoL (sans clé Riot), sinon de l\'API Riot sur 5 parties.',
+    'Simulateur : historique de parties pour chaque joueur et rôles dans la session de partie, pour tester tout cela.',
+  ]},
   { v: '3.4.1', date: '2026-10-23', notes: [
     'Simulateur : l\'écran de chargement reste affiché tant que tu ne cliques pas sur « Lancer la partie », même quand tout le monde est prêt. « Terminer le chargement » remplit les barres sans lancer la partie.',
   ]},

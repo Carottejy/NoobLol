@@ -21,7 +21,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '', stats: [], any: false, price: '', sort: 'price' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    goal: { metric: '', target: 0 }, goals: {}, progRole: '', targetTier: '', game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], ed: null,
+    goal: { metric: '', target: 0 }, goals: {}, progRole: '', targetTier: '', game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], gameBuild: null, ed: null,
   });
   function load() {
     try {
@@ -56,7 +56,7 @@
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* stockage plein */ } };
 
   /* ---------- État en direct (non enregistré) ---------- */
-  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {}, pinfo: {}, pinfoPending: new Set(), post: null, liveMemo: {}, key: { state: 'unknown' } };
+  const R = { lcu: { connected: false, phase: 'None', summoner: null, champSelect: null }, live: null, cfg: null, info: null, col: null, profile: null, profileErr: '', profileLoading: false, update: null, miniOpen: false, displays: null, shot: null, keyMsg: '', applied: { runes: '', spells: '' }, selPages: [], selSpells: [], prevObj: {}, pinfo: {}, pinfoPending: new Set(), post: null, liveMemo: {}, key: { state: 'unknown' }, recent: {}, recentPending: new Set(), full: {} };
   const cache = new Map(); /* résultats de statistiques (requêtes vers la base locale) */
   function cached(key, fn) {
     if (cache.has(key)) { const v = cache.get(key); return v === PENDING ? undefined : v; }
@@ -1220,7 +1220,8 @@
     const LR = liveRoles(L);
     const role = LR.get(meP.name) || (lp && lp.role) || '';
     const owned0 = meP.items.map((i) => i.id);
-    const chosen = S.myItems.find((b) => b.id === S.selItems[c.id] && b.champ === c.id);
+    const gb = S.gameBuild && S.gameBuild.champ === c.id && (!R.lcu.game || !S.gameBuild.gameId || R.lcu.game.gameId === S.gameBuild.gameId) ? S.gameBuild.build : null;
+    const chosen = gb || S.myItems.find((b) => b.id === S.selItems[c.id] && b.champ === c.id);
     const personal = chosen || forChamp(S.myItems, c.id, role).sort((a, b) => (b.roles.includes(role) ? 1 : 0) - (a.roles.includes(role) ? 1 : 0))[0];
     if (personal) return { c, role, personal, owned: owned0, next: Builds.nextItem(itemPlan(personal), owned0, D) };
     if (!role) return { c, role: '' };
@@ -1459,9 +1460,211 @@
     h += `<div class="orow"><span class="oic">💎</span><div class="onm"><b>Inhibiteurs</b></div><div class="ost"></div>${score(O.inhib)}</div>`;
     return h + '</div>';
   }
+
+  /* =====================================================================
+     ÉCRAN DE CHARGEMENT : les 10 joueurs, mon match-up, le build conseillé, les conseils
+     ===================================================================== */
+  function wantRecent(puuids) {
+    if (!NB || !NB.players.recent) return;
+    const miss = (puuids || []).filter((id) => id && !(id in R.recent) && !R.recentPending.has(id));
+    if (!miss.length) return;
+    miss.forEach((id) => R.recentPending.add(id));
+    NB.players.recent(miss).then((res) => { miss.forEach((id) => { R.recent[id] = (res || {})[id] || null; }); })
+      .catch(() => { miss.forEach((id) => { R.recent[id] = null; }); })
+      .finally(() => { miss.forEach((id) => R.recentPending.delete(id)); soon(); });
+  }
+  const isLoading = () => !R.live && /GameStart|InProgress|Reconnect/.test(R.lcu.phase || '') && !!(R.lcu.game && !R.lcu.game.ended && (R.lcu.game.players || []).length);
+  function wantFull(id) { if (!id || R.full[id] || R.full[id] === null) return; R.full[id] = null; Dd.champFull(id).then((f) => { R.full[id] = f; soon(); }).catch(() => {}); }
+  function loadingData() {
+    const g = R.lcu.game, sp = R.lcu.summoner;
+    const meG = g.players.find((p) => sp && p.puuid && p.puuid === sp.puuid) || null;
+    const myTeam = meG ? meG.team : 'ORDER';
+    const teams = [g.players.filter((p) => p.team === myTeam), g.players.filter((p) => p.team !== myTeam)];
+    const role = new Map();
+    for (const t of teams) {
+      const fixed = {};
+      t.forEach((p) => {
+        let r = p.role;
+        if (!r && p === meG && S.lastPick && +S.lastPick.champ === +p.champ) r = S.lastPick.role;
+        if (!r && (p.spells || []).includes(11)) r = 'jungle';
+        if (r && p.champ) fixed[p.champ] = r;
+      });
+      const keys = t.map((p) => p.champ).filter(Boolean);
+      const dist = NB && keys.length ? cached('rd:' + keys.slice().sort().join(','), () => NB.stats.roleDist(keys)) : {};
+      let as = {};
+      try { as = Builds.assignRoles(keys, D, dist || {}, fixed); } catch (e) { as = fixed; }
+      t.forEach((p) => role.set(p, as[p.champ] || fixed[p.champ] || ''));
+    }
+    const myRole = meG ? role.get(meG) : '';
+    const oppG = (R.loadOpp && teams[1].find((p) => +p.champ === +R.loadOpp)) || (myRole && teams[1].find((p) => role.get(p) === myRole)) || null;
+    return { g, meG, myTeam, teams, role, myRole, oppG };
+  }
+  const recentTxt = (r) => (r === undefined ? '…' : !r ? 'historique indisponible' : `${r.wins} V / ${r.games - r.wins} D (${Math.round((100 * r.wins) / r.games)} %)`);
+  const kdaTxt = (r) => (r === undefined ? '…' : !r ? '—' : `${f1(r.k)} / ${f1(r.d)} / ${f1(r.a)} · ${f1(r.kda)}`);
+  const formOf = (r) => (!r || r.games < 5 ? '' : r.wins / r.games >= 0.7 ? 'hot' : r.wins / r.games <= 0.3 ? 'cold' : '');
+  function loadCard(p, ld, enemy) {
+    const c = byKey(p.champ), r = R.recent[p.puuid], role = ld.role.get(p), f = formOf(r);
+    const isOpp = enemy && ld.oppG === p;
+    return `<div class="ldc ${enemy ? 'enemy' : 'ally'} ${p === ld.meG ? 'me' : ''} ${isOpp ? 'opp' : ''}" ${enemy ? `data-act="loadOpp" data-val="${p.champ}" title="Désigner comme mon adversaire de voie"` : ''}>
+      <div class="ldh">${cIcon(c, 'ico')}<div class="grow"><b class="ell">${esc(c ? c.name : '?')}</b><span class="small muted ell">${role ? ROLE_IC[role] + ' ' + ROLE_NAME[role] + ' · ' : ''}${esc(p.name || '')}</span></div>${isOpp ? '<span class="tag gold">adversaire</span>' : p === ld.meG ? '<span class="tag gold">toi</span>' : ''}</div>
+      <div class="ldr">${rankTag(p.puuid) || '<span class="rk unr">…</span>'}</div>
+      <div class="ldr"><span class="muted small">10 dernières</span><b class="${f === 'hot' ? 'pos' : f === 'cold' ? 'neg' : ''}">${recentTxt(r)}${f === 'hot' ? ' 🔥' : ''}</b></div>
+      <div class="ldr"><span class="muted small">KDA moyen</span><span>${kdaTxt(r)}</span></div>
+      ${c ? dmgBar(champAd(c)) : ''}</div>`;
+  }
+  /* Build conseillé : statistiques du collecteur si disponibles, sinon règles générales (classe, match-up, équipe adverse) */
+  const legOf = (f) => D.itemList.filter((it) => Builds.isLegendary(it) && f(it)).sort((a, b) => a.gold.total - b.gold.total);
+  function generalBuild(c, role, oc, enemyKeys) {
+    const ex = (id) => (D.items && D.items[String(id)] ? +id : 0);
+    const ad = champAd(c) >= 0.5, tank = c.tags.includes('Tank'), melee = (c.stats.attackrange || 500) < 300;
+    let start;
+    if (role === 'support') start = [3865, 2003];
+    else if (role === 'jungle') start = [ex(1102) || ex(1101) || ex(1103), 2003];
+    else if (!ad && !tank) start = [1056, 2003, 2003];
+    else if (tank || (melee && oc && (oc.stats.attackrange || 0) >= 400)) start = [1054, 2003];
+    else start = [1055, 2003];
+    const prof = Builds.teamProfile(enemyKeys, D) || { ap: 0.5, tanks: [], healers: [] };
+    const boots = role === 'support' ? 3158 : prof.ap >= 0.6 ? 3111 : prof.ap <= 0.4 && !c.tags.includes('Marksman') ? 3047 : c.tags.includes('Marksman') ? 3006 : ad ? 3047 : 3020;
+    const myTag = tank ? 'Health' : ad ? 'Damage' : 'SpellDamage';
+    const typed = (it) => (it.tags || []).includes(myTag);
+    const counters = [];
+    const add = (why, list) => { const items = list.slice(0, 2).map((it) => +it.id); if (items.length) counters.push({ why, items }); };
+    if (prof.healers.length) add(`Soins importants en face (${prof.healers.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : un objet anti-soins`, legOf((it) => /blessures graves|grievous/i.test(it.description || '') && (typed(it) || tank)));
+    if (prof.ap >= 0.58) add(`Équipe adverse surtout magique (${Math.round(prof.ap * 100)} % AP) : de la résistance magique`, legOf((it) => (it.tags || []).includes('SpellBlock') && (typed(it) || (tank && (it.tags || []).includes('Health')))));
+    if (prof.ap <= 0.42) add(`Équipe adverse surtout physique (${Math.round((1 - prof.ap) * 100)} % AD) : de l'armure`, legOf((it) => (it.tags || []).includes('Armor') && (typed(it) || (tank && (it.tags || []).includes('Health')))));
+    if (prof.tanks.length >= 2 && !tank) add(`${prof.tanks.length} tanks en face (${prof.tanks.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : de la pénétration`, legOf((it) => (it.tags || []).includes(ad ? 'ArmorPenetration' : 'MagicPenetration')));
+    return { start: start.filter(ex), boots: ex(boots), counters };
+  }
+  function loadBuild(ld) {
+    if (!ld.meG || !D.champs) return null;
+    const c = byKey(ld.meG.champ); if (!c) return null;
+    const role = ld.myRole, oc = ld.oppG ? byKey(ld.oppG.champ) : null;
+    const enemyKeys = ld.teams[1].map((p) => +p.champ).filter(Boolean);
+    const G0 = generalBuild(c, role, oc, enemyKeys);
+    const rows = role && NB ? cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30)) : null;
+    if (rows === undefined) return { c, role, oc, loading: true };
+    let A = null;
+    if (rows && rows.length) {
+      const mk = `load:${c.key}:${role}:${oc ? oc.key : 0}:${enemyKeys.join(',')}:${rows.length}`;
+      if (R.loadMemo && R.loadMemo.k === mk) A = R.loadMemo.A; else { A = Builds.analyze(rows, D, { opp: oc ? +oc.key : 0, enemies: enemyKeys }); R.loadMemo = { k: mk, A }; }
+    }
+    const fromStats = !!(A && A.games);
+    const counters = fromStats ? (A.situational || []).filter((x) => x.items.length).map((x) => ({ why: x.why, items: x.items.map((o) => o.item) })) : [];
+    return { c, role, oc, fromStats, games: fromStats ? A.games : 0, adapted: fromStats && A.adapted,
+      start: fromStats && A.start && A.start[0] ? A.start[0].items : G0.start,
+      core: fromStats && A.core && A.core[0] ? A.core[0].items.slice(0, 3) : [],
+      boots: fromStats && A.boots && A.boots[0] ? A.boots[0].item : G0.boots,
+      counters: counters.length ? counters : G0.counters, countersGeneral: !counters.length };
+  }
+  /* Conseils pour mon match-up */
+  function matchupTips(ld, b) {
+    const c = b && b.c, oc = b && b.oc;
+    if (!c || !oc) return [];
+    wantFull(oc.id); wantFull(c.id);
+    const fo = R.full[oc.id], tips = [];
+    const rc = c.stats.attackrange || 0, ro = oc.stats.attackrange || 0;
+    if (rc - ro >= 150) tips.push(`Tu as plus de portée (${rc} contre ${ro}) : touche-le avec tes attaques quand il s'approche de tes sbires pour les achever.`);
+    else if (ro - rc >= 150) tips.push(`Il a plus de portée (${ro} contre ${rc}) : ne reste pas à sa portée sans raison, échange seulement quand tes sorts sont prêts, et accepte de perdre quelques sbires plutôt que ta vie.`);
+    const ad = champAd(oc);
+    if (ad >= 0.65) tips.push('Ses dégâts sont surtout physiques : un fragment d\'armure et, plus tard, des Coques en acier t\'aideront.');
+    else if (ad <= 0.35) tips.push('Ses dégâts sont surtout magiques : un fragment de résistance magique et, plus tard, des Sandales de Mercure t\'aideront.');
+    if (oc.tags.includes('Assassin')) tips.push('C\'est un assassin : il cherche à te tuer d\'un coup. Garde Saut éclair pour fuir et ne reste pas à moitié de vie dans ta voie.');
+    else if (oc.tags.includes('Tank')) tips.push('C\'est un tank : il encaisse beaucoup. Ne t\'acharne pas sur lui, farme et va aider ailleurs quand il ne fait rien.');
+    else if (oc.tags.includes('Marksman')) tips.push('C\'est un tireur : très fort en fin de partie. Prends l\'avantage tôt, avant qu\'il ait ses objets.');
+    else if (oc.tags.includes('Mage')) tips.push('C\'est un mage : déplace-toi de côté pour esquiver ses sorts, et attaque juste après qu\'il les a utilisés.');
+    else if (oc.tags.includes('Fighter')) tips.push('C\'est un combattant : les combats longs l\'avantagent souvent. Fais des échanges courts puis recule.');
+    if (fo && fo.spells && fo.spells[3]) tips.push(`Méfie-toi à partir du niveau 6 : son ultime « ${fo.spells[3].name} » change les combats.`);
+    if (fo && (fo.enemytips || []).length) fo.enemytips.slice(0, 3).forEach((t) => tips.push('Conseil de Riot : ' + Dd.plain(t)));
+    const mu = NB && b.role ? cached(`mu:${c.key}:${oc.key}:${b.role}`, () => NB.stats.matchup(+c.key, +oc.key, b.role, 30)) : null;
+    if (mu && mu.games >= 5) tips.push(`D'après le collecteur : ${c.name} gagne ${Math.round((100 * mu.wins) / mu.games)} % de ses parties contre ${oc.name} (${mu.games} parties de très bons joueurs).`);
+    const r = ld.oppG && R.recent[ld.oppG.puuid];
+    if (formOf(r) === 'hot') tips.push(`Ton adversaire est en forme : ${r.wins} victoires sur ses ${r.games} dernières parties. Joue prudemment au début.`);
+    if (formOf(r) === 'cold') tips.push(`Ton adversaire est en difficulté : seulement ${r.wins} victoires sur ses ${r.games} dernières parties.`);
+    return tips;
+  }
+  /* Conseils face à l'ensemble de l'équipe adverse */
+  const SCALERS = new Set(['Kayle', 'Kassadin', 'Vayne', 'Jinx', 'Veigar', 'Nasus', 'Smolder', 'KogMaw', 'Aurelion Sol', 'AurelionSol', 'Azir', 'Cassiopeia', 'Senna', 'Twitch', 'Viktor', 'Ryze', 'Kindred', 'Gangplank', 'Jax', 'Zeri', 'Aphelios']);
+  function teamTips(ld) {
+    const en = ld.teams[1].map((p) => ({ p, c: byKey(p.champ) })).filter((x) => x.c);
+    if (!en.length) return [];
+    const names = (l) => l.map((x) => x.c.name).join(', ');
+    const tips = [];
+    const prof = Builds.teamProfile(en.map((x) => +x.c.key), D) || { ap: 0.5, tanks: [], healers: [] };
+    if (prof.ap >= 0.6) tips.push(`Équipe surtout magique (${Math.round(prof.ap * 100)} % AP) : la résistance magique est très rentable pour toute ton équipe.`);
+    else if (prof.ap <= 0.4) tips.push(`Équipe surtout physique (${Math.round((1 - prof.ap) * 100)} % AD) : l'armure est très rentable pour toute ton équipe.`);
+    else tips.push('Dégâts mixtes : équilibre armure et résistance magique.');
+    const ass = en.filter((x) => x.c.tags.includes('Assassin'));
+    if (ass.length >= 2) tips.push(`${ass.length} assassins (${names(ass)}) : ne te promène pas seul sur la carte, reste près de ton équipe et pense à un objet défensif.`);
+    const engage = en.filter((x) => x.c.tags.includes('Tank') && (x.c.tags.includes('Support') || x.c.tags.includes('Fighter')));
+    if (engage.length) tips.push(`Ils peuvent engager fort (${names(engage)}) : reste derrière tes tanks en combat et garde Saut éclair pour te dégager.`);
+    const poke = en.filter((x) => (x.c.stats.attackrange || 0) >= 500 && (x.c.tags.includes('Mage') || x.c.tags.includes('Marksman')));
+    if (poke.length >= 3) tips.push(`Composition à distance (${names(poke)}) : évitez de rester dans leur portée ; foncez sur eux tous ensemble ou passez par les côtés.`);
+    if (prof.tanks.length >= 2) tips.push(`${prof.tanks.length} tanks (${prof.tanks.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : vos dégâts doivent passer par la pénétration ; frappez ce qui est derrière eux si possible.`);
+    if (prof.healers.length) tips.push(`Soins importants (${prof.healers.map((id) => (D.champs[id] || {}).name || id).join(', ')}) : il faut au moins un objet anti-soins dans ton équipe.`);
+    const sc = en.filter((x) => SCALERS.has(x.c.id));
+    if (sc.length) tips.push(`${names(sc)} devien${sc.length > 1 ? 'nent' : 't'} très fort${sc.length > 1 ? 's' : ''} en fin de partie : prenez de l'avance tôt et essayez de finir avant 30 min.`);
+    const hot = ld.teams[1].filter((p) => formOf(R.recent[p.puuid]) === 'hot');
+    if (hot.length) tips.push(`En forme en face : ${hot.map((p) => `${(byKey(p.champ) || {}).name} (${R.recent[p.puuid].wins}/${R.recent[p.puuid].games})`).join(', ')}.`);
+    const kd = ld.teams[1].filter((p) => R.recent[p.puuid]).sort((a, b) => R.recent[b.puuid].kda - R.recent[a.puuid].kda)[0];
+    if (kd && R.recent[kd.puuid].kda >= 3.5) tips.push(`Le joueur le plus dangereux semble être ${(byKey(kd.champ) || {}).name} (KDA moyen ${f1(R.recent[kd.puuid].kda)} sur ses dernières parties).`);
+    return tips;
+  }
+  function viewLoading() {
+    const ld = loadingData();
+    wantInfo(ld.g.players.map((p) => p.puuid)); wantRecent(ld.g.players.map((p) => p.puuid));
+    loadovSync(ld);
+    const b = loadBuild(ld);
+    const ic = (id) => (id ? `<button class="bi" data-act="item" data-val="${id}">${itIcon(id, 'ico xs')}</button>` : '');
+    let h = `<div class="row sp"><h1>⏳ Chargement de la partie</h1><span class="small muted">${esc(QUEUE[ld.g.queueId] || '')}</span></div>`;
+    h += `<div class="card"><h2>🟦 Mon équipe</h2><div class="ldgrid">${ld.teams[0].map((p) => loadCard(p, ld, false)).join('')}</div></div>`;
+    h += `<div class="card"><h2>🟥 Adversaires <span class="small muted">· clique un adversaire pour le désigner comme ton adversaire de voie</span></h2><div class="ldgrid">${ld.teams[1].map((p) => loadCard(p, ld, true)).join('')}</div></div>`;
+    h += '<div class="cols"><div>';
+    if (!b) h += '<div class="card"><p class="muted">Ton champion n\'est pas encore connu.</p></div>';
+    else if (b.loading) h += '<div class="card"><div class="loader small">Calcul du build…</div></div>';
+    else {
+      const following = S.gameBuild && S.gameBuild.gameId === ld.g.gameId && S.gameBuild.champ === b.c.id;
+      h += `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">🛒 Build conseillé · ${esc(b.c.name)}${b.oc ? ' vs ' + esc(b.oc.name) : ''}</h2></div>
+        <p class="small muted">${b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire et à l\'équipe adverse' : ''}.` : 'Règles générales (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
+        <div class="mybuild compact" style="border:0;padding:0;background:none">
+        <div class="brow"><span class="small muted">Départ</span><div class="bis">${b.start.map(ic).join('')}</div></div>
+        ${b.core.length || b.boots ? `<div class="brow"><span class="small muted">Principaux</span><div class="bis">${b.core.map(ic).join('<span class="arrow">›</span>')}${b.boots ? `<span class="rsep"></span>${ic(b.boots)}` : ''}</div></div>` : ''}
+        ${b.counters.map((x) => `<div class="brow"><span class="small muted" title="${esc(x.why)}">Contre eux</span><div class="bis">${x.items.map(ic).join('')}<span class="small muted ell" style="margin-left:6px">${esc(x.why)}</span></div></div>`).join('')}
+        </div>
+        <div class="row" style="margin-top:8px">${following ? '<span class="pill on">✅ Suivi dans l\'encart en jeu</span><button class="btn ghost small" data-act="unfollowGameBuild">Ne plus suivre</button>' : `<button class="btn small" data-act="followGameBuild">⭐ Suivre ce build dans l'encart en jeu</button>`}</div></div>`;
+    }
+    h += '</div><div>';
+    const mt = matchupTips(ld, b);
+    h += `<div class="card"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu : clique un adversaire ci-dessus.</p>'}</div>`;
+    const tt = teamTips(ld);
+    h += `<div class="card"><h2>🛡️ Face à l'équipe adverse</h2><ul class="tips">${tt.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`;
+    h += '</div></div>';
+    R.loadBuildCur = b;
+    return h;
+  }
+  /* Infos envoyées à l'encart par-dessus l'écran de chargement */
+  function loadovSync(ld) {
+    if (!NB || !NB.loadov) return;
+    let d = null;
+    if (ld && isLoading() && D.champs) {
+      const P = (p, t) => {
+        const c = byKey(p.champ), r = R.recent[p.puuid], i = R.pinfo[p.puuid], q = i && (i.solo || i.flex);
+        const role = ld.role.get(p);
+        return { champ: c ? c.name : '?', icon: c ? Dd.img.champ(c) : '', name: p.name || '', role: role ? ROLE_NAME[role] : '', me: p === ld.meG,
+          rank: q ? `${TIER[q.tier] || q.tier}${q.division ? ' ' + q.division : ''}` : i === undefined ? '…' : 'Non classé', level: i && i.level ? i.level : 0,
+          wr: r === undefined ? '…' : r ? `${r.wins} V / ${r.games - r.wins} D` : '—', wrClass: formOf(r) === 'hot' ? 'pos' : formOf(r) === 'cold' ? 'neg' : '',
+          kda: r === undefined ? '…' : r ? `${f1(r.k)}/${f1(r.d)}/${f1(r.a)} (${f1(r.kda)})` : '—', ad: c ? Math.round(champAd(c) * 100) : 50 };
+      };
+      d = { teams: ld.teams.map((t, i) => ({ side: t[0] ? t[0].team : (i ? 'CHAOS' : 'ORDER'), mine: i === 0, players: t.map((p) => P(p)) })) };
+    }
+    const k = JSON.stringify(d);
+    if (k === R.loadovKey) return;
+    R.loadovKey = k;
+    NB.loadov.update(d).catch(() => {});
+  }
   function viewGame() {
     const nd = needData();
     const L = R.live;
+    if (!L && !nd && isLoading()) return viewLoading();
     if (!L && R.post && R.post.status && !nd) return viewPost();
     const showMap = S.opt.miniEmbed && NB;
     const mapCard = showMap ? `<div class="gm-map card"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
@@ -1822,7 +2025,9 @@
     const ov = c.overlay || { enabled: true };
     h += `<div class="card"><h2>⭐ Encart « Mon build » par-dessus le jeu</h2>
       <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. <b>Glisse-le à la souris</b> pour le déplacer, sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
-      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div></div>`;
+      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div>
+      <p class="muted small" style="margin-top:8px">Pendant l'écran de chargement, Noob LOL affiche aussi par-dessus le jeu le rang, le niveau, les victoires et le KDA moyen des 10 dernières parties de chaque joueur, et le type de dégâts de son champion.</p>
+      <div class="row"><button class="chip ${ov.loading !== false ? 'on' : ''}" data-act="ovLoadToggle">${ov.loading !== false ? '✅ Infos sur l\'écran de chargement' : 'Infos sur l\'écran de chargement : désactivées'}</button></div></div>`;
     return h;
   }
 
@@ -1925,6 +2130,7 @@
       case 'edMv': { const L2 = S.ed.draft[el.dataset.sec], i = +el.dataset.i; if (i > 0) [L2[i - 1], L2[i]] = [L2[i], L2[i - 1]]; render(true); break; }
       case 'selItemBuild': S.selItems[el.dataset.champ] = v; R.ovKey = ''; save(); render(true); break;
       case 'ovToggle': { const on = !(((R.cfg || {}).overlay || {}).enabled !== false); NB.config.set({ overlay: { enabled: on } }).then((c) => { R.cfg = c; R.ovKey = ''; render(true); }).catch(() => {}); break; }
+      case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {
         const b = S.myRunes.find((x) => x.id === v); if (!b) break;
@@ -2019,6 +2225,11 @@
       case 'goalReset': { goalOf('all'); const k = S.progRole || 'all'; S.goals[k] = { metric: (S.goals[k] || {}).metric }; save(); render(true); break; }
       case 'targetTier': S.targetTier = v; save(); render(true); break;
       case 'goalStep': { const G0 = ((R.hist && R.hist.games) || []).filter((g) => !S.progRole || MATCH_ROLE[g.role] === S.progRole); const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goals[g.rk] = { metric: g.metric, target: t, custom: true }; save(); render(true); break; }
+      case 'loadOpp': R.loadOpp = +v; render(true); break;
+      case 'followGameBuild': { const b = R.loadBuildCur, g = R.lcu.game; if (!b || !g) break;
+        S.gameBuild = { gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: [...new Set(b.counters.flatMap((x) => x.items))] } };
+        save(); R.ovKey = ''; toast('⭐ Ce build sera suivi dans l\'encart en jeu'); render(true); break; }
+      case 'unfollowGameBuild': S.gameBuild = null; save(); R.ovKey = ''; render(true); break;
       case 'simOpen': NB.sim.open().catch((e) => toast('❌ ' + e.message)); break;
       case 'openData': NB.openData().catch(() => {}); break;
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
@@ -2105,6 +2316,8 @@
     let prevPhase = 'None';
     NB.lcu.on((st) => {
       const old = R.lcu; R.lcu = st;
+      if (st.game && (!old.game || old.game.gameId !== st.game.gameId)) { R.loadOpp = 0; R.recent = {}; }
+      try { if (isLoading() && D.champs) { const ld = loadingData(); wantInfo(ld.g.players.map((p) => p.puuid)); wantRecent(ld.g.players.map((p) => p.puuid)); loadovSync(ld); } else loadovSync(null); } catch (e) { /* ignoré */ }
       const auto = !R.cfg || R.cfg.autoMode !== false;
       if (st.phase !== prevPhase) {
         if (st.phase === 'ChampSelect') { R.applied = { runes: '', spells: '' }; S.select.opp = ''; S.select.role = ''; }
@@ -2117,7 +2330,7 @@
       }
       if (S.mode === 'select' && !busy()) render(true); else renderTop();
     });
-    NB.live.on((d) => { if (d && !R.live && R.cfg && R.cfg.autoMode !== false) S.mode = 'game'; onLive(d); });
+    NB.live.on((d) => { if (d && !R.live && R.cfg && R.cfg.autoMode !== false) S.mode = 'game'; onLive(d); if (d) loadovSync(null); });
     NB.collector.on((s) => { const grew = R.col && s.picks !== R.col.picks; R.col = s; if (grew && s.picks % 50 < 10) cache.clear(); if (S.mode === 'settings' && !busy()) render(true); });
     NB.minimap.onState((open) => { R.miniOpen = open; if (!busy()) render(true); });
     NB.onUpdate((u) => { R.update = u; renderTop(); });

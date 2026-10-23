@@ -51,7 +51,9 @@
       SIM.players.push({ cell: i, team, role, isMe, champ: 0, hover: 0, locked: false, spells: DEF_SPELLS[role].slice(),
         gameName: nm, tagLine: isMe ? SIM.me.tagLine : pickOne(['EUW', 'FR1', '1234', 'LOL']), legacy: isMe ? 'Ancien' + nm : 'Old' + nm + rnd(99),
         puuid: isMe ? 'sim-moi-0000' : `sim-joueur-${i}-${rnd(1e6)}`, level: isMe ? SIM.me.level : 30 + rnd(400),
-        tier: isMe ? SIM.me.tier : TIERS[ti], division: isMe ? SIM.me.division : pickOne(['I', 'II', 'III', 'IV']), lp: rnd(100), wins: 20 + rnd(80), losses: 20 + rnd(80) });
+        tier: isMe ? SIM.me.tier : TIERS[ti], division: isMe ? SIM.me.division : pickOne(['I', 'II', 'III', 'IV']), lp: rnd(100), wins: 20 + rnd(80), losses: 20 + rnd(80),
+        /* Historique des 20 dernières parties (forme du moment : plus ou moins bonne selon le joueur) */
+        history: (() => { const form = 0.3 + Math.random() * 0.45, skill = 0.6 + Math.random() * 1.2; return Array.from({ length: 20 }, () => { const win = Math.random() < form; return { win, k: rnd(Math.round(8 * skill)) + (win ? 2 : 0), d: 1 + rnd(8), a: rnd(12) + (win ? 3 : 0), dur: 1300 + rnd(1000), champ: 0 }; }); })() });
     }
     SIM.bans = []; SIM.applied = { runes: null, spells: null }; SIM.load = null; SIM.game = null; SIM.log = [];
   }
@@ -91,7 +93,7 @@
     };
   }
   function gameflow() {
-    const m = (p) => ({ puuid: p.puuid, championId: p.champ, gameName: p.gameName, tagLine: p.tagLine, summonerName: p.legacy, internalName: p.legacy });
+    const m = (p) => ({ puuid: p.puuid, championId: p.champ, gameName: p.gameName, tagLine: p.tagLine, summonerName: p.legacy, internalName: p.legacy, selectedPosition: SIM.positions ? p.role.toUpperCase() : '', spell1Id: p.spells[0], spell2Id: p.spells[1] });
     return { gameData: { gameId: SIM.gameId, queue: { id: SIM.queue }, teamOne: SIM.players.filter((p) => p.team === 'ORDER').map(m), teamTwo: SIM.players.filter((p) => p.team === 'CHAOS').map(m) } };
   }
   /* Nom d'un joueur dans les événements du jeu, selon le format choisi */

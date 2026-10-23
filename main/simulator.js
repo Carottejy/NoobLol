@@ -61,6 +61,16 @@ class SimServer extends EventEmitter {
     if (m === 'GET' && mm) { const p = S.players[decodeURIComponent(mm[1])]; return p ? this.send(res, 200, { queueMap: { RANKED_SOLO_5x5: p.tier ? { tier: p.tier, division: p.division || 'NA', leaguePoints: p.lp || 0, wins: p.wins || 0, losses: p.losses || 0 } : { tier: 'NONE', division: 'NA' }, RANKED_FLEX_SR: { tier: 'NONE', division: 'NA' } } }) : this.send(res, 404, {}); }
     mm = url.match(/^\/lol-summoner\/v2\/summoners\/puuid\/(.+)$/);
     if (m === 'GET' && mm) { const p = S.players[decodeURIComponent(mm[1])]; return p ? this.send(res, 200, { summonerLevel: p.level, gameName: p.gameName, tagLine: p.tagLine, puuid: decodeURIComponent(mm[1]) }) : this.send(res, 404, {}); }
+    /* Historique des parties d'un joueur (format du client) */
+    mm = url.match(/^\/lol-match-history\/v1\/products\/lol\/([^/]+)\/matches$/);
+    if (m === 'GET' && mm) {
+      const id = decodeURIComponent(mm[1]), p = S.players[id];
+      if (!p) return this.send(res, 404, {});
+      const games = (p.history || []).map((g, i) => ({ gameId: 9000 + i, gameCreation: Date.now() - (i + 1) * 3600000, gameDuration: g.dur || 1800, queueId: 420, gameMode: 'CLASSIC',
+        participantIdentities: [{ participantId: 1, player: { puuid: id, gameName: p.gameName, tagLine: p.tagLine } }],
+        participants: [{ participantId: 1, championId: g.champ || 0, stats: { win: !!g.win, kills: g.k, deaths: g.d, assists: g.a } }] }));
+      return this.send(res, 200, { accountId: 0, games: { gameCount: games.length, games } });
+    }
     /* Pages de runes */
     if (m === 'GET' && url === '/lol-perks/v1/pages') return this.send(res, 200, this.perks);
     if (m === 'GET' && url === '/lol-perks/v1/currentpage') return this.send(res, 200, this.perks.find((p) => p.current) || null);
