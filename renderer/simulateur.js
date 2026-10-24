@@ -308,8 +308,13 @@
   function viewLoading() {
     const L = SIM.load, W = window.innerWidth, H = window.innerHeight;
     const { rows, o } = LoadLayout.cards(W, H, SIM.layout);
+    /* Carte comme dans le jeu : illustration en haut, nom du champion vers 75 %, plaque runes/sorts, nom du joueur */
     const card = (p, r) => { const c = champ(p.champ); const pr = Math.min(100, Math.round(L.prog[p.cell]));
-      return `<div class="lcard ${p.isMe ? 'me' : ''}" data-cell="${p.cell}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">${c ? `<img alt="" src="${Dd.img.loading(c.id)}">` : ''}<div class="lname"><b>${esc(c ? c.name : '?')}</b><span>${esc(p.gameName)}</span><span class="lsp">${spellIcon(p.spells[0])}${spellIcon(p.spells[1])}</span></div><div class="lbar"><i style="width:${pr}%"></i></div><span class="lpct">${pr} %</span></div>`; };
+      return `<div class="lcard ${p.isMe ? 'me' : ''}" data-cell="${p.cell}" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;font-size:${(r.w * 0.058).toFixed(1)}px">${c ? `<img class="art" alt="" src="${Dd.img.loading(c.id)}">` : ''}
+        <b class="cname" style="top:${(o.nameY * 100 + 1).toFixed(1)}%">${esc(c ? c.name : '?')}</b>
+        <div class="plate"><span class="lsp">${spellIcon(p.spells[0])}${spellIcon(p.spells[1])}</span></div>
+        <span class="pname ${p.isMe ? 'me' : ''}">${esc(p.gameName)}</span>
+        <div class="lbar"><i style="width:${pr}%"></i></div><span class="lpct">${pr} %</span></div>`; };
     const midY = ((o.row1 + o.cardH) * H + o.row2 * H) / 2;
     return `<div class="lscreen">${byTeam('ORDER').map((p, i) => card(p, rows[0][i])).join('')}${byTeam('CHAOS').map((p, i) => card(p, rows[1][i])).join('')}
       <div class="lmid" style="top:${Math.round(midY)}px">${L.done ? '<span class="ready">✅ Tout le monde est prêt.</span>' : '<button class="btn ghost sm" data-act="fillLoading">⏩ Terminer le chargement</button>'}<button class="btn hex sm" data-act="skipLoading">▶ Lancer la partie</button>

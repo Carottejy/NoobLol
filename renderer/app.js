@@ -2073,15 +2073,15 @@
       ${!vs.length ? '<p class="small warn">Aucune voix française trouvée : ajoute-en une dans Windows (Paramètres → Heure et langue → Voix).</p>' : ''}</div>`;
   }
   /* Réglage fin de l'encart de chargement : caler les infos sur les cartes du jeu */
-  const LAY_DEF = { cardW: 0.23, cardH: 0.42, gap: 0.018, row1: 0.05, row2: 0.52, box: 'top' };
-  const LAY_SL = [['cardW', 'Largeur des cartes', 0.15, 0.32, 0.002], ['gap', 'Écart entre les cartes', 0, 0.06, 0.001], ['row1', 'Hauteur de la rangée du haut', 0, 0.25, 0.002], ['row2', 'Hauteur de la rangée du bas', 0.35, 0.7, 0.002], ['cardH', 'Hauteur des cartes', 0.3, 0.5, 0.002]];
-  const layNow = () => Object.assign({}, LAY_DEF, ((R.cfg || {}).overlay || {}).layout || {}, R.layDraft || {});
+  const LAY_DEF = { v: 2, cardW: 0.235, cardH: 0.423, gap: 0.038, row1: 0.065, row2: 0.548, nameY: 0.735, box: 'name' };
+  const LAY_SL = [['cardW', 'Largeur des cartes', 0.15, 0.32, 0.002], ['gap', 'Écart entre les cartes', 0, 0.06, 0.001], ['row1', 'Hauteur de la rangée du haut', 0, 0.25, 0.002], ['row2', 'Hauteur de la rangée du bas', 0.35, 0.7, 0.002], ['cardH', 'Hauteur des cartes', 0.3, 0.5, 0.002], ['nameY', 'Position du nom du champion dans la carte', 0.4, 0.95, 0.005]];
+  const layNow = () => { const saved = ((R.cfg || {}).overlay || {}).layout; return Object.assign({}, LAY_DEF, saved && saved.v === 2 ? saved : {}, R.layDraft || {}, { v: 2 }); };
   function layoutSettings() {
     const L2 = layNow();
     return `<h3>📐 Placer les infos sur les cartes du chargement</h3>
-      <p class="muted small">Lance <b>« Aperçu »</b> pendant un écran de chargement (ou une capture plein écran) : les contours des cartes calculées s'affichent en pointillés sur l'écran du jeu. Ajuste les curseurs jusqu'à ce qu'ils tombent sur les images des champions.</p>
+      <p class="muted small">Réglé d'après le vrai écran de chargement (1920 × 1080) et proportionnel à la hauteur de l'écran : ça devrait tomber juste à toutes les résolutions. Si besoin, lance <b>« Aperçu »</b> pendant un chargement : les contours des cartes calculées s'affichent en pointillés et la ligne jaune marque le nom du champion.</p>
       <div class="laygrid">${LAY_SL.map(([k, l, mn, mx, st]) => `<label class="small">${l} <b>${Math.round(L2[k] * 1000) / 10} %</b><input type="range" data-lay="${k}" min="${mn}" max="${mx}" step="${st}" value="${L2[k]}"></label>`).join('')}</div>
-      <div class="row"><span class="small muted">Infos placées</span><button class="chip ${L2.box !== 'bottom' ? 'on' : ''}" data-act="layBox" data-val="top">en haut de la carte</button><button class="chip ${L2.box === 'bottom' ? 'on' : ''}" data-act="layBox" data-val="bottom">en bas de la carte</button></div>
+      <div class="row"><span class="small muted">Infos placées</span><button class="chip ${L2.box !== 'top' ? 'on' : ''}" data-act="layBox" data-val="name">au-dessus du nom (bas de l'image)</button><button class="chip ${L2.box === 'top' ? 'on' : ''}" data-act="layBox" data-val="top">en haut de la carte</button></div>
       <div class="row"><button class="btn small" data-act="layPreview">👁️ Aperçu sur l'écran du jeu (20 s)</button><button class="btn ghost small" data-act="layReset">Valeurs par défaut</button></div>`;
   }
   function layPreview() {

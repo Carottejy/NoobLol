@@ -11,22 +11,24 @@
     if (!d) { root.innerHTML = ''; return; }
     const W = window.innerWidth, H = window.innerHeight;
     const { rows, o } = LoadLayout.cards(W, H, d.layout);
-    const fs = Math.max(10, Math.min(16, H * 0.0115));
     const order = (d.teams || []).slice().sort((a, b) => (a.side === 'ORDER' ? -1 : 1) - (b.side === 'ORDER' ? -1 : 1));
     let h = '';
     order.forEach((t, ri) => (t.players || []).slice(0, 5).forEach((p, i) => {
       const c = rows[ri][i]; if (!c) return;
-      const m = Math.max(4, c.w * 0.03);
-      const top = o.box === 'bottom' ? `top:${Math.round(c.y + c.h * 0.58)}px` : `top:${Math.round(c.y + m)}px`;
+      /* Taille du texte proportionnelle à la carte : lisible de 720p à la 4K */
+      const fs = Math.max(9, Math.min(18, c.w * 0.047));
+      const w = c.w * 0.88, x = c.x + (c.w - w) / 2;
+      /* Par défaut : posé juste au-dessus du nom du champion (bas de l'image) ; sinon en haut de la carte */
+      const pos = o.box === 'top' ? `top:${Math.round(c.y + c.h * 0.03)}px` : `top:${Math.round(c.y + c.h * o.nameY)}px;transform:translateY(-100%)`;
       const dt = DT[p.dmg];
-      h += `<div class="p ${t.mine ? 'mine' : 'theirs'} ${p.me ? 'me' : ''}" style="left:${Math.round(c.x + m)}px;${top};width:${Math.round(c.w - 2 * m)}px;font-size:${fs.toFixed(1)}px">
+      h += `<div class="p ${t.mine ? 'mine' : 'theirs'} ${p.me ? 'me' : ''}" style="left:${Math.round(x)}px;${pos};width:${Math.round(w)}px;font-size:${fs.toFixed(1)}px">
         <div class="r"><span class="tier">${esc(p.rank || 'Non classé')}</span><span class="k">${p.level ? 'niv. ' + p.level : ''}</span></div>
-        <div class="r"><span class="k">10 dernières</span><span class="${p.wrClass || ''}">${esc(p.wr || '…')}</span></div>
+        <div class="r"><span class="k">10 parties</span><span class="${p.wrClass || ''}">${esc(p.wr || '…')}</span></div>
         <div class="r"><span class="k">KDA</span><span>${esc(p.kda || '…')}</span></div>
         <div class="r"><span class="k">${esc(p.role || '')}</span>${dt ? `<span class="dt ${dt[0]}">${dt[1]}</span>` : ''}</div></div>`;
     }));
     /* Mode réglage : contour des cartes calculées, pour les caler sur le jeu */
-    if (d.preview) h += `<div class="grid">${rows.flat().map((c) => `<i style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px"></i>`).join('')}</div>`;
+    if (d.preview) h += `<div class="grid">${rows.flat().map((c) => `<i style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px"></i><b style="left:${c.x}px;top:${c.y + c.h * o.nameY}px;width:${c.w}px"></b>`).join('')}</div>`;
     root.innerHTML = h;
   }
   window.addEventListener('resize', () => draw(last));

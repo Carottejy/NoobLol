@@ -45,13 +45,6 @@ select { max-width: 100%; }
 .slot select { flex: 1 1 auto; min-width: 0; }
 .sps { display: flex; flex-direction: column; gap: 2px; }
 .timer { font-weight: 800; color: var(--accent2); font-size: 1.1rem; }
-.lcard { position: absolute; border-radius: 10px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); }
-.lcard.me { border-color: var(--accent); }
-.lcard > img { width: 100%; height: calc(100% - 26px); object-fit: cover; display: block; }
-.lname { position: absolute; left: 0; right: 0; bottom: 22px; padding: 6px; background: linear-gradient(transparent, rgba(0,0,0,.85)); display: flex; flex-direction: column; font-size: .8rem; }
-.lsp { display: flex; justify-content: center; gap: 3px; margin-top: 3px; }
-.lbar { height: 6px; background: #000; margin: 0; } .lbar i { display: block; height: 100%; background: var(--accent); transition: width .25s; }
-.lpct { display: block; font-size: .78rem; padding: 2px 0 4px; color: var(--muted); }
 .vs { font-size: 1.4rem; font-weight: 900; color: var(--accent2); margin: 10px 0; }
 .prow { display: grid; grid-template-columns: 28px 22px minmax(70px, 1fr) 60px 60px 70px auto auto; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 8px; background: var(--panel2); margin-bottom: 3px; font-size: .84rem; }
 .prow.me { outline: 1px solid var(--accent); } .prow.dead { opacity: .55; }
@@ -68,4 +61,14 @@ select { max-width: 100%; }
 
 .lscreen { position: fixed; inset: 0; z-index: 20; background: radial-gradient(ellipse at center, #10192c 0%, #05080f 75%); overflow: hidden; }
 .lmid { position: absolute; left: 0; right: 0; transform: translateY(-50%); display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .8rem; }
-.lcard .lname { bottom: 26px; }
+/* Carte de chargement façon client LoL */
+.lcard { position: absolute; box-sizing: border-box; border: 2px solid #8a7340; border-radius: 3px; background: #0b111c; overflow: hidden; box-shadow: 0 0 0 1px #000, 0 6px 18px rgba(0,0,0,.6); }
+.lcard.me { border-color: #f0d58c; }
+.lcard .art { position: absolute; left: 0; top: 0; width: 100%; height: 80%; object-fit: cover; display: block; }
+.lcard .cname { position: absolute; left: 0; right: 0; text-align: center; color: #f0e6d2; font-size: 1em; text-shadow: 0 1px 3px #000; }
+.lcard .plate { position: absolute; left: 0; right: 0; top: 80%; height: 10%; background: linear-gradient(#141c2b, #0b111c); border-top: 1px solid #8a7340; display: flex; align-items: center; justify-content: flex-end; padding: 0 6%; }
+.lcard .lsp { display: flex; gap: 3px; } .lcard .lsp .sp { width: 1.4em; height: 1.4em; }
+.lcard .pname { position: absolute; left: 0; right: 0; top: 91%; text-align: center; font-weight: 700; font-size: .95em; color: #e8eaf0; }
+.lcard .pname.me { color: #f0b44a; }
+.lcard .lbar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #000; } .lcard .lbar i { display: block; height: 100%; background: var(--accent); transition: width .25s; }
+.lcard .lpct { display: none; }
