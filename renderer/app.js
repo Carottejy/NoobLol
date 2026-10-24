@@ -2128,8 +2128,8 @@
     h += `<div class="row" style="margin-top:10px"><button class="btn ${R.miniOpen ? 'danger' : 'hex'}" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}">🗺️ ${R.miniOpen ? 'Fermer la mini-carte' : 'Ouvrir la mini-carte'}</button></div></div>`;
     const ov = c.overlay || { enabled: true };
     h += `<div class="card"><h2>⭐ Encart « Mon build » par-dessus le jeu</h2>
-      <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. La souris le traverse (aucun clic possible pendant la partie). Pour le placer, clique <b>« Déplacer l'encart »</b> : tu as 30 secondes pour le faire glisser, puis il se verrouille ; sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
-      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn small" data-act="ovMove">🖐️ Déplacer l'encart (30 s)</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div>
+      <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. <b>Glisse-le à la souris</b> pour le déplacer (c'est la seule action possible dessus), sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
+      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div>
       <p class="muted small" style="margin-top:8px">Pendant l'écran de chargement, Noob LOL affiche aussi par-dessus le jeu le rang, le niveau, les victoires et le KDA moyen des 10 dernières parties de chaque joueur, et le type de dégâts de son champion.</p>
       <div class="row"><button class="chip ${ov.loading !== false ? 'on' : ''}" data-act="ovLoadToggle">${ov.loading !== false ? '✅ Infos sur l\'écran de chargement' : 'Infos sur l\'écran de chargement : désactivées'}</button></div>
       ${layoutSettings(ov)}</div>`;
@@ -2238,7 +2238,6 @@
       case 'layReset': R.layDraft = null; NB.config.set({ overlay: { layout: Object.assign({}, LAY_DEF) } }).then((c) => { R.cfg = c; render(true); layPreview(); }).catch(() => {}); break;
       case 'layPreview': layPreview(); break;
       case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
-      case 'ovMove': NB.overlay.move(true).then(() => toast('🖐️ Fais glisser l\'encart à sa place : il se verrouille dans 30 s')).catch(() => {}); break;
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {
         const b = S.myRunes.find((x) => x.id === v); if (!b) break;

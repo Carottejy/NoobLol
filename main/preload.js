@@ -24,7 +24,7 @@ contextBridge.exposeInMainWorld('noob', {
   key: { status: () => call('key:status'), renew: () => call('key:renew'), on: on('keystatus'), onRenewed: on('keyrenewed') },
   champ: { damage: (keys) => call('champ:damage', keys) },
   loadov: { update: (d) => call('loadov:update', d), onData: on('loadov:data') },
-  overlay: { update: (d) => call('overlay:update', d), reset: () => call('overlay:reset'), onData: on('overlay:data'), openItem: (id) => call('overlay:openItem', id), onOpenItem: on('open:item'), move: (on) => call('overlay:move', on), onMove: on('overlay:move') },
+  overlay: { update: (d) => call('overlay:update', d), reset: () => call('overlay:reset'), onData: on('overlay:data'), openItem: (id) => call('overlay:openItem', id), onOpenItem: on('open:item') },
   players: { info: (ids) => call('players:info', ids), recent: (ids) => call('players:recent', ids) },
   postgame: { get: () => call('postgame:get'), load: (id, puuid) => call('postgame:load', id, puuid), on: on('postgame') },
   sim: { open: () => call('sim:open'), isOpen: () => call('sim:isOpen'), push: (s) => call('sim:push', s), ports: () => call('sim:ports'), onAction: on('sim:action'), onState: on('sim:state') },

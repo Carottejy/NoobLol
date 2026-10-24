@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.6.3';
+var APP_VERSION = '3.6.4';
 var APP_RELEASES = [
+  { v: '3.6.4', date: '2026-10-24', notes: [
+    'Encart « Mon build » en jeu : de nouveau déplaçable directement à la souris (c\'est la seule action possible dessus : aucun clic sur les objets). Le bouton « Déplacer l\'encart (30 s) » est supprimé.',
+  ]},
   { v: '3.6.3', date: '2026-10-24', notes: [
     'Écran de chargement : les infos par-dessus le jeu n\'apparaissent plus pendant le lancement du jeu (écran noir), mais une fois le jeu lancé ; et elles restent jusqu\'au vrai début de la partie (le jeu répond déjà pendant le chargement avec un chrono à 0 : ce n\'est plus pris pour le début de la partie). L\'écran « Chargement » de l\'appli reste affiché jusqu\'au début de la partie.',
     'Encart « Mon build » en jeu : plus aucun clic, la souris le traverse. Pour le placer : Réglages → « 🖐️ Déplacer l\'encart (30 s) », il se verrouille tout seul ensuite. Il n\'apparaît qu\'une fois la partie commencée.',

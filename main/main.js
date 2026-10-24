@@ -97,15 +97,16 @@ function setOverlay(data) {
   if (!overlay || overlay.isDestroyed()) {
     overlay = new BrowserWindow(Object.assign(overlayBounds(), {
       frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
-      skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, focusable: false, title: 'Noob LOL — Mon build', webPreferences: secureWebPrefs(),
+      skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, title: 'Noob LOL — Mon build', webPreferences: secureWebPrefs(),
     }));
     overlay.setAlwaysOnTop(true, 'screen-saver');
-    /* Aucun clic : la souris traverse l'encart (on le déplace depuis Réglages → « Déplacer l'encart ») */
-    overlay.setIgnoreMouseEvents(true);
+    /* Seule interaction possible : le faire glisser pour le déplacer (aucun bouton, aucun clic sur les objets) ;
+       une fois lâché, il se remet au premier plan au-dessus du jeu */
     overlay.loadFile(path.join(RENDERER, 'overlay.html'));
     overlay.webContents.on('did-finish-load', () => { if (overlay && !overlay.isDestroyed() && overlayData) { overlay.webContents.send('overlay:data', overlayData); overlay.showInactive(); } });
     overlay.on('move', () => {
       clearTimeout(ovSaveT);
+      if (overlay && !overlay.isDestroyed()) overlay.setAlwaysOnTop(true, 'screen-saver');
       ovSaveT = setTimeout(() => { if (overlay && !overlay.isDestroyed()) { const b = overlay.getBounds(); cfg.set({ overlay: { x: b.x, y: b.y } }); } }, 400);
     });
     overlay.on('closed', () => { overlay = null; });
@@ -310,22 +311,6 @@ function handlers() {
   h('stats:pendingFile', () => { const f = pendingStatsFile; pendingStatsFile = null; return f; });
   h('champ:damage', (keys) => dmgTypes.get(keys));
   h('loadov:update', (d) => { setLoadOverlay(d); return true; });
-  /* Mode déplacement de l'encart du build : 30 s pendant lesquelles on peut le faire glisser, puis il se verrouille */
-  let moveT = null;
-  const setMove = (on) => {
-    clearTimeout(moveT);
-    if (!overlay || overlay.isDestroyed()) return false;
-    overlay.setIgnoreMouseEvents(!on);
-    overlay.setFocusable(!!on);
-    overlay.webContents.send('overlay:move', !!on);
-    if (on) { if (!overlay.isVisible()) overlay.showInactive(); moveT = setTimeout(() => setMove(false), 30000); }
-    return true;
-  };
-  h('overlay:move', (on) => {
-    if (on && (!overlay || overlay.isDestroyed())) { setOverlay({ name: 'Mon build', champ: 'aperçu', core: [], boots: null, sit: [], next: null, preview: true }); setTimeout(() => setMove(true), 700); return true; }
-    if (!on && overlayData && overlayData.preview) { setMove(false); setOverlay(null); return true; }
-    return setMove(on);
-  });
   h('overlay:openItem', (id) => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('open:item', String(id)); } return true; });
   h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
   h('app:openData', () => shell.openPath(app.getPath('userData')));
