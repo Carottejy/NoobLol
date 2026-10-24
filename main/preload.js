@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('noob', {
   stats: {
     counts: () => call('stats:counts'), roleDist: (c) => call('stats:roleDist', c), builds: (c, r, d) => call('stats:builds', c, r, d), champ: (c, r, d) => call('stats:champ', c, r, d), tier: (r, d, m) => call('stats:tier', r, d, m),
     counters: (e, r, d) => call('stats:counters', e, r, d), matchup: (c, o, r, d) => call('stats:matchup', c, o, r, d), mainRole: (c) => call('stats:mainRole', c), clear: () => call('stats:clear'),
+    exportFile: () => call('stats:export'), inspect: (f) => call('stats:inspect', f), importFile: (f) => call('stats:import', f), pendingFile: () => call('stats:pendingFile'), onOpenFile: on('stats:openFile'),
   },
   collector: { start: () => call('collector:start'), stop: () => call('collector:stop'), status: () => call('collector:status'), on: on('collector') },
   minimap: {

@@ -1,5 +1,5 @@
 /* Noob LOL — processus principal Electron */
-const { app, BrowserWindow, ipcMain, shell, screen, desktopCapturer, safeStorage, session, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen, desktopCapturer, safeStorage, session, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Config } = require('./config');
@@ -13,6 +13,7 @@ const { KeyWatch } = require('./keyrenew');
 const { History } = require('./history');
 const { SimServer } = require('./simulator');
 const { DamageTypes } = require('./damage');
+const statsFile = require('./statsfile');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
@@ -263,6 +264,29 @@ function handlers() {
   h('stats:counters', (enemy, role, days) => db.counters(enemy, role, days));
   h('stats:matchup', (champ, opp, role, days) => db.matchup(champ, opp, role, days));
   h('stats:mainRole', (champ) => db.mainRole(champ));
+  /* Partage des statistiques : export dans un fichier « .nooblolstats », import par fusion */
+  h('stats:export', async () => {
+    db.flush();
+    const c = db.counts();
+    const day = new Date().toISOString().slice(0, 10);
+    const r = await dialog.showSaveDialog(win, { title: 'Exporter mes statistiques', defaultPath: path.join(app.getPath('desktop'), `Statistiques Noob LOL ${String(cfg.data.platform || '').toUpperCase()} ${day}.nooblolstats`), filters: [{ name: 'Statistiques Noob LOL', extensions: ['nooblolstats'] }] });
+    if (r.canceled || !r.filePath) return null;
+    const meta = { format: 'nooblol-stats', version: 1, app: app.getVersion(), platform: cfg.data.platform, matches: c.matches, picks: c.picks, patches: (c.patches || []).map((p) => p.patch), exportedAt: Date.now() };
+    const buf = statsFile.pack(db.exportBuffer(), meta);
+    fs.writeFileSync(r.filePath, buf);
+    return { path: r.filePath, size: buf.length, matches: c.matches };
+  });
+  h('stats:inspect', async (file) => {
+    if (!file) { const r = await dialog.showOpenDialog(win, { title: 'Importer des statistiques', properties: ['openFile'], filters: [{ name: 'Statistiques Noob LOL', extensions: ['nooblolstats'] }] }); if (r.canceled || !r.filePaths[0]) return null; file = r.filePaths[0]; }
+    const { meta } = statsFile.readMeta(fs.readFileSync(file));
+    return { file, name: path.basename(file), meta };
+  });
+  h('stats:import', (file) => {
+    const { db: buf } = statsFile.unpack(fs.readFileSync(file));
+    const res = db.importBuffer(buf);
+    db.flush();
+    return Object.assign(res, { counts: db.counts() });
+  });
   h('stats:clear', () => { collector.stop(); db.clearStats(); return db.counts(); });
   h('collector:start', () => { collector.start(); return collector.status(); });
   h('collector:stop', () => { colWasRunning = false; collector.stop(); return collector.status(); });
@@ -279,6 +303,7 @@ function handlers() {
   h('sim:isOpen', () => !!(simWin && !simWin.isDestroyed()));
   h('sim:push', (state) => { if (sim) sim.push(state); return true; });
   h('sim:ports', () => (sim ? { lcu: sim.lcuPort, live: sim.livePort, seen: sim.seen } : null));
+  h('stats:pendingFile', () => { const f = pendingStatsFile; pendingStatsFile = null; return f; });
   h('champ:damage', (keys) => dmgTypes.get(keys));
   h('loadov:update', (d) => { setLoadOverlay(d); return true; });
   h('overlay:openItem', (id) => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('open:item', String(id)); } return true; });
@@ -372,5 +397,11 @@ app.whenReady().then(async () => {
   keys.startTimer();
   autoUpdate();
 });
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
+/* Double-clic sur un fichier « .nooblolstats » : Noob LOL s'ouvre et propose l'import */
+const statsArg = (argv) => (argv || []).find((a) => /\.nooblolstats$/i.test(String(a))) || null;
+let pendingStatsFile = statsArg(process.argv);
+app.on('second-instance', (e, argv) => {
+  if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
+  const f = statsArg(argv); if (f) send('stats:openFile', f);
+});
 app.on('window-all-closed', () => { lcu.stop(); live.stop(); if (collector) collector.stop(); if (db) db.close(); app.quit(); });

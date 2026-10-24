@@ -2022,7 +2022,11 @@
       <div class="kpis"><div><b>${nf(col.matches)}</b><span>parties analysées</span></div><div><b>${nf(col.picks)}</b><span>lignes champion</span></div><div><b>${nf(col.pending)}</b><span>en attente</span></div><div><b>${nf(col.seeds)}</b><span>joueurs suivis</span></div></div>
       <p class="small">${running ? '🟢 En cours…' : '⏸️ À l\'arrêt'}${col.lastError ? ` · <span class="neg">${esc(col.lastError)}</span>` : ''}</p>
       <div class="row"><button class="btn ${running ? 'danger' : ''} small" data-act="${running ? 'colStop' : 'colStart'}" ${c.hasApiKey ? '' : 'disabled'}>${running ? '⏸️ Arrêter' : '▶ Démarrer'}</button>
-      <button class="chip ${(c.collector || {}).autoStart ? 'on' : ''}" data-act="colAuto">Démarrer avec l'appli</button><button class="btn ghost small" data-act="colClear">Vider les statistiques</button></div></div>`;
+      <button class="chip ${(c.collector || {}).autoStart ? 'on' : ''}" data-act="colAuto">Démarrer avec l'appli</button><button class="btn ghost small" data-act="colClear">Vider les statistiques</button></div>
+      <h3>🤝 Partager mes statistiques</h3>
+      <p class="muted small">« Exporter » crée un fichier <b>.nooblolstats</b> à donner à un ami. Chez lui, un double-clic sur ce fichier ouvre Noob LOL, qui lui propose de l'importer. Ses parties sont <b>ajoutées</b> aux siennes, sans doublon : rien n'est effacé. Le fichier ne contient que les statistiques du collecteur, ni ta clé Riot, ni tes builds, ni ton compte.</p>
+      <div class="row"><button class="btn small" data-act="statsExport" ${col.matches ? '' : 'disabled'}>📤 Exporter mes statistiques</button><button class="btn ghost small" data-act="statsImport">📥 Importer des statistiques</button></div>
+      ${importAskCard()}</div>`;
     h += voiceSettings();
     h += miniSettings();
     h += '</div></div>';
@@ -2087,6 +2091,19 @@
     NB.loadov.update({ preview: true, teams: [{ side: 'ORDER', mine: true, players: pick.slice(0, 5).map(P) }, { side: 'CHAOS', mine: false, players: pick.slice(5).map((c, i) => P(c, i + 5)) }] }).catch(() => {});
     clearTimeout(R.layTimer);
     R.layTimer = setTimeout(() => { R.loadovKey = ''; NB.loadov.update(null).catch(() => {}); if (isLoading()) loadovSync(loadingData()); }, 20000);
+  }
+  /* Import de statistiques reçues : confirmation (fichier choisi ou ouvert d'un double-clic) */
+  function importAskCard() {
+    const a = R.importAsk; if (!a) return '';
+    const m = a.meta || {};
+    return `<div class="card gold" style="margin-top:8px"><h3 style="margin-top:0">📥 Importer « ${esc(a.name)} » ?</h3>
+      <p class="small">${nf(m.matches || 0)} parties analysées${m.platform ? ` · serveur ${esc(String(m.platform).toUpperCase())}` : ''}${m.patches && m.patches.length ? ` · patchs ${esc(m.patches.join(', '))}` : ''}${m.exportedAt ? ` · exporté le ${new Date(m.exportedAt).toLocaleDateString('fr-FR')}` : ''}.</p>
+      <p class="small muted">Ces parties seront ajoutées aux tiennes, sans doublon.</p>
+      <div class="row"><button class="btn small" data-act="statsImportOk" ${R.importBusy ? 'disabled' : ''}>${R.importBusy ? '⏳ Import en cours…' : '✅ Importer'}</button><button class="btn ghost small" data-act="statsImportNo">Annuler</button></div></div>`;
+  }
+  function askImport(file) {
+    NB.stats.inspect(file).then((a) => { if (!a) return; R.importAsk = a; S.mode = 'settings'; render(); setTimeout(() => { const el = document.querySelector('[data-act=statsImportOk]'); if (el) el.scrollIntoView({ block: 'center' }); }, 50); })
+      .catch((e) => toast('❌ ' + e.message));
   }
   function miniSettings() {
     const c = R.cfg || {}, m = c.minimap || {};
@@ -2316,6 +2333,12 @@
         S.gameBuild = { gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: b.next.slice() } };
         save(); R.ovKey = ''; toast('⭐ Ce build sera suivi dans l\'encart en jeu'); render(true); break; }
       case 'unfollowGameBuild': S.gameBuild = null; save(); R.ovKey = ''; render(true); break;
+      case 'statsExport': NB.stats.exportFile().then((r) => { if (r) toast(`📤 ${nf(r.matches)} parties exportées (${(r.size / 1048576).toFixed(1).replace('.', ',')} Mo) : ${r.path.split(/[\\/]/).pop()}`); }).catch((e) => toast('❌ ' + e.message)); break;
+      case 'statsImport': askImport(); break;
+      case 'statsImportNo': R.importAsk = null; render(true); break;
+      case 'statsImportOk': { const a = R.importAsk; if (!a || R.importBusy) break; R.importBusy = true; render(true);
+        NB.stats.importFile(a.file).then((r) => { toast(`✅ ${nf(r.matches)} nouvelles parties ajoutées (total : ${nf(r.total)})`); R.importAsk = null; cache.clear(); return NB.collector.status().then((c) => { R.col = c; }); })
+          .catch((e) => toast('❌ ' + e.message)).finally(() => { R.importBusy = false; render(true); }); break; }
       case 'simOpen': NB.sim.open().catch((e) => toast('❌ ' + e.message)); break;
       case 'openData': NB.openData().catch(() => {}); break;
       case 'checkUpdate': R.upd = Object.assign({}, R.upd, { state: 'checking' }); render(true); NB.update.check().then((u) => { R.upd = u; render(true); }).catch((e) => { R.upd = { state: 'error', error: e.message, checkedAt: Date.now() }; render(true); }); break;
@@ -2429,6 +2452,7 @@
     NB.minimap.onState((open) => { R.miniOpen = open; if (!busy()) render(true); });
     NB.onUpdate((u) => { R.update = u; renderTop(); });
     if (NB.overlay && NB.overlay.onOpenItem) NB.overlay.onOpenItem((id) => { if (S.mode !== 'prep') lastMode = S.mode; openView('item', id); });
+    if (NB.stats.onOpenFile) { NB.stats.onOpenFile((f) => askImport(f)); NB.stats.pendingFile().then((f) => { if (f) askImport(f); }).catch(() => {}); }
     if (NB.update) { NB.update.on((u) => { R.upd = u; if (S.mode === 'settings' && !busy()) render(true); }); NB.update.state().then((u) => { R.upd = u; }).catch(() => {}); }
     NB.postgame.on((d) => {
       const fresh = !R.post || R.post.at !== d.at;

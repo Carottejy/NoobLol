@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.5.1';
+var APP_VERSION = '3.6.0';
 var APP_RELEASES = [
+  { v: '3.6.0', date: '2026-10-24', notes: [
+    'Partager les statistiques du collecteur : Réglages → Collecteur → « 📤 Exporter mes statistiques » crée un fichier .nooblolstats (compressé) à donner à un ami.',
+    'Chez l\'ami, un double-clic sur ce fichier ouvre Noob LOL qui propose de l\'importer (ou « 📥 Importer des statistiques »). Les parties sont ajoutées aux siennes, sans doublon : rien n\'est effacé.',
+    'Le fichier ne contient que les statistiques du collecteur : ni clé Riot, ni builds, ni compte.',
+  ]},
   { v: '3.5.1', date: '2026-10-23', notes: [
     'Écran de chargement : les infos de chaque joueur sont maintenant posées SUR la carte de son champion (même disposition que le jeu : 2 rangées de 5 cartes, taille selon la hauteur de l\'écran). Réglage fin dans Réglages → « Placer les infos sur les cartes du chargement », avec un aperçu qui dessine le contour des cartes sur l\'écran du jeu.',
     'Type de dégâts officiel de Riot (AD, AP ou Mixte) au lieu d\'un pourcentage estimé : Séraphine est bien AP. Il vient des données du client LoL (sinon de leur copie publique) et sert aussi en sélection et pour les profils d\'équipe.',

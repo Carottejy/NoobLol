@@ -12,6 +12,7 @@ class StatsDb {
     let buf = null;
     try { if (file) buf = fs.readFileSync(file); } catch (e) { /* nouvelle base */ }
     const db = new StatsDb(file, buf ? new SQL.Database(buf) : new SQL.Database());
+    db.SQL = SQL;
     db.migrate();
     return db;
   }
@@ -49,6 +50,32 @@ class StatsDb {
     } catch (e) { console.error('db save', e); }
   }
   close() { this.flush(); this.db.close(); }
+  /* ---------- Partage : export de la base et fusion d'une base reçue ---------- */
+  exportBuffer() { return Buffer.from(this.db.export()); }
+  /* Ajoute les parties d'une autre base (sans doublons) ; renvoie ce qui a été ajouté */
+  importBuffer(buf) {
+    const src = new this.SQL.Database(buf);
+    try {
+      const q = (sql) => { const st = src.prepare(sql); const rows = []; while (st.step()) rows.push(st.get()); st.free(); return rows; };
+      const has = (t) => q(`SELECT name FROM sqlite_master WHERE type='table' AND name='${t}'`).length > 0;
+      if (!has('picks') || !has('matches')) throw new Error('Ce fichier ne contient pas de statistiques Noob LOL.');
+      const destCols = this.all('PRAGMA table_info(picks)').map((c) => c.name);
+      const srcCols = q('PRAGMA table_info(picks)').map((r) => r[1]);
+      const cols = srcCols.filter((c) => destCols.includes(c));
+      const before = { m: (this.one('SELECT COUNT(*) n FROM matches WHERE done = 1') || {}).n || 0, p: (this.one('SELECT COUNT(*) n FROM picks') || {}).n || 0 };
+      this.db.run('BEGIN');
+      const im = this.db.prepare('INSERT INTO matches (id, platform, patch, created, done) VALUES (?, ?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET done = 1');
+      for (const r of q('SELECT id, platform, patch, created FROM matches WHERE done = 1')) im.run(r);
+      im.free();
+      const ip = this.db.prepare(`INSERT OR IGNORE INTO picks (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
+      for (const r of q(`SELECT ${cols.join(',')} FROM picks`)) ip.run(r);
+      ip.free();
+      this.db.run('COMMIT');
+      this.touch();
+      const after = { m: (this.one('SELECT COUNT(*) n FROM matches WHERE done = 1') || {}).n || 0, p: (this.one('SELECT COUNT(*) n FROM picks') || {}).n || 0 };
+      return { matches: after.m - before.m, picks: after.p - before.p, total: after.m };
+    } catch (e) { try { this.db.run('ROLLBACK'); } catch (e2) { /* rien à annuler */ } throw e; } finally { src.close(); }
+  }
   clearStats() { this.db.run('DELETE FROM picks; DELETE FROM matches; DELETE FROM seeds;'); this.touch(); }
 
   /* ---------- Écriture (collecteur) ---------- */

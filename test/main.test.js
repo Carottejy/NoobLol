@@ -522,3 +522,20 @@ test('chargement : historique du client résumé et rôles de la session de part
   const s = simplifyGame({ gameData: { gameId: 1, teamOne: [{ puuid: 'a', championId: 1, selectedPosition: 'MIDDLE', spell1Id: 4, spell2Id: 14 }], teamTwo: [{ puuid: 'b', championId: 2, selectedPosition: 'UTILITY' }] } });
   assert.strictEqual(s.players[0].role, 'mid'); assert.strictEqual(s.players[1].role, 'support'); assert.deepStrictEqual(s.players[0].spells, [4, 14]);
 });
+
+test('partage des statistiques : fichier .nooblolstats et fusion sans doublon', async () => {
+  const { StatsDb } = require('../main/db');
+  const statsFile = require('../main/statsfile');
+  const a = await StatsDb.open(null), b = await StatsDb.open(null);
+  const add = (db, id, champ) => { db.run('INSERT INTO matches (id, platform, patch, created, done) VALUES (?, ?, ?, ?, 1)', [id, 'euw1', '16.21', Date.now()]); db.run('INSERT INTO picks (match_id, champ, role, win, opp, patch, created) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, champ, 'mid', 1, 0, '16.21', Date.now()]); };
+  add(a, 'EUW1_1', 103); add(a, 'EUW1_2', 99); add(b, 'EUW1_2', 99); add(b, 'EUW1_3', 1);
+  b.run('INSERT INTO matches (id, platform, done) VALUES (?, ?, 0)', ['EUW1_9', 'euw1']);
+  const file = statsFile.pack(a.exportBuffer(), { format: 'nooblol-stats', matches: 2 });
+  assert.strictEqual(statsFile.readMeta(file).meta.matches, 2);
+  assert.throws(() => statsFile.readMeta(Buffer.from('nimporte quoi')), /pas un fichier/);
+  const r = b.importBuffer(statsFile.unpack(file).db);
+  assert.deepStrictEqual([r.matches, r.picks, r.total], [1, 1, 3], 'EUW1_2 déjà présent : seul EUW1_1 est ajouté');
+  const again = b.importBuffer(statsFile.unpack(file).db);
+  assert.deepStrictEqual([again.matches, again.picks], [0, 0]);
+  assert.strictEqual(b.counts().pending, 1, 'les parties en attente du destinataire sont gardées');
+});
