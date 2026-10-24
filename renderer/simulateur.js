@@ -124,7 +124,11 @@
   }
   function push() {
     if (!NB || !NB.sim) return;
-    const phase = { lobby: 'Lobby', select: 'ChampSelect', loading: 'GameStart', game: 'InProgress', end: 'EndOfGame' }[SIM.step] || 'None';
+    /* Comme le vrai client : « GameStart » pendant le lancement du jeu (2 s), puis « InProgress » dès que le jeu tourne */
+    const launching = SIM.step === 'loading' && SIM.load && Date.now() - SIM.load.t0 < 2000;
+    const phase = { lobby: 'Lobby', select: 'ChampSelect', loading: launching ? 'GameStart' : 'InProgress', game: 'InProgress', end: 'EndOfGame' }[SIM.step] || 'None';
+    /* Pendant l'écran de chargement (après le lancement), le jeu répond déjà : chrono à 0, aucun événement */
+    const loadingLive = SIM.step === 'loading' && SIM.load && Date.now() - SIM.load.t0 >= 4000 && SIM.game;
     const players = {}; SIM.players.forEach((p) => { players[p.puuid] = p; });
     const me = meP() || {};
     NB.sim.push({
@@ -132,7 +136,7 @@
       summoner: { gameName: SIM.me.gameName, tagLine: SIM.me.tagLine, displayName: SIM.me.gameName, puuid: me.puuid || 'sim-moi-0000', summonerLevel: SIM.me.level, profileIconId: 29 },
       session: SIM.step === 'select' ? session() : null,
       gameflow: /loading|game|end/.test(SIM.step) ? gameflow() : null,
-      live: SIM.step === 'game' && SIM.game ? liveData() : null,
+      live: (SIM.step === 'game' || loadingLive) && SIM.game ? liveData() : null,
     }).catch(() => {});
   }
 
@@ -150,14 +154,20 @@
     const boots = [p.role === 'utility' ? 3158 : ap ? 3020 : tank ? 3047 : 3006].filter(has);
     return { starter, plan: boots.concat(core) };
   }
-  function startGame() {
+  /* Prépare la partie dès le chargement (le jeu répond déjà, chrono à 0, sans événement « GameStart ») */
+  function initGame() {
     const st = {};
     SIM.players.forEach((p) => {
       const b = buildFor(p);
       st[p.cell] = { level: 1, cs: 0, k: 0, d: 0, a: 0, gold: 500, spent: 0, items: b.starter.slice(), plan: b.plan, trinket: 3340, deadUntil: 0, ward: 0, lvlOff: Math.random() * 0.6 - 0.3 };
       st[p.cell].spent = b.starter.reduce((s, id) => s + ((D.items[String(id)] || { gold: { total: 0 } }).gold.total), 0);
     });
-    SIM.game = { t: 0, running: true, st, events: [{ EventID: 0, EventName: 'GameStart', EventTime: 0 }], evId: 1, hp: 1, mana: 1, drakeAt: 300, drakes: { ORDER: 0, CHAOS: 0 }, elderAt: 0, grubs: 3, herald: false, baronAt: 1200, first: false, turrets: { ORDER: 0, CHAOS: 0 }, inhibs: { ORDER: 0, CHAOS: 0 } };
+    SIM.game = { t: 0, running: false, st, events: [], evId: 0, hp: 1, mana: 1, drakeAt: 300, drakes: { ORDER: 0, CHAOS: 0 }, elderAt: 0, grubs: 3, herald: false, baronAt: 1200, first: false, turrets: { ORDER: 0, CHAOS: 0 }, inhibs: { ORDER: 0, CHAOS: 0 } };
+  }
+  function startGame() {
+    if (!SIM.game) initGame();
+    SIM.game.running = true;
+    SIM.game.events.push({ EventID: SIM.game.evId++, EventName: 'GameStart', EventTime: 0 });
     SIM.step = 'game';
     logLine('🎮 La partie commence.');
   }
@@ -318,7 +328,7 @@
     const midY = ((o.row1 + o.cardH) * H + o.row2 * H) / 2;
     return `<div class="lscreen">${byTeam('ORDER').map((p, i) => card(p, rows[0][i])).join('')}${byTeam('CHAOS').map((p, i) => card(p, rows[1][i])).join('')}
       <div class="lmid" style="top:${Math.round(midY)}px">${L.done ? '<span class="ready">✅ Tout le monde est prêt.</span>' : '<button class="btn ghost sm" data-act="fillLoading">⏩ Terminer le chargement</button>'}<button class="btn hex sm" data-act="skipLoading">▶ Lancer la partie</button>
-      <span class="muted">Phase « GameStart » · mets le simulateur en plein écran (F11) pour caler l'encart de Noob LOL sur les cartes</span></div></div>`;
+      <span class="muted">${Date.now() - L.t0 < 2000 ? 'Lancement du jeu (phase « GameStart »)' : Date.now() - L.t0 < 4000 ? 'Jeu lancé (phase « InProgress »)' : 'Jeu lancé : il répond déjà (chrono à 0)'} · F11 pour le plein écran</span></div></div>`;
   }
   function boardHtml() {
     const G = SIM.game, S = G.st;
@@ -393,7 +403,7 @@
     else if (a === 'nextPick') { const p = nextPicker(); if (p) { if (p.isMe && !p.hover) autoPick(p); else if (p.isMe) { p.champ = p.hover; p.hover = 0; p.locked = true; } else autoPick(p); SIM.timerEnd = Date.now() + 30000; } }
     else if (a === 'allButMe') { pickOrder().filter((p) => !p.isMe && !p.locked).forEach(autoPick); }
     else if (a === 'allPicks') { pickOrder().filter((p) => !p.locked).forEach((p) => { if (p.hover) { p.champ = p.hover; p.hover = 0; p.locked = true; } else autoPick(p); }); }
-    else if (a === 'toLoading') { SIM.step = 'loading'; SIM.load = { prog: {}, speed: {} }; SIM.players.forEach((p) => { SIM.load.prog[p.cell] = 0; SIM.load.speed[p.cell] = 6 + Math.random() * 10; }); }
+    else if (a === 'toLoading') { SIM.step = 'loading'; initGame(); SIM.load = { prog: {}, speed: {}, t0: Date.now() }; SIM.players.forEach((p) => { SIM.load.prog[p.cell] = 0; SIM.load.speed[p.cell] = 6 + Math.random() * 10; }); }
     else if (a === 'skipLoading') { startGame(); }
     else if (a === 'fillLoading' && SIM.load) { SIM.players.forEach((p) => { SIM.load.prog[p.cell] = 100; }); SIM.load.done = true; }
     else if (a === 'speed') SIM.speed = +v;

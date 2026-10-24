@@ -1297,7 +1297,7 @@
   function overlaySync(L) {
     if (!NB || !NB.overlay) return;
     let d = null;
-    const b = L ? liveBuild(L) : null;
+    const b = L && started(L) ? liveBuild(L) : null;
     if (b && b.personal && D.items) {
       const P = b.personal, own = new Set((b.owned || []).map(Number));
       const it = (id) => { const x = D.items[String(id)]; return x ? { id: +id, src: Dd.img.item(x), name: x.name, cost: x.gold.total, own: own.has(+id) } : null; };
@@ -1497,7 +1497,13 @@
       .catch(() => { miss.forEach((id) => { R.recent[id] = null; }); })
       .finally(() => { miss.forEach((id) => R.recentPending.delete(id)); soon(); });
   }
-  const isLoading = () => !R.live && /GameStart|InProgress|Reconnect/.test(R.lcu.phase || '') && !!(R.lcu.game && !R.lcu.game.ended && (R.lcu.game.players || []).length);
+  /* La partie a vraiment commencé : le chrono tourne ou le jeu a envoyé l'événement « GameStart » (pendant l'écran
+     de chargement, le jeu peut déjà répondre avec un chrono à 0) */
+  const started = (L) => !!(L && (L.time > 1 || (L.events || []).some((e) => e.name === 'GameStart')));
+  const isLoading = () => !started(R.live) && /GameStart|InProgress|Reconnect/.test(R.lcu.phase || '') && !!(R.lcu.game && !R.lcu.game.ended && (R.lcu.game.players || []).length);
+  /* Incrustation sur l'écran de chargement : seulement quand le jeu est lancé (phase « en partie » depuis 3 s,
+     ou le jeu répond déjà), pas pendant le lancement où l'écran du jeu n'est pas encore affiché */
+  const loadScreenShown = () => isLoading() && (!!R.live || (R.lcu.phase !== 'GameStart' && R.inProgressAt && Date.now() - R.inProgressAt >= 3000));
   function wantFull(id) { if (!id || R.full[id] || R.full[id] === null) return; R.full[id] = null; Dd.champFull(id).then((f) => { R.full[id] = f; soon(); }).catch(() => {}); }
   function loadingData() {
     const g = R.lcu.game, sp = R.lcu.summoner;
@@ -1625,7 +1631,7 @@
     const c = b && b.c, oc = b && b.oc;
     if (!c || !oc) return [];
     wantFull(oc.id); wantFull(c.id);
-    const fo = R.full[oc.id], tips = [], K = b.K;
+    const fo = R.full[oc.id], tips = [], K = b.K || myKit(c, b.role);
     const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
     const rc = c.stats.attackrange || 0, ro = oc.stats.attackrange || 0;
     if (rc - ro >= 150) T(`Tu as plus de portée (${rc} contre ${ro}) : touche-le avec tes attaques quand il s'approche de tes sbires pour les achever.`);
@@ -1707,7 +1713,7 @@
   function loadovSync(ld) {
     if (!NB || !NB.loadov) return;
     let d = null;
-    if (ld && isLoading() && D.champs) {
+    if (ld && loadScreenShown() && D.champs) {
       const P = (p, t) => {
         const c = byKey(p.champ), r = R.recent[p.puuid], i = R.pinfo[p.puuid], q = i && (i.solo || i.flex);
         const role = ld.role.get(p);
@@ -1726,7 +1732,7 @@
   function viewGame() {
     const nd = needData();
     const L = R.live;
-    if (!L && !nd && isLoading()) return viewLoading();
+    if (!nd && isLoading()) return viewLoading();
     if (!L && R.post && R.post.status && !nd) return viewPost();
     const showMap = S.opt.miniEmbed && NB;
     const mapCard = showMap ? `<div class="gm-map card"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
@@ -2122,8 +2128,8 @@
     h += `<div class="row" style="margin-top:10px"><button class="btn ${R.miniOpen ? 'danger' : 'hex'}" data-act="${R.miniOpen ? 'miniClose' : 'miniOpen'}">🗺️ ${R.miniOpen ? 'Fermer la mini-carte' : 'Ouvrir la mini-carte'}</button></div></div>`;
     const ov = c.overlay || { enabled: true };
     h += `<div class="card"><h2>⭐ Encart « Mon build » par-dessus le jeu</h2>
-      <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. <b>Glisse-le à la souris</b> pour le déplacer, sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
-      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div>
+      <p class="muted small">Quand tu suis un de tes builds d'objets (choisi pendant la sélection), un petit encart s'affiche en bas de l'écran du jeu, entre tes compétences et la mini-carte : prochain objet, or manquant et objets déjà achetés. La souris le traverse (aucun clic possible pendant la partie). Pour le placer, clique <b>« Déplacer l'encart »</b> : tu as 30 secondes pour le faire glisser, puis il se verrouille ; sa position est retenue. Il faut que League of Legends soit en mode <b>« Fenêtré sans bordure »</b>.</p>
+      <div class="row"><button class="chip ${ov.enabled !== false ? 'on' : ''}" data-act="ovToggle">${ov.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn small" data-act="ovMove">🖐️ Déplacer l'encart (30 s)</button><button class="btn ghost small" data-act="ovReset">Remettre à sa place</button></div>
       <p class="muted small" style="margin-top:8px">Pendant l'écran de chargement, Noob LOL affiche aussi par-dessus le jeu le rang, le niveau, les victoires et le KDA moyen des 10 dernières parties de chaque joueur, et le type de dégâts de son champion.</p>
       <div class="row"><button class="chip ${ov.loading !== false ? 'on' : ''}" data-act="ovLoadToggle">${ov.loading !== false ? '✅ Infos sur l\'écran de chargement' : 'Infos sur l\'écran de chargement : désactivées'}</button></div>
       ${layoutSettings(ov)}</div>`;
@@ -2232,6 +2238,7 @@
       case 'layReset': R.layDraft = null; NB.config.set({ overlay: { layout: Object.assign({}, LAY_DEF) } }).then((c) => { R.cfg = c; render(true); layPreview(); }).catch(() => {}); break;
       case 'layPreview': layPreview(); break;
       case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
+      case 'ovMove': NB.overlay.move(true).then(() => toast('🖐️ Fais glisser l\'encart à sa place : il se verrouille dans 30 s')).catch(() => {}); break;
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {
         const b = S.myRunes.find((x) => x.id === v); if (!b) break;
@@ -2432,6 +2439,8 @@
     NB.lcu.on((st) => {
       const old = R.lcu; R.lcu = st;
       if (st.game && (!old.game || old.game.gameId !== st.game.gameId)) { R.loadOpp = 0; R.recent = {}; }
+      if (/InProgress|Reconnect/.test(st.phase) && !/InProgress|Reconnect/.test(old.phase || '')) { R.inProgressAt = Date.now(); setTimeout(() => { try { if (isLoading() && D.champs) loadovSync(loadingData()); } catch (e) { /* ignoré */ } }, 3100); }
+      if (!/InProgress|Reconnect/.test(st.phase)) R.inProgressAt = 0;
       try { if (isLoading() && D.champs) { const ld = loadingData(); wantInfo(ld.g.players.map((p) => p.puuid)); wantRecent(ld.g.players.map((p) => p.puuid)); loadovSync(ld); } else loadovSync(null); } catch (e) { /* ignoré */ }
       const auto = !R.cfg || R.cfg.autoMode !== false;
       if (st.phase !== prevPhase) {
@@ -2445,7 +2454,7 @@
       }
       if (S.mode === 'select' && !busy()) render(true); else renderTop();
     });
-    NB.live.on((d) => { if (d && !R.live && R.cfg && R.cfg.autoMode !== false) S.mode = 'game'; onLive(d); if (d) loadovSync(null); });
+    NB.live.on((d) => { if (d && !R.live && R.cfg && R.cfg.autoMode !== false) S.mode = 'game'; onLive(d); try { if (d && started(d)) loadovSync(null); else if (isLoading() && D.champs) loadovSync(loadingData()); } catch (e) { /* ignoré */ } });
     NB.collector.on((s) => { const grew = R.col && s.picks !== R.col.picks; R.col = s; if (grew && s.picks % 50 < 10) cache.clear(); if (S.mode === 'settings' && !busy()) render(true); });
     NB.minimap.onState((open) => { R.miniOpen = open; if (!busy()) render(true); });
     NB.onUpdate((u) => { R.update = u; renderTop(); });

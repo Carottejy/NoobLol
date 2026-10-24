@@ -177,6 +177,8 @@ class LcuWatcher extends EventEmitter {
           this.state.champSelect = simplifySession(await this.get('/lol-champ-select/v1/session').catch(() => null));
           delay = 1000;
         } else this.state.champSelect = null;
+        /* Lancement / chargement de la partie : on suit la phase de près pour l'encart de l'écran de chargement */
+        if (/GameStart|InProgress|Reconnect/.test(this.state.phase)) delay = Math.min(delay, 1500);
         /* Partie lancée : identifiant de la partie et joueurs (puuid) pour les rangs et les stats de fin de partie */
         if (/GameStart|InProgress|Reconnect/.test(this.state.phase) && (changed || !this.state.game)) {
           const gs = await this.get('/lol-gameflow/v1/session').catch(() => null);

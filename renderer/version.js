@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.6.2';
+var APP_VERSION = '3.6.3';
 var APP_RELEASES = [
+  { v: '3.6.3', date: '2026-10-24', notes: [
+    'Écran de chargement : les infos par-dessus le jeu n\'apparaissent plus pendant le lancement du jeu (écran noir), mais une fois le jeu lancé ; et elles restent jusqu\'au vrai début de la partie (le jeu répond déjà pendant le chargement avec un chrono à 0 : ce n\'est plus pris pour le début de la partie). L\'écran « Chargement » de l\'appli reste affiché jusqu\'au début de la partie.',
+    'Encart « Mon build » en jeu : plus aucun clic, la souris le traverse. Pour le placer : Réglages → « 🖐️ Déplacer l\'encart (30 s) », il se verrouille tout seul ensuite. Il n\'apparaît qu\'une fois la partie commencée.',
+    'Simulateur : séquence de lancement réaliste (lancement du jeu, puis jeu qui répond avec un chrono à 0 pendant le chargement, puis début de la partie).',
+  ]},
   { v: '3.6.2', date: '2026-10-24', notes: [
     'Écran de chargement : calage corrigé. L\'encart couvre désormais tout l\'écran du jeu (Windows le réduisait à la zone sans barre des tâches, ce qui décalait et rétrécissait tout) et les positions sont calculées sur la taille réelle de l\'écran. Disposition re-mesurée sur le vrai client, centrage compris.',
     'Réglages de l\'encart de chargement simplifiés à 5 curseurs : centrer les cartes, largeur, écart, rangée du haut, rangée du bas (valeurs en pixels pour un écran de 1080 px de haut). La hauteur des cartes suit leur largeur.',
