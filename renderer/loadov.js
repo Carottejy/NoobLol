@@ -9,8 +9,12 @@
   function draw(d) {
     last = d;
     if (!d) { root.innerHTML = ''; return; }
-    const W = window.innerWidth, H = window.innerHeight;
-    const { rows, o } = LoadLayout.cards(W, H, d.layout);
+    /* On calcule sur la taille RÉELLE de l'écran (le jeu en plein écran l'occupe entièrement), puis on corrige
+       si Windows a réduit ou décalé la fenêtre de l'encart (barre des tâches, mise à l'échelle). */
+    const W = (window.screen && window.screen.width) || window.innerWidth, H = (window.screen && window.screen.height) || window.innerHeight;
+    const ox = window.screenX - ((window.screen && window.screen.left) || 0), oy = window.screenY - ((window.screen && window.screen.top) || 0);
+    const res = LoadLayout.cards(W, H, d.layout);
+    const rows = res.rows.map((r) => r.map((c) => Object.assign({}, c, { x: c.x - ox, y: c.y - oy }))), o = res.o;
     const order = (d.teams || []).slice().sort((a, b) => (a.side === 'ORDER' ? -1 : 1) - (b.side === 'ORDER' ? -1 : 1));
     let h = '';
     order.forEach((t, ri) => (t.players || []).slice(0, 5).forEach((p, i) => {
@@ -28,7 +32,7 @@
         <div class="r"><span class="k">${esc(p.role || '')}</span>${dt ? `<span class="dt ${dt[0]}">${dt[1]}</span>` : ''}</div></div>`;
     }));
     /* Mode réglage : contour des cartes calculées, pour les caler sur le jeu */
-    if (d.preview) h += `<div class="grid">${rows.flat().map((c) => `<i style="left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px"></i><b style="left:${c.x}px;top:${c.y + c.h * o.nameY}px;width:${c.w}px"></b>`).join('')}</div>`;
+    if (d.preview) h += `<div class="grid">${rows.flat().map((c) => `<i style="left:${c.x - 2}px;top:${c.y - 2}px;width:${c.w}px;height:${c.h}px"></i><b style="left:${c.x}px;top:${c.y + c.h * o.nameY}px;width:${c.w}px"></b>`).join('')}</div>`;
     root.innerHTML = h;
   }
   window.addEventListener('resize', () => draw(last));

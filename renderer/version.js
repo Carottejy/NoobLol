@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.6.1';
+var APP_VERSION = '3.6.2';
 var APP_RELEASES = [
+  { v: '3.6.2', date: '2026-10-24', notes: [
+    'Écran de chargement : calage corrigé. L\'encart couvre désormais tout l\'écran du jeu (Windows le réduisait à la zone sans barre des tâches, ce qui décalait et rétrécissait tout) et les positions sont calculées sur la taille réelle de l\'écran. Disposition re-mesurée sur le vrai client, centrage compris.',
+    'Réglages de l\'encart de chargement simplifiés à 5 curseurs : centrer les cartes, largeur, écart, rangée du haut, rangée du bas (valeurs en pixels pour un écran de 1080 px de haut). La hauteur des cartes suit leur largeur.',
+  ]},
   { v: '3.6.1', date: '2026-10-24', notes: [
     'Écran de chargement : disposition mesurée sur le vrai client (2 rangées de 5 cartes, taille proportionnelle à la hauteur de l\'écran, donc juste à toutes les résolutions). Les infos de chaque joueur sont posées en bas de l\'image du champion, juste au-dessus de son nom, sans cacher les runes, les sorts ni le pseudo ; la taille du texte suit celle des cartes.',
     'Réglages : nouveau curseur « Position du nom du champion », et l\'aperçu trace une ligne sur le nom pour vérifier le calage.',

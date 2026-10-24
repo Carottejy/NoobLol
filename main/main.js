@@ -123,12 +123,14 @@ function setLoadOverlay(data) {
   if (!want) { if (loadov && !loadov.isDestroyed()) { loadov.close(); } loadov = null; return; }
   if (!loadov || loadov.isDestroyed()) {
     const b = gameDisplay().bounds;
-    loadov = new BrowserWindow({ x: b.x, y: b.y, width: b.width, height: b.height, frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, movable: false,
+    loadov = new BrowserWindow({ x: b.x, y: b.y, width: b.width, height: b.height, frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, movable: false, enableLargerThanScreen: true, thickFrame: false,
       skipTaskbar: true, alwaysOnTop: true, focusable: false, hasShadow: false, show: false, title: 'Noob LOL — Chargement', webPreferences: secureWebPrefs() });
     loadov.setAlwaysOnTop(true, 'screen-saver');
     loadov.setIgnoreMouseEvents(true);
     loadov.loadFile(path.join(RENDERER, 'loadov.html'));
-    loadov.webContents.on('did-finish-load', () => { if (loadov && !loadov.isDestroyed() && loadovData) { loadov.webContents.send('loadov:data', withLayout(loadovData)); loadov.showInactive(); } });
+    /* Windows peut réduire une fenêtre à la zone de travail (sans la barre des tâches) : on reprend tout l'écran du jeu */
+    const fit = () => { if (loadov && !loadov.isDestroyed()) { const bb = gameDisplay().bounds; loadov.setBounds({ x: bb.x, y: bb.y, width: bb.width, height: bb.height }); } };
+    loadov.webContents.on('did-finish-load', () => { if (loadov && !loadov.isDestroyed() && loadovData) { loadov.webContents.send('loadov:data', withLayout(loadovData)); loadov.showInactive(); fit(); setTimeout(fit, 300); } });
     loadov.on('closed', () => { loadov = null; });
     return;
   }
