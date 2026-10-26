@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.6.4';
+var APP_VERSION = '3.6.5';
 var APP_RELEASES = [
+  { v: '3.6.5', date: '2026-10-26', notes: [
+    'Annonces vocales : plus d\'annonce quand tu meurs.',
+  ]},
   { v: '3.6.4', date: '2026-10-24', notes: [
     'Encart « Mon build » en jeu : de nouveau déplaçable directement à la souris (c\'est la seule action possible dessus : aucun clic sur les objets). Le bouton « Déplacer l\'encart (30 s) » est supprimé.',
   ]},

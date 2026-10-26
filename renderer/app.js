@@ -1115,9 +1115,7 @@
       if (r.state === 'spawn' && r.in <= 31 && r.in > 20) speak(`${nm[1]} dans 30 secondes.`, `warn-${r.id}-${Math.round(L.time + r.in)}`);
       if (R.prevObj[r.id] === 'spawn' && r.state === 'up') speak(`${nm[1]} ${r.id === 'grubs' ? 'sont disponibles' : 'est disponible'}.`, `up-${r.id}-${Math.round(L.time)}`);
     }
-    /* Mort : temps de réapparition */
     const meP = L.me ? L.players.find((p) => p.name === L.me.name) : null;
-    if (meP && meP.dead && meP.respawn > 8) speak(`Tu es mort. Réapparition dans ${Math.round(meP.respawn)} secondes. Regarde la carte en attendant.`, `death-${meP.d}`);
     /* Rappels utiles (uniquement d'après tes propres données) */
     if (S.opt.reminders !== false && meP && L.me) {
       const lvl = L.me.level || meP.level || 0;
@@ -2069,7 +2067,7 @@
   function voiceSettings() {
     const vs = frVoices();
     return `<div class="card"><h2>🔊 Annonces vocales en jeu</h2>
-      <p class="muted small">Une voix t'annonce les objectifs (30 s avant et à l'apparition), les objectifs pris par chaque équipe, les inhibiteurs, ta mort et ton temps de réapparition, et quand tu as assez d'or pour ton prochain objet.</p>
+      <p class="muted small">Une voix t'annonce les objectifs (30 s avant et à l'apparition), les objectifs pris par chaque équipe, les inhibiteurs, et quand tu as assez d'or pour ton prochain objet.</p>
       <div class="chips"><button class="chip ${S.opt.voice ? 'on' : ''}" data-act="opt" data-val="voice">${S.opt.voice ? '🔊 Activées' : '🔇 Désactivées'}</button><button class="chip" data-act="voiceTest">▶ Tester</button></div>
       <div class="row" style="margin-top:8px"><div class="grow"><label>Voix</label><select data-voice="1">${vs.length ? vs.map((v) => `<option value="${esc(v.name)}" ${v.name === S.opt.voiceName ? 'selected' : ''}>${esc(v.name)}</option>`).join('') : '<option value="">Voix française par défaut</option>'}</select></div></div>
       <div class="row" style="margin-top:8px"><span class="small muted">Vitesse</span>${[0.9, 1.05, 1.25].map((r) => `<button class="chip ${S.opt.voiceRate === r ? 'on' : ''}" data-act="voiceRate" data-val="${r}">${r < 1 ? 'Lente' : r > 1.1 ? 'Rapide' : 'Normale'}</button>`).join('')}
