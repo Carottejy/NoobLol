@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.6.5';
+var APP_VERSION = '3.7.0';
 var APP_RELEASES = [
+  { v: '3.7.0', date: '2026-10-28', notes: [
+    'En jeu : la mini-carte intégrée est remplacée par les conseils pour ton match-up et face à l\'équipe adverse (les mêmes qu\'au chargement, avec les images des objets conseillés). La mini-carte sur un deuxième écran reste disponible dans Réglages.',
+    'Annonces vocales : plus d\'annonce quand tu termines un objet.',
+  ]},
   { v: '3.6.5', date: '2026-10-26', notes: [
     'Annonces vocales : plus d\'annonce quand tu meurs.',
   ]},

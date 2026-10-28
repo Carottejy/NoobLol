@@ -1172,7 +1172,7 @@
         else if (opp.level - myLvl >= 2) coachSay(L, `${on} a ${opp.level - myLvl} niveaux d'avance : évite le combat et farme près de ta tour.`, 'opp-lead-' + opp.level);
         for (const id of legendaryIds(opp)) if (!R.coach.opp.has(id)) { R.coach.opp.add(id); coachSay(L, `${on} a terminé ${itemName(id)}.`, 'opp-item-' + id); }
       }
-      for (const id of legendaryIds(meP)) if (!R.coach.mine.has(id)) { R.coach.mine.add(id); coachSay(L, `Tu as terminé ${itemName(id)} : tu es plus fort, cherche un combat ou un objectif.`, 'my-item-' + id); }
+      legendaryIds(meP).forEach((id) => R.coach.mine.add(id)); /* pas d'annonce pour mes propres objets */
     } else { legendaryIds(meP).forEach((id) => R.coach.mine.add(id)); if (opp) legendaryIds(opp).forEach((id) => R.coach.opp.add(id)); }
     /* 5. Plusieurs adversaires morts en même temps */
     if (coachOn('dead') && !meP.dead) {
@@ -1456,10 +1456,8 @@
     if (MM.stream && S.opt.miniEmbed) { if (!MM.canvas) { MM.canvas = document.createElement('canvas'); MM.canvas.className = 'mmcv'; } if (MM.canvas.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(MM.canvas); } }
     else slot.innerHTML = mmPlaceholder();
   }
-  function mmSync() {
-    if (S.mode === 'game' && S.opt.miniEmbed && NB && R.live) { if (!MM.stream && !MM.err) mmStart(); mmPlace(); }
-    else { mmStop(); MM.err = ''; mmPlace(); }
-  }
+  /* La mini-carte n'est plus intégrée à l'écran En jeu (remplacée par les conseils) ; la mini-carte sur un 2e écran reste disponible */
+  function mmSync() { mmStop(); MM.err = ''; }
 
   /* Écran « En jeu » : aucun bouton, tout est automatique.
      Mini-carte carrée à gauche (image fixe hors partie, capture en direct en partie), joueurs et objectifs à droite. */
@@ -1732,9 +1730,8 @@
     const L = R.live;
     if (!nd && isLoading()) return viewLoading();
     if (!L && R.post && R.post.status && !nd) return viewPost();
-    const showMap = S.opt.miniEmbed && NB;
-    const mapCard = showMap ? `<div class="gm-map card"><div id="mmSlot" class="mmslot">${mmPlaceholder()}</div></div>` : '';
-    if (nd) return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${nd}</div></div>`;
+    if (nd) return `<div class="gm nomap"><div class="gm-side">${nd}</div></div>`;
+    const tipsCol = L ? gameTipsCards(L) : '';
     const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted idle">${NB ? 'Aucune partie en cours. Dès que la partie démarre, Noob LOL bascule ici tout seul et affiche les 10 joueurs avec leur rang, leur niveau, leurs kills, morts, assistances, objets et leur profil AD / AP. À la fin de la partie, toutes les statistiques s\'affichent ici.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
     let side = '';
     if (L) {
@@ -1745,7 +1742,29 @@
     const journal = S.game.log.length && L ? `<div class="card journal"><h2>📜 Journal</h2><div class="log">${S.game.log.slice(0, 14).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>` : '';
     const build = L ? buildCard(L) : '';
     side += (build || journal) ? `<div class="gm-tools"><div>${objectivesCard(L)}</div><div>${build}${journal}</div></div>` : objectivesCard(L);
-    return `<div class="gm ${showMap ? '' : 'nomap'}">${mapCard}<div class="gm-side">${side}</div></div>`;
+    return `<div class="gm ${tipsCol ? 'tips' : 'nomap'}">${tipsCol ? `<div class="gm-tips">${tipsCol}</div>` : ''}<div class="gm-side">${side}</div></div>`;
+  }
+  /* Partie en cours : les mêmes données que l'écran de chargement, reconstruites d'après le jeu (positions réelles) */
+  function liveLd(L) {
+    const LR = liveRoles(L), myTeam = L.me ? L.me.team : 'ORDER';
+    const gp = (R.lcu.game && R.lcu.game.players) || [];
+    const P = L.players.map((p) => { const k = D.champs[p.champ] ? +D.champs[p.champ].key : 0; const g = gp.find((x) => x.team === p.team && +x.champ === k); return { puuid: g ? g.puuid : '', champ: k, team: p.team, name: p.gameName, role: LR.get(p.name) || '', spells: [], live: p }; });
+    const meG = P.find((x) => L.me && x.live.name === L.me.name) || null;
+    const teams = [P.filter((x) => x.team === myTeam), P.filter((x) => x.team !== myTeam)];
+    const role = new Map(P.map((x) => [x, x.role]));
+    const myRole = meG ? meG.role : '';
+    const oppG = (R.loadOpp && teams[1].find((x) => x.champ === +R.loadOpp)) || (myRole && teams[1].find((x) => x.role === myRole)) || null;
+    return { g: { players: P, gameId: R.lcu.game ? R.lcu.game.gameId : 0 }, meG, myTeam, teams, role, myRole, oppG };
+  }
+  function gameTipsCards(L) {
+    if (!D.champs) return '';
+    const ld = liveLd(L);
+    if (!ld.meG) return '';
+    wantRecent(ld.g.players.map((p) => p.puuid).filter(Boolean));
+    const b = loadBuild(ld);
+    const mt = matchupTips(ld, b), tt = teamTips(ld, b && !b.loading ? b : null);
+    return `<div class="card tipscard"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map(tipLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu.</p>'}</div>
+      <div class="card tipscard"><h2>🛡️ Face à l'équipe adverse</h2><ul class="tips">${tt.map(tipLi).join('')}</ul></div>`;
   }
 
   /* =====================================================================
@@ -2119,7 +2138,6 @@
       <div class="grow"><label>Afficher sur</label><select data-cfg="minimap.displayId">${ds.map((d) => `<option value="${d.id}" ${String(m.displayId || (ds.find((x) => !x.primary) || ds[0] || {}).id) === String(d.id) ? 'selected' : ''}>${esc(d.label)} ${d.bounds.width}×${d.bounds.height}${d.primary ? ' (principal)' : ''}</option>`).join('')}</select></div></div>
       ${ds.length < 2 ? '<p class="small warn">Un seul écran détecté : la mini-carte s\'ouvrira dans une fenêtre.</p>' : ''}
       <h3>Zone de la mini-carte</h3><p class="muted small">Prends une capture pendant une partie (ou l'Outil d'entraînement), puis trace un rectangle autour de la mini-carte.</p>
-      <div class="chips" style="margin:6px 0"><button class="chip ${S.opt.miniEmbed ? 'on' : ''}" data-act="miniEmbed">🗺️ Mini-carte dans l'écran « En jeu »</button></div>
       <div class="row"><button class="btn ghost small" data-act="miniShot">📸 Prendre une capture</button><button class="btn ghost small" data-act="miniReset">Position par défaut</button><button class="chip ${m.alwaysOnTop ? 'on' : ''}" data-act="miniTop">Toujours au premier plan</button></div>`;
     if (R.shot) h += `<div class="cropper" id="cropper"><img src="${R.shot}" alt="Capture" draggable="false"><div class="crop" id="cropBox" style="left:${crop.x * 100}%;top:${crop.y * 100}%;width:${crop.w * 100}%;height:${crop.h * 100}%"></div></div>
       <div class="row"><button class="btn small" data-act="miniSaveCrop">Enregistrer la zone</button><span class="muted small">Glisse sur l'image pour tracer la zone.</span></div>`;
