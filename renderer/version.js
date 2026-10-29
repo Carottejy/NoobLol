@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.7.0';
+var APP_VERSION = '3.8.0';
 var APP_RELEASES = [
+  { v: '3.8.0', date: '2026-10-29', notes: [
+    'En jeu : nouvelle carte « ⚡ Achats adaptés à la partie ». Noob LOL lit le tableau des scores (le même que la touche Tab) : objets achetés, kills/morts et or de chaque adversaire, et repère les plus dangereux.',
+    'Les conseils d\'achat s\'adaptent : armure ou résistance magique selon ce qui fait vraiment mal en face (pondéré par l\'avance de chaque joueur), anti-soins s\'ils achètent du vol de vie, pénétration s\'ils empilent l\'armure ou la RM, protection anti-burst si un assassin est en avance, dégâts selon les PV max contre les tanks. Chaque conseil explique pourquoi.',
+    'Le conseil le plus utile s\'affiche aussi dans « Mon build », dans l\'encart par-dessus le jeu, et peut être annoncé à voix haute (catégorie « Objets adaptés » du coaching).',
+  ]},
   { v: '3.7.0', date: '2026-10-28', notes: [
     'En jeu : la mini-carte intégrée est remplacée par les conseils pour ton match-up et face à l\'équipe adverse (les mêmes qu\'au chargement, avec les images des objets conseillés). La mini-carte sur un deuxième écran reste disponible dans Réglages.',
     'Annonces vocales : plus d\'annonce quand tu termines un objet.',

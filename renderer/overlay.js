@@ -14,6 +14,7 @@
 
       <div class="nm">${n ? `${icon({ id: n.id, src: n.src, name: n.name }, -1, 'big')}<b>${esc(n.name)}</b>${n.miss <= 0 ? '<span class="ok">assez d\'or !</span>' : `<span class="miss">−${nf(n.miss)} po</span>`}` : '<span class="ok">✅ Build terminé</span>'}</div>
       <div class="row">${(d.core || []).map((it) => icon(it, nextId)).join('<span class="ar">›</span>')}${d.boots ? '<span class="sep"></span>' + icon(d.boots, nextId) : ''}</div>
+      ${d.adapt ? `<div class="ad"><span class="it sm"><img alt="" src="${esc(d.adapt.src)}"></span><span>⚡ <b>${esc(d.adapt.name)}</b> ${esc(d.adapt.why)}</span></div>` : ''}
       ${d.sit && d.sit.length ? `<div class="row sit">${d.sit.map((it) => icon(it, nextId, 'sm')).join('')}</div>` : ''}`;
     box.className = '';
   }

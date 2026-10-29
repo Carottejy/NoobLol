@@ -1183,20 +1183,10 @@
         coachSay(L, `${r.length} adversaires morts pendant ${Math.round(r[2])} secondes : ${target} !`, 'deadwin-' + Math.floor(L.time / 45));
       }
     }
-    /* 6. Objets adaptés à l'équipe adverse (une fois chacun, après 10 min) */
-    if (coachOn('counter') && L.time > 600) {
-      const ad = dmgProfile(meP).ad >= 0.5;
-      const pick = (f) => D.itemList.filter((it) => f(it) && (it.tags || []).includes(ad ? 'Damage' : 'SpellDamage')).sort((a, b) => a.gold.total - b.gold.total)[0];
-      const owns = (f) => meP.items.some((i) => { const it = D.items[String(i.id)]; return it && f(it); });
-      const gw = (it) => /blessures graves|grievous/i.test(it.description || '');
-      const ekeys = enemies.map((p) => (D.champs[p.champ] ? +D.champs[p.champ].key : 0)).filter(Boolean);
-      const prof = Builds.teamProfile(ekeys, D) || { healers: [] };
-      const sustain = prof.healers.length + enemies.reduce((n, p) => n + p.items.filter((i) => { const it = D.items[String(i.id)]; return it && Builds.isLegendary(it) && ((it.tags || []).includes('LifeSteal') || (it.tags || []).includes('SpellVamp')); }).length, 0);
-      if (sustain >= 3 && !owns(gw)) { const it = pick(gw); if (it) coachSay(L, `L'équipe adverse se soigne beaucoup : pense à un objet anti-soins, comme ${it.name}.`, 'counter-heal'); }
-      const stack = (tag) => enemies.reduce((n, p) => n + p.items.filter((i) => { const it = D.items[String(i.id)]; return it && Builds.isLegendary(it) && (it.tags || []).includes(tag); }).length, 0);
-      const legPen = (tag) => D.itemList.filter((it) => Builds.isLegendary(it) && (it.tags || []).includes(tag)).sort((a, b) => a.gold.total - b.gold.total)[0];
-      if (ad && stack('Armor') >= 3 && !owns((it) => (it.tags || []).includes('ArmorPenetration'))) { const it = legPen('ArmorPenetration'); if (it) coachSay(L, `Les adversaires empilent l'armure : un objet de pénétration d'armure comme ${it.name} t'aidera.`, 'counter-armor'); }
-      if (!ad && stack('SpellBlock') >= 3 && !owns((it) => (it.tags || []).includes('MagicPenetration'))) { const it = legPen('MagicPenetration'); if (it) coachSay(L, `Les adversaires empilent la résistance magique : un objet de pénétration magique comme ${it.name} t'aidera.`, 'counter-mr'); }
+    /* 6. Achats adaptés à la partie (une fois par type de besoin, après 8 min) */
+    if (coachOn('counter') && L.time > 480) {
+      const ad = adaptBuy(L), r = ad && ad.recos[0];
+      if (r && r.score >= 0.7) coachSay(L, `${r.text} : ${itemName(r.items[0])}.`, 'adapt-' + r.id);
     }
     /* 7. Point farm à 10 et 20 min, plaques à 14 min */
     if (coachOn('cs')) {
@@ -1260,6 +1250,12 @@
     return { c, role, opp, A, owned, next: Builds.nextItem(A, owned, D) };
   }
   /* Carte « Mon build » en jeu : compacte, tous les objets visés ; un clic ouvre la fiche boutique de l'objet */
+  /* Dans « Mon build » : l'achat le plus utile maintenant, d'après la partie */
+  function adaptRow(L) {
+    const ad = adaptBuy(L); const r = ad && ad.recos[0];
+    if (!r) return '';
+    return `<div class="brow adaptrow"><span class="small">⚡ Maintenant</span><div class="bis">${r.items.map((id) => `<button class="bi" data-act="item" data-val="${id}">${itIcon(id, 'ico xs')}</button>`).join('')}<span class="small" style="margin-left:6px"><b>${r.items.map(itemNm).map(esc).join(' ou ')}</b> <span class="muted">— ${esc(r.text)}</span></span></div></div>`;
+  }
   function buildCard(L) {
     const b = liveBuild(L);
     if (!b) return '';
@@ -1276,13 +1272,13 @@
     let h = `<div class="card mybuild compact"><div class="row sp nw"><h2 class="ell" style="margin:0">${b.personal ? '⭐ ' + esc(b.personal.name || 'Mon build perso') : '🛒 Mon build'}</h2><span class="small muted ell">${esc(b.c.name)}${b.role ? ' · ' + ROLE_NAME[b.role] : ''}${oc ? ' vs ' + esc(oc.name) : ''}</span></div>`;
     if (b.personal) {
       const P = b.personal;
-      return h + nextLine() + row('Départ', P.start) + row('Principaux', P.core, '<span class="arrow">›</span>', P.boots) + row('Selon partie', P.situational) + '</div>';
+      return h + nextLine() + adaptRow(L) + row('Départ', P.start) + row('Principaux', P.core, '<span class="arrow">›</span>', P.boots) + row('Selon partie', P.situational) + '</div>';
     }
     if (!b.role) return h + '<p class="muted small">Rôle inconnu pour cette partie.</p></div>';
     if (b.loading) return h + '<div class="loader small">Calcul…</div></div>';
-    if (!b.A || !b.A.games) return h + '<p class="muted small">Pas encore de parties analysées pour ce champion dans ce rôle (collecteur).</p></div>';
+    if (!b.A || !b.A.games) return h + (adaptRow(L) || '<p class="muted small">Pas encore de parties analysées pour ce champion dans ce rôle (collecteur).</p>') + '</div>';
     const A = b.A;
-    h += nextLine();
+    h += nextLine() + adaptRow(L);
     h += row('Départ', A.start && A.start[0] ? A.start[0].items : []);
     h += row('Principaux', A.core && A.core[0] ? A.core[0].items : [], '<span class="arrow">›</span>', A.boots && A.boots[0] ? A.boots[0].item : 0);
     const sit = (A.situational || []).filter((x) => x.items.length);
@@ -1302,6 +1298,8 @@
       const nx = b.next && D.items[String(b.next.item)];
       d = { name: P.name || 'Mon build', champ: b.c.name, core: P.core.map(it).filter(Boolean), boots: P.boots ? it(P.boots) : null, sit: (P.situational || []).map(it).filter(Boolean),
         next: nx ? { id: +b.next.item, src: Dd.img.item(nx), name: b.next.name, miss: Math.max(0, b.next.cost - ((L.me && L.me.gold) || 0)) } : null };
+      const ad = adaptBuy(L), r = ad && ad.recos[0];
+      if (r) { const x = D.items[String(r.items[0])]; if (x) d.adapt = { src: Dd.img.item(x), name: x.name, why: ({ armor: 'contre leurs dégâts physiques', mr: 'contre leurs dégâts magiques', burst: 'contre l\'assassin en avance', heal: 'contre leurs soins', pen: 'contre leurs résistances', hp: 'contre leurs PV' })[r.id] || '' }; }
     }
     const k = JSON.stringify(d);
     if (k === R.ovKey) return;
@@ -1756,6 +1754,81 @@
     const oppG = (R.loadOpp && teams[1].find((x) => x.champ === +R.loadOpp)) || (myRole && teams[1].find((x) => x.role === myRole)) || null;
     return { g: { players: P, gameId: R.lcu.game ? R.lcu.game.gameId : 0 }, meG, myTeam, teams, role, myRole, oppG };
   }
+
+  /* =====================================================================
+     ACHATS ADAPTÉS À LA PARTIE EN COURS
+     D'après le tableau des scores (visible par tous avec Tab) : objets, kills, morts et or estimé de chaque adversaire.
+     ===================================================================== */
+  const ADAPT_HP = { ap: [6653], marksman: [3153, 3036], assassin: [3036, 6694], fighter: [3153, 3071], tank: [3075], enchanter: [6653] };
+  const kdaS = (p) => `${p.k}/${p.d}/${p.a}`;
+  function adaptBuy(L) {
+    if (!L || !L.me || !D.items || !D.champs) return null;
+    const meP = L.players.find((p) => p.name === L.me.name); if (!meP) return null;
+    const c = D.champs[meP.champ]; if (!c) return null;
+    const role = liveRoles(L).get(meP.name) || '';
+    const K = myKit(c, role);
+    const en = L.players.filter((p) => p.team !== L.me.team).map((p) => {
+      const ch = D.champs[p.champ];
+      const its = p.items.filter((i) => i.slot < 6).map((i) => D.items[String(i.id)]).filter(Boolean);
+      const sum = (k) => its.reduce((t, it) => t + (((it.stats || {})[k]) || 0), 0);
+      const leg = its.filter((it) => Builds.isLegendary(it));
+      const healer = ch ? ((Builds.teamProfile([+ch.key], D) || { healers: [] }).healers.length > 0) : false;
+      return { p, c: ch, gold: goldOf(p, L).v, ad: dmgProfile(p).ad, armor: sum('FlatArmorMod'), mr: sum('FlatSpellBlockMod'), hp: sum('FlatHPPoolMod'), crit: sum('FlatCritChanceMod'),
+        sustain: leg.filter((it) => (it.tags || []).some((t) => t === 'LifeSteal' || t === 'SpellVamp')).length + (healer ? 1 : 0), assassin: !!(ch && ch.tags.includes('Assassin')), tank: !!(ch && ch.tags.includes('Tank')) };
+    }).filter((e) => e.c);
+    if (!en.length) return null;
+    /* Menace : or (objets) par rapport à la moyenne + avance en kills */
+    const avgGold = en.reduce((t, e) => t + e.gold, 0) / en.length || 1;
+    en.forEach((e) => { e.threat = Math.max(0.2, e.gold / avgGold + (e.p.k - e.p.d) * 0.08); });
+    const tsum = en.reduce((t, e) => t + e.threat, 0);
+    const wAD = en.reduce((t, e) => t + e.threat * e.ad, 0) / tsum;
+    const byThreat = en.slice().sort((a, b) => b.threat - a.threat);
+    const fed = byThreat[0] && byThreat[0].threat >= 1.35 && byThreat[0].p.k >= 3 ? byThreat[0] : null;
+    const owned = new Set(meP.items.map((i) => +i.id));
+    const ownsF = (f) => meP.items.some((i) => { const it = D.items[String(i.id)]; return it && f(it); });
+    const st = (it, k) => ((it.stats || {})[k]) || 0;
+    const recos = [];
+    const add = (id, score, text, ids) => { const items = [...new Set(ids.map(okItem).filter(Boolean))].filter((x) => !owned.has(x)).slice(0, 2); if (items.length) recos.push({ id, score, text, items }); };
+    const pct2 = (v) => Math.round(v * 100) + ' %';
+    /* 1. Se défendre contre ce qui fait mal en face (pondéré par la menace) */
+    if (wAD >= 0.6 && !ownsF((it) => st(it, 'FlatArmorMod') >= 30)) {
+      const crit = en.reduce((t, e) => t + e.crit, 0);
+      add('armor', 0.45 + (wAD - 0.6) * 1.5 + (fed && fed.ad >= 0.6 ? 0.35 : 0),
+        `Ce qui fait mal en face est physique (${pct2(wAD)} AD${fed && fed.ad >= 0.6 ? `, surtout ${fed.c.name} en ${kdaS(fed.p)}` : ''}${crit >= 0.5 ? ', avec des coups critiques' : ''}) : de l'armure`,
+        (crit >= 0.5 && K.kind === 'tank' ? [3143] : []).concat(DEF.armor[K.kind]));
+    }
+    if (wAD <= 0.4 && !ownsF((it) => st(it, 'FlatSpellBlockMod') >= 30)) {
+      add('mr', 0.45 + (0.4 - wAD) * 1.5 + (fed && fed.ad <= 0.4 ? 0.35 : 0),
+        `Ce qui fait mal en face est magique (${pct2(1 - wAD)} AP${fed && fed.ad <= 0.4 ? `, surtout ${fed.c.name} en ${kdaS(fed.p)}` : ''}) : de la résistance magique`, DEF.mr[K.kind]);
+    }
+    /* 2. Un assassin adverse en avance : un objet qui sauve d'un burst */
+    if (fed && fed.assassin && K.kind !== 'tank') add('burst', 0.8, `${fed.c.name} (assassin) est en avance (${kdaS(fed.p)}) : un objet qui te sauve d'un burst`, DEF.burst[K.kind]);
+    /* 3. Soins adverses */
+    const sustain = en.reduce((t, e) => t + e.sustain, 0);
+    if (sustain >= 2 && !ownsF((it) => /blessures graves|grievous/i.test(it.description || ''))) {
+      const who = en.filter((e) => e.sustain).map((e) => e.c.name).join(', ');
+      add('heal', 0.4 + sustain * 0.12, `Ils se soignent beaucoup (${who}) : un objet anti-soins`, DEF.heal[K.kind]);
+    }
+    /* 4. Leurs défenses : pénétration ou dégâts selon les PV max */
+    const maxArmor = Math.max(...en.map((e) => e.armor)), maxMr = Math.max(...en.map((e) => e.mr));
+    const avgArmor = en.reduce((t, e) => t + e.armor, 0) / en.length, avgMr = en.reduce((t, e) => t + e.mr, 0) / en.length;
+    if (!K.ap && K.kind !== 'tank' && (maxArmor >= 80 || avgArmor >= 35) && !ownsF((it) => (it.tags || []).includes('ArmorPenetration'))) {
+      const tough = en.filter((e) => e.armor >= 50).sort((a, b) => b.armor - a.armor).map((e) => `${e.c.name} +${Math.round(e.armor)}`).join(', ');
+      add('pen', 0.4 + Math.min(0.5, maxArmor / 250), `Ils achètent de l'armure${tough ? ` (${tough})` : ''} : de la pénétration d'armure`, DEF.pen[K.kind]);
+    }
+    if (K.ap && (maxMr >= 60 || avgMr >= 28) && !ownsF((it) => (it.tags || []).includes('MagicPenetration'))) {
+      const tough = en.filter((e) => e.mr >= 40).sort((a, b) => b.mr - a.mr).map((e) => `${e.c.name} +${Math.round(e.mr)}`).join(', ');
+      add('pen', 0.4 + Math.min(0.5, maxMr / 200), `Ils achètent de la résistance magique${tough ? ` (${tough})` : ''} : de la pénétration magique`, DEF.pen[K.kind]);
+    }
+    const tanky = en.filter((e) => e.hp >= 800);
+    if (tanky.length >= 2 && K.kind !== 'tank') add('hp', 0.35 + tanky.length * 0.1, `${tanky.map((e) => e.c.name).join(', ')} ont beaucoup de PV : des dégâts selon les PV max`, ADAPT_HP[K.kind] || []);
+    recos.sort((a, b) => b.score - a.score);
+    return { recos: recos.slice(0, 3), fed, wAD, threats: byThreat.slice(0, 3), K };
+  }
+  const adaptHtml = (ad, compact) => {
+    if (!ad || !ad.recos.length) return compact ? '' : '<p class="small muted">Rien de particulier à adapter pour l\'instant : suis ton build.</p>';
+    return ad.recos.map((r) => `<div class="adapt"><span class="bis">${r.items.map((id) => `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}</button>`).join('')}</span><span class="small"><b>${r.items.map(itemNm).map(esc).join(' ou ')}</b> — ${esc(r.text)}</span></div>`).join('');
+  };
   function gameTipsCards(L) {
     if (!D.champs) return '';
     const ld = liveLd(L);
@@ -1763,7 +1836,10 @@
     wantRecent(ld.g.players.map((p) => p.puuid).filter(Boolean));
     const b = loadBuild(ld);
     const mt = matchupTips(ld, b), tt = teamTips(ld, b && !b.loading ? b : null);
-    return `<div class="card tipscard"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map(tipLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu.</p>'}</div>
+    const ad = adaptBuy(L);
+    const threats = ad && ad.threats.length ? `<p class="small muted" style="margin:0 0 6px">Les plus dangereux en face : ${ad.threats.map((e) => `<b>${esc(e.c.name)}</b> ${kdaS(e.p)} · ≈${k1g(e.gold)} po`).join(' · ')}</p>` : '';
+    return `<div class="card tipscard gold"><h2>⚡ Achats adaptés à la partie</h2>${threats}${adaptHtml(ad)}</div>
+      <div class="card tipscard"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map(tipLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu.</p>'}</div>
       <div class="card tipscard"><h2>🛡️ Face à l'équipe adverse</h2><ul class="tips">${tt.map(tipLi).join('')}</ul></div>`;
   }
 
