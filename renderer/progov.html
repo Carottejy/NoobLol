@@ -7,17 +7,17 @@
   <style>
     html, body { margin: 0; background: transparent; color: #e8eaf0; font: 22px/1.25 system-ui, "Segoe UI", Roboto, sans-serif; overflow: hidden; user-select: none; }
     #box { position: absolute; inset: 2px; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px;
-      background: rgba(7, 13, 24, .86); border: 2px solid #c8aa6e; border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.6); -webkit-app-region: drag; cursor: move; }
+      background: transparent; border: 0; border-radius: 14px; box-shadow: none; text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000; -webkit-app-region: drag; cursor: move; }
     #box.hidden { display: none; }
     .ttl { display: flex; justify-content: space-between; align-items: baseline; color: #f0d58c; font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; }
     .ttl span { color: #8e98ad; font-weight: 400; font-size: 16px; }
     .m { display: grid; grid-template-columns: 34px 1fr; gap: 3px 8px; align-items: center; }
     .m .l { display: flex; align-items: center; justify-content: center; width: 34px; height: 30px; font-size: 24px; }
-    .m .l svg { width: 28px; height: 28px; display: block; }
+    .m .l svg { width: 28px; height: 28px; display: block; filter: drop-shadow(0 0 2px #000); }
     .m .v { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .m .v b.ok { color: #5fd18a; } .m .v b.ko { color: #e8606a; } .m .v b.mid { color: #f0b44a; }
     .m .v i { font-style: normal; color: #8e98ad; }
-    .bar { grid-column: 1 / -1; height: 6px; background: #1b2638; border-radius: 3px; overflow: hidden; margin-top: 0; }
+    .bar { grid-column: 1 / -1; height: 6px; background: rgba(0, 0, 0, .45); box-shadow: 0 0 2px #000; border-radius: 3px; overflow: hidden; margin-top: 0; }
     .bar u { display: block; height: 100%; text-decoration: none; }
     .bar u.ok { background: #5fd18a; } .bar u.ko { background: #e8606a; } .bar u.mid { background: #f0b44a; }
   </style>

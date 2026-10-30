@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.12.0';
+var APP_VERSION = '3.12.1';
 var APP_RELEASES = [
+  { v: '3.12.1', date: '2026-10-30', notes: [
+    'Encart « Ma progression » : fond transparent (le texte et les symboles ont un contour sombre pour rester lisibles sur le jeu).',
+  ]},
   { v: '3.12.0', date: '2026-10-30', notes: [
     'Écran « En jeu » réorganisé en 3 colonnes pour tout voir d\'un coup d\'œil : conseils à gauche, joueurs au centre, objectifs, build, ordre des sorts et journal à droite.',
     'En jeu : les builds conseillés du chargement (contre ton match-up et contre toute l\'équipe adverse) sont aussi affichés, avec le bouton ⭐ pour les suivre dans l\'encart.',
