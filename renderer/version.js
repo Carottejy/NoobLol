@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.10.0';
+var APP_VERSION = '3.11.0';
 var APP_RELEASES = [
+  { v: '3.11.0', date: '2026-10-30', notes: [
+    'En jeu : nouvel encart « Ma progression » par-dessus le jeu. Il compare, à la minute où tu es, tes sbires, ton or gagné, ton score de vision, ta participation aux kills, tes morts et ton KDA à la cible de ton rang visé et de ton rôle (vert : atteint, orange : presque, rouge : en retard).',
+    'Il se déplace en le faisant glisser, sa position est retenue ; on peut le désactiver ou le replacer dans Réglages.',
+  ]},
   { v: '3.10.0', date: '2026-10-30', notes: [
     'Écran de chargement : les incrustations sont toujours dans l\'ordre top, jungle, mid, support, ADC (le client ne donne pas toujours les joueurs dans cet ordre). Même ordre dans l\'appli.',
     'Chargement : nouveau « Build contre toute l\'équipe adverse », en plus du build pour ton match-up. Les objets qui contrent leur composition (anti-soins, anti-burst, résistances, pénétration) passent dans les principaux, et les bottes suivent leurs dégâts. Il peut être suivi dans l\'encart en jeu.',

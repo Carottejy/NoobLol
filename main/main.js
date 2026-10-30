@@ -38,7 +38,7 @@ function createWindow() {
   /* Les liens externes s'ouvrent dans le navigateur, jamais dans l'appli. */
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('file://')) { e.preventDefault(); if (/^https:\/\//.test(url)) shell.openExternal(url); } });
-  win.on('closed', () => { win = null; if (loadov && !loadov.isDestroyed()) loadov.close(); if (simWin && !simWin.isDestroyed()) simWin.close(); if (mini && !mini.isDestroyed()) mini.close(); if (overlay && !overlay.isDestroyed()) overlay.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
+  win.on('closed', () => { win = null; if (loadov && !loadov.isDestroyed()) loadov.close(); if (simWin && !simWin.isDestroyed()) simWin.close(); if (mini && !mini.isDestroyed()) mini.close(); if (overlay && !overlay.isDestroyed()) overlay.close(); if (progov && !progov.isDestroyed()) progov.close(); if (keys && keys.win && !keys.win.isDestroyed()) keys.win.close(); });
 }
 
 /* ---------- Mini-carte sur un deuxième écran ---------- */
@@ -115,6 +115,40 @@ function setOverlay(data) {
   }
   overlay.webContents.send('overlay:data', overlayData);
   if (!overlay.isVisible()) { overlay.showInactive(); overlay.setAlwaysOnTop(true, 'screen-saver'); }
+}
+
+/* ---------- Encart « Ma progression » par-dessus le jeu (comme celui du build : on peut seulement le déplacer) ---------- */
+const PV_W = 230, PV_H = 168;
+let progov = null, progovData = null, pvSaveT = null;
+function progBounds() {
+  const o = (cfg.data.overlay || {}).prog || {};
+  const onScreen = o.x != null && o.y != null && screen.getAllDisplays().some((d) => o.x + PV_W > d.bounds.x + 20 && o.x < d.bounds.x + d.bounds.width - 20 && o.y + PV_H > d.bounds.y + 20 && o.y < d.bounds.y + d.bounds.height - 20);
+  if (onScreen) return { x: Math.round(o.x), y: Math.round(o.y), width: PV_W, height: PV_H };
+  const b = gameDisplay().bounds;
+  return { x: Math.round(b.x + 12), y: Math.round(b.y + b.height * 0.32), width: PV_W, height: PV_H };
+}
+function setProgOverlay(data) {
+  progovData = data || null;
+  const want = !!(progovData && cfg.data.overlay.enabled && ((cfg.data.overlay.prog || {}).enabled !== false));
+  if (!want) { if (progov && !progov.isDestroyed() && progov.isVisible()) progov.hide(); return; }
+  if (!progov || progov.isDestroyed()) {
+    progov = new BrowserWindow(Object.assign(progBounds(), {
+      frame: false, transparent: true, backgroundColor: '#00000000', resizable: false, maximizable: false, minimizable: false, fullscreenable: false,
+      skipTaskbar: true, alwaysOnTop: true, hasShadow: false, show: false, title: 'Noob LOL — Ma progression', webPreferences: secureWebPrefs(),
+    }));
+    progov.setAlwaysOnTop(true, 'screen-saver');
+    progov.loadFile(path.join(RENDERER, 'progov.html'));
+    progov.webContents.on('did-finish-load', () => { if (progov && !progov.isDestroyed() && progovData) { progov.webContents.send('progov:data', progovData); progov.showInactive(); } });
+    progov.on('move', () => {
+      clearTimeout(pvSaveT);
+      if (progov && !progov.isDestroyed()) progov.setAlwaysOnTop(true, 'screen-saver');
+      pvSaveT = setTimeout(() => { if (progov && !progov.isDestroyed()) { const b = progov.getBounds(); cfg.set({ overlay: { prog: { x: b.x, y: b.y } } }); } }, 400);
+    });
+    progov.on('closed', () => { progov = null; });
+    return;
+  }
+  progov.webContents.send('progov:data', progovData);
+  if (!progov.isVisible()) { progov.showInactive(); progov.setAlwaysOnTop(true, 'screen-saver'); }
 }
 
 /* ---------- Infos des joueurs par-dessus l'écran de chargement ----------
@@ -305,6 +339,8 @@ function handlers() {
   h('minimap:close', () => { if (mini && !mini.isDestroyed()) mini.close(); return true; });
   h('minimap:isOpen', () => !!(mini && !mini.isDestroyed()));
   h('overlay:update', (d) => { setOverlay(d); return true; });
+  h('progov:update', (d) => { setProgOverlay(d); return true; });
+  h('progov:reset', () => { cfg.set({ overlay: { prog: { x: null, y: null } } }); if (progov && !progov.isDestroyed()) progov.setBounds(progBounds()); return true; });
   h('sim:open', () => openSimulator());
   h('sim:isOpen', () => !!(simWin && !simWin.isDestroyed()));
   h('sim:push', (state) => { if (sim) sim.push(state); return true; });
@@ -391,7 +427,7 @@ app.whenReady().then(async () => {
     }
   });
   live.on('data', (d) => {
-    if (!d) setOverlay(null);
+    if (!d) { setOverlay(null); setProgOverlay(null); }
     /* L'écran de chargement dure tant que la partie n'a pas vraiment commencé (chrono à 0, pas d'événement « GameStart ») */
     else if (loadov && (d.time > 1 || (d.events || []).some((e) => e.name === 'GameStart'))) setLoadOverlay(null);
     /* Diagnostic : événements bruts de la dernière partie (noms des tours, des joueurs…), pour comprendre un compteur qui ne marche pas */

@@ -12,7 +12,7 @@ const DEFAULTS = {
   riotId: { gameName: '', tagLine: '' },
   collector: { autoStart: false, tiers: ['CHALLENGER', 'GRANDMASTER', 'MASTER'], days: 14, timeline: true },
   minimap: { displayId: null, sourceDisplayId: null, crop: { x: 0.857, y: 0.745, w: 0.14, h: 0.25 }, alwaysOnTop: true },
-  overlay: { enabled: true, loading: true, x: null, y: null, layout: null },
+  overlay: { enabled: true, loading: true, x: null, y: null, layout: null, prog: { enabled: true, x: null, y: null } },
   autoMode: true,
 };
 

@@ -1034,6 +1034,7 @@
       for (const r of O.rows) R.prevObj[r.id] = r.state;
     } catch (e) { /* ignoré */ }
     try { overlaySync(L); } catch (e) { /* ignoré */ }
+    try { progSync(L); } catch (e) { /* ignoré */ }
     renderTop();
     if (S.mode === 'game' && !busy()) render(true); else save();
   }
@@ -1285,6 +1286,34 @@
     return h + '</div>';
   }
 
+  /* Encart « Ma progression » par-dessus le jeu : tes chiffres et la cible pour ton rang visé, à cette minute de la partie */
+  function progRows(L) {
+    if (!L || !L.me || !started(L)) return null;
+    const meP = L.players.find((p) => p.name === L.me.name); if (!meP) return null;
+    const m = L.time / 60; if (m < 1) return null;
+    const role = liveRoles(L).get(meP.name) || '', tier = targetTier();
+    const B = (k) => bench(k, role, tier);
+    const st = (pct) => (pct >= 1 ? 'ok' : pct >= 0.85 ? 'mid' : 'ko');
+    const rows = [];
+    const up = (label, cur, target, fmt) => { if (target == null || !(target > 0)) return; const pct = cur / target; rows.push({ label, cur: fmt(cur), target: fmt(target), pct, st: st(pct) }); };
+    const csm = B('csm'); if (csm) up('Sbires', meP.cs, Math.round(csm * m), (v) => String(Math.round(v)));
+    const gpm = B('gpm'); if (gpm) up('Or gagné', goldOf(meP, L).v, Math.max(500, Math.round(gpm * m)), k1g);
+    const vis = B('vision'); if (vis) up('Vision', meP.ward || 0, Math.max(1, Math.round(vis * m)), (v) => String(Math.round(v)));
+    const kills = L.players.filter((p) => p.team === meP.team).reduce((t, p) => t + p.k, 0), kp = B('kp');
+    if (kp && kills >= 3) up('Participation', (meP.k + meP.a) / kills, kp, (v) => Math.round(v * 100) + ' %');
+    const dl = B('deaths');
+    if (dl) { const max = Math.max(1, Math.round((dl * m) / 30)); const pct = meP.d ? max / meP.d : 1.2; rows.push({ label: 'Morts', cur: String(meP.d), target: 'max ' + max, pct: Math.min(1.2, pct), st: meP.d <= max ? 'ok' : meP.d === max + 1 ? 'mid' : 'ko' }); }
+    const kda = B('kda'); if (kda && (meP.k + meP.a + meP.d) > 0) up('KDA', (meP.k + meP.a) / Math.max(1, meP.d), kda, f1);
+    return { tier: TIER[tier] || tier, role: role ? ROLE_NAME[role] : '', rows };
+  }
+  function progSync(L) {
+    if (!NB || !NB.progov) return;
+    const d = progRows(L);
+    const k = JSON.stringify(d);
+    if (k === R.pvKey) return;
+    R.pvKey = k;
+    NB.progov.update(d).catch(() => {});
+  }
   /* Encart par-dessus le jeu : seulement quand un build perso est suivi */
   function overlaySync(L) {
     if (!NB || !NB.overlay) return;
@@ -2254,6 +2283,10 @@
       <p class="muted small" style="margin-top:8px">Pendant l'écran de chargement, Noob LOL affiche aussi par-dessus le jeu le rang, le niveau, les victoires et le KDA moyen des 10 dernières parties de chaque joueur, et le type de dégâts de son champion.</p>
       <div class="row"><button class="chip ${ov.loading !== false ? 'on' : ''}" data-act="ovLoadToggle">${ov.loading !== false ? '✅ Infos sur l\'écran de chargement' : 'Infos sur l\'écran de chargement : désactivées'}</button></div>
       ${layoutSettings(ov)}</div>`;
+    const pv = ov.prog || {};
+    h += `<div class="card"><h2>📈 Encart « Ma progression » par-dessus le jeu</h2>
+      <p class="muted small">Pendant la partie, un petit encart montre où tu en es par rapport à ton objectif de rang (<b>${esc(TIER[targetTier()] || '')}</b>, réglable dans Ma progression) à la minute où tu es : sbires, or gagné, score de vision, participation aux kills, morts et KDA. Vert = objectif atteint, orange = presque, rouge = en retard. Il s'affiche sur le côté gauche de l'écran ; glisse-le pour le déplacer (sa position est retenue).</p>
+      <div class="row"><button class="chip ${pv.enabled !== false ? 'on' : ''}" data-act="pvToggle">${pv.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="pvReset">Remettre à sa place</button></div></div>`;
     return h;
   }
 
@@ -2359,6 +2392,8 @@
       case 'layReset': R.layDraft = null; NB.config.set({ overlay: { layout: Object.assign({}, LAY_DEF) } }).then((c) => { R.cfg = c; render(true); layPreview(); }).catch(() => {}); break;
       case 'layPreview': layPreview(); break;
       case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
+      case 'pvToggle': { const on = (((R.cfg || {}).overlay || {}).prog || {}).enabled === false; NB.config.set({ overlay: { prog: { enabled: on } } }).then((c) => { R.cfg = c; R.pvKey = ''; render(true); }).catch(() => {}); break; }
+      case 'pvReset': NB.progov.reset().then(() => toast('Encart « Ma progression » replacé')).catch(() => {}); break;
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {
         const b = S.myRunes.find((x) => x.id === v); if (!b) break;
