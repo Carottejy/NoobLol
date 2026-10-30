@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.12.1';
+var APP_VERSION = '3.13.0';
 var APP_RELEASES = [
+  { v: '3.13.0', date: '2026-10-31', notes: [
+    'Plus besoin de clé Riot pour Mon compte, l\'historique, la progression et les statistiques de fin de partie : sans clé (ou si elle a expiré), Noob LOL les lit dans l\'historique du client League of Legends lancé. La clé reste utile pour le collecteur de statistiques.',
+    'Écran de chargement : l\'ordre des incrustations est corrigé (top, jungle, mid, ADC, support), le support et l\'ADC étaient inversés.',
+  ]},
   { v: '3.12.1', date: '2026-10-30', notes: [
     'Encart « Ma progression » : fond transparent (le texte et les symboles ont un contour sombre pour rester lisibles sur le jeu).',
   ]},

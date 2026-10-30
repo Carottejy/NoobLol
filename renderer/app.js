@@ -191,7 +191,7 @@
     h += `</div><div>`;
     if (nd) h += nd;
     else {
-      if (NB && R.cfg && R.cfg.hasApiKey) { if (!R.profile && !R.profileErr) loadProfile(); loadHistory(); }
+      if (NB && R.cfg && (R.cfg.hasApiKey || R.lcu.connected)) { if (!R.profile && !R.profileErr) loadProfile(); loadHistory(); }
       h += patchCard();
       h += `<div class="card"><h2>⭐ Mes champions</h2>${favs.length ? `<div class="grid-ic">${favs.map((c) => tile(c)).join('')}</div>` : '<p class="muted">Ajoute tes champions préférés avec l\'étoile sur leur fiche : ils apparaîtront ici.</p>'}</div>`;
       const ids = GUIDE.beginners[S.role] || [];
@@ -209,7 +209,7 @@
     const c = R.cfg || {};
     const steps = [
       [R.lcu.connected, 'Lance le client League of Legends : Noob LOL le détecte tout seul.'],
-      [c.hasApiKey, 'Ajoute ta clé Riot (gratuite) dans Réglages pour voir ton compte et les statistiques.'],
+      [c.hasApiKey, 'Facultatif : ajoute ta clé Riot (gratuite) dans Réglages pour le collecteur de statistiques. Sans clé, ton compte, ton historique et tes stats de fin de partie sont lus dans le client LoL.'],
       [R.col && R.col.picks > 0, 'Démarre le collecteur de statistiques dans Réglages (runes, objets, match-ups).'],
     ];
     if (steps.every((s) => s[0])) return '';
@@ -1143,7 +1143,7 @@
   const legendaryIds = (p) => p.items.filter((i) => i.slot < 6 && Builds.isLegendary((D.items || {})[String(i.id)])).map((i) => i.id);
   function coachLive(L, O, meP) {
     if (!meP || !L.me || !D.items) return;
-    if (NB && !R.profile && !R.profileErr && !R.profileLoading && R.cfg && R.cfg.hasApiKey) loadProfile(); /* rang actuel → rang cible */
+    if (NB && !R.profile && !R.profileErr && !R.profileLoading && R.cfg && (R.cfg.hasApiKey || R.lcu.connected)) loadProfile(); /* rang actuel → rang cible */
     const myTeam = L.me.team;
     const enemies = L.players.filter((p) => p.team !== myTeam);
     const LR = liveRoles(L), myRole = LR.get(meP.name) || '';
@@ -1533,7 +1533,7 @@
      ou le jeu répond déjà), pas pendant le lancement où l'écran du jeu n'est pas encore affiché */
   const loadScreenShown = () => isLoading() && (!!R.live || (R.lcu.phase !== 'GameStart' && R.inProgressAt && Date.now() - R.inProgressAt >= 3000));
   function wantFull(id) { if (!id || R.full[id] || R.full[id] === null) return; R.full[id] = null; Dd.champFull(id).then((f) => { R.full[id] = f; soon(); }).catch(() => {}); }
-  const LOAD_ORDER = ['top', 'jungle', 'mid', 'support', 'adc', 'x'];
+  const LOAD_ORDER = ['top', 'jungle', 'mid', 'adc', 'support', 'x'];
   function loadingData() {
     const g = R.lcu.game, sp = R.lcu.summoner;
     const meG = g.players.find((p) => sp && p.puuid && p.puuid === sp.puuid) || null;
@@ -1554,7 +1554,7 @@
       try { as = Builds.assignRoles(keys, D, dist || {}, fixed); } catch (e) { as = fixed; }
       t.forEach((p) => role.set(p, as[p.champ] || fixed[p.champ] || ''));
     }
-    /* Ordre de l'écran de chargement : top, jungle, mid, support, ADC (rôle inconnu : à la fin) */
+    /* Ordre de l'écran de chargement : top, jungle, mid, ADC, support (rôle inconnu : à la fin) */
     teams.forEach((t) => t.sort((a, b) => LOAD_ORDER.indexOf(role.get(a) || 'x') - LOAD_ORDER.indexOf(role.get(b) || 'x') || 0));
     const myRole = meG ? role.get(meG) : '';
     const oppG = (R.loadOpp && teams[1].find((p) => +p.champ === +R.loadOpp)) || (myRole && teams[1].find((p) => role.get(p) === myRole)) || null;
@@ -2094,7 +2094,7 @@
     const head = (sub) => `<div class="row sp"><h1>📊 ${P.old ? 'Partie' : 'Dernière partie'}</h1>${sub || ''}</div>`;
     if (P.status !== 'ready' || !P.match) {
       let h = head(P.status === 'waiting' ? '<span class="pill on">⏳ Riot publie les statistiques complètes (1 à 3 min)…</span>' : '');
-      if (P.status === 'live-only') h += `<div class="card"><p class="muted">${P.reason === 'nokey' ? 'Ajoute ta clé Riot (Réglages) pour obtenir toutes les statistiques de fin de partie.' : esc(P.reason || 'Statistiques complètes indisponibles pour cette partie.')} Voici l'état final de la partie :</p></div>`;
+      if (P.status === 'live-only') h += `<div class="card"><p class="muted">${P.reason === 'nokey' ? 'Statistiques complètes indisponibles : le client League of Legends n\'était pas lancé (ou ajoute une clé Riot dans les Réglages).' : esc(P.reason || 'Statistiques complètes indisponibles pour cette partie.')} Voici l'état final de la partie :</p></div>`;
       if (P.live) h += playersPanel(P.live);
       else h += '<div class="loader">Récupération…</div>';
       return h;
@@ -2697,6 +2697,8 @@
     let prevPhase = 'None';
     NB.lcu.on((st) => {
       const old = R.lcu; R.lcu = st;
+      /* Client LoL lancé après l'appli : sans clé, le compte et l'historique se lisent maintenant dans le client */
+      if (st.summoner && !(old && old.summoner) && R.cfg && !R.cfg.hasApiKey) { R.profileErr = ''; R.histErr = ''; if (!R.profile) loadProfile(); if (!R.hist) loadHistory(); }
       if (st.game && (!old.game || old.game.gameId !== st.game.gameId)) { R.loadOpp = 0; R.recent = {}; }
       if (/InProgress|Reconnect/.test(st.phase) && !/InProgress|Reconnect/.test(old.phase || '')) { R.inProgressAt = Date.now(); setTimeout(() => { try { if (isLoading() && D.champs) loadovSync(loadingData()); } catch (e) { /* ignoré */ } }, 3100); }
       if (!/InProgress|Reconnect/.test(st.phase)) R.inProgressAt = 0;

@@ -558,3 +558,37 @@ test('statistiques fournies : remplacent la base locale seulement si elle a moin
   const r2 = await applySeed({ db: r.db, dbFile, seedFile, reopen: () => StatsDb.open(dbFile) });
   assert.equal(r2.replaced, false);
 });
+
+test('sans clé Riot : parties et chronologie du client converties au format match-v5', async () => {
+  const { toV5, timelineToV5, clientMatchApi, withFallback } = require('../main/lcumatch');
+  const { summarize } = require('../main/history');
+  const g = { gameId: 123, platformId: 'EUW1', gameCreation: 1, gameDuration: 1800, queueId: 420, gameMode: 'CLASSIC', mapId: 11,
+    participants: [
+      { participantId: 1, teamId: 100, championId: 103, spell1Id: 4, spell2Id: 14, timeline: { lane: 'MIDDLE', role: 'SOLO' }, stats: { win: true, kills: 5, deaths: 1, assists: 4, totalMinionsKilled: 200, neutralMinionsKilled: 10, goldEarned: 12000, totalDamageDealtToChampions: 20000, visionScore: 20, item0: 6655, perkPrimaryStyle: 8100, perkSubStyle: 8300, perk0: 8112, perk4: 8304 } },
+      { participantId: 2, teamId: 100, championId: 89, spell1Id: 4, spell2Id: 3, timeline: { lane: 'BOTTOM', role: 'DUO_SUPPORT' }, stats: { win: true, kills: 1, deaths: 2, assists: 10, goldEarned: 7000, totalDamageDealtToChampions: 5000 } },
+      { participantId: 6, teamId: 200, championId: 64, spell1Id: 11, spell2Id: 4, timeline: { lane: 'NONE', role: 'NONE' }, stats: { win: false, kills: 3, deaths: 4, assists: 2 } },
+    ],
+    participantIdentities: [{ participantId: 1, player: { puuid: 'moi', gameName: 'Carotte', tagLine: 'EUW' } }, { participantId: 2, player: { puuid: 'sup' } }, { participantId: 6, player: { puuid: 'jgl' } }],
+    teams: [{ teamId: 100, win: 'Win', towerKills: 8, dragonKills: 3, firstDargon: true }, { teamId: 200, win: 'Fail', towerKills: 2 }] };
+  const m = toV5(g);
+  assert.equal(m.metadata.matchId, 'EUW1_123');
+  const me = m.info.participants[0];
+  assert.equal(me.teamPosition, 'MIDDLE'); assert.equal(m.info.participants[1].teamPosition, 'UTILITY'); assert.equal(m.info.participants[2].teamPosition, 'JUNGLE');
+  assert.equal(me.kills, 5); assert.equal(me.riotIdGameName, 'Carotte'); assert.equal(me.perks.styles[0].style, 8100);
+  assert.equal(m.info.teams[0].win, true); assert.equal(m.info.teams[0].objectives.dragon.first, true); assert.equal(m.info.teams[0].objectives.tower.kills, 8);
+  const s = summarize(m, 'moi');
+  assert.equal(s.win, true); assert.equal(s.cs, 210); assert.ok(Math.abs(s.kp - 9 / 6) < 1e-9 || s.kp > 0);
+  const tl = timelineToV5({ frames: [{ timestamp: 0, participantFrames: { 1: { totalGold: 500 } }, events: [{ type: 'ELITE_MONSTER_KILL', killerId: 6, timestamp: 300000 }] }] }, m);
+  assert.equal(tl.info.frames[0].events[0].killerTeamId, 200);
+  /* Interface « API Riot » lue dans le client */
+  const lcu = { creds: {}, get: async (u) => (/products\/lol/.test(u) ? { games: { games: [{ gameId: 123, platformId: 'EUW1', gameCreation: 5 }] } } : /games\/123/.test(u) ? g : /game-timelines/.test(u) ? { frames: [{ timestamp: 0, participantFrames: {}, events: [] }] } : null) };
+  const capi = clientMatchApi(lcu, () => 'euw1');
+  assert.deepEqual(await capi.matchIds('moi', { count: 5 }), ['EUW1_123']);
+  assert.equal((await capi.match('EUW1_123')).info.gameId, 123);
+  await assert.rejects(capi.match('EUW1_999'), (e) => e.status === 404);
+  /* Clé expirée : bascule sur le client */
+  const riot = { matchIds: async () => { throw Object.assign(new Error('expirée'), { status: 403 }); }, match: async () => { throw Object.assign(new Error('expirée'), { status: 403 }); }, timeline: async () => null };
+  const api = withFallback(riot, capi, () => true);
+  assert.deepEqual(await api.matchIds('moi', {}), ['EUW1_123']);
+  assert.equal((await api.match('EUW1_123')).info.gameId, 123);
+});

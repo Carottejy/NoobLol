@@ -182,8 +182,8 @@
   const levelAt = (t, off) => Math.max(1, Math.min(18, Math.floor(1 + 9 * Math.pow(Math.max(0, t) / 600, 0.75) + off)));
   const respawnFor = (lvl, t) => Math.round(6 + lvl * 2.2 + (t > 1800 ? 8 : t > 1200 ? 4 : 0));
   const byTeam = (team) => SIM.players.filter((p) => p.team === team);
-  /* Écran de chargement : top, jungle, mid, support, ADC */
-  const LOAD_ORDER = ['top', 'jungle', 'middle', 'utility', 'bottom'];
+  /* Écran de chargement : top, jungle, mid, ADC, support */
+  const LOAD_ORDER = ['top', 'jungle', 'middle', 'bottom', 'utility'];
   const byTeamLoad = (team) => byTeam(team).sort((a, b) => LOAD_ORDER.indexOf(a.role) - LOAD_ORDER.indexOf(b.role));
   /* Le vrai client ne donne pas les joueurs dans l'ordre des rôles : on mélange pour vérifier que Noob LOL les remet en ordre */
   const shuffled = (l) => { const k = SIM.gameId; return l.slice().sort((a, b) => ((a.cell * 7 + k) % 11) - ((b.cell * 7 + k) % 11)); };

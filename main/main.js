@@ -14,11 +14,12 @@ const { History } = require('./history');
 const { SimServer } = require('./simulator');
 const { DamageTypes } = require('./damage');
 const statsFile = require('./statsfile');
+const { clientMatchApi, withFallback } = require('./lcumatch');
 const { seedPath, applySeed } = require('./seed');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
-let dmgTypes = null, loadov = null, loadovData = null, sim = null, simWin = null, hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
+let matchApi = null, dmgTypes = null, loadov = null, loadovData = null, sim = null, simWin = null, hist = null, win = null, mini = null, overlay = null, overlayData = null, ovSaveT = null, cfg, api, db, collector, post, lastLive = null, keys, colWasRunning = false;
 const infoCache = new Map(); /* puuid → rang et niveau */
 const lcu = new LcuWatcher(() => cfg && cfg.data.lolPath);
 const live = new LiveWatcher();
@@ -232,7 +233,30 @@ function handlers() {
   h('lcu:applySpells', (spells) => lcu.applySpells(spells));
   h('live:state', () => live.last);
 
+  /* Sans clé Riot : mon profil lu dans le client LoL (compte connecté, rangs, maîtrises, historique) */
+  async function clientProfile() {
+    if (!lcu.creds || !lcu.state.summoner) throw new Error('Sans clé Riot, lance le client League of Legends pour voir ton profil et ton historique (ou ajoute une clé dans les Réglages).');
+    const sm = lcu.state.summoner;
+    const [rk, mast] = await Promise.all([lcu.get('/lol-ranked/v1/current-ranked-stats').catch(() => null), lcu.get('/lol-champion-mastery/v1/local-player/champion-mastery').catch(() => null)]);
+    const leagues = ((rk && rk.queues) || []).filter((q) => q.tier && q.tier !== 'NONE' && q.tier !== '').map((q) => ({ queueType: q.queueType, tier: q.tier, rank: q.division && q.division !== 'NA' ? q.division : 'I', leaguePoints: q.leaguePoints || 0, wins: q.wins || 0, losses: q.losses || 0 }));
+    const mastery = (Array.isArray(mast) ? mast : (mast && mast.masteries) || []).map((m) => ({ championId: m.championId, championLevel: m.championLevel, championPoints: m.championPoints })).sort((a, b) => b.championPoints - a.championPoints).slice(0, 15);
+    const ids = await matchApi.matchIds(sm.puuid, { count: 10 }).catch(() => []);
+    const matches = [];
+    for (const mid of ids.slice(0, 10)) {
+      try {
+        const m = await matchApi.match(mid);
+        const p = m.info.participants.find((x) => x.puuid === sm.puuid);
+        if (p) matches.push({ id: mid, queue: m.info.queueId, created: m.info.gameCreation, duration: m.info.gameDuration, champ: p.championId, champName: p.championName, role: p.teamPosition, win: p.win, k: p.kills, d: p.deaths, a: p.assists, cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0), items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6], vision: p.visionScore, remake: !!p.gameEndedInEarlySurrender });
+      } catch (e) { /* partie illisible : on passe */ }
+    }
+    return { account: { puuid: sm.puuid, gameName: sm.gameName, tagLine: sm.tagLine }, summoner: { puuid: sm.puuid, summonerLevel: sm.level, profileIconId: sm.icon }, leagues, mastery, matches, source: 'client' };
+  }
+  const keyDead = (e) => e && (e.status === 401 || e.status === 403) && lcu.creds && lcu.state.summoner;
   h('riot:profile', async (riotId) => {
+    if (!cfg.getApiKey()) return clientProfile();
+    try { return await apiProfile(riotId); } catch (e) { if (keyDead(e)) return clientProfile(); throw e; }
+  });
+  async function apiProfile(riotId) {
     const id = riotId && riotId.gameName ? riotId : cfg.data.riotId;
     if (!id || !id.gameName || !id.tagLine) throw new Error('Indique ton Riot ID (ex. Carotte#EUW) dans les Réglages, ou lance le client du jeu.');
     const acc = await api.account(id.gameName, id.tagLine);
@@ -246,12 +270,17 @@ function handlers() {
       } catch (e) { /* partie illisible : on passe */ }
     }
     return { account: acc, summoner: summ, leagues, mastery, matches };
-  });
+  }
   /* Mes 20 dernières parties sur la Faille (progression, choix des champions) */
   h('riot:history', async (riotId) => {
     const id = riotId && riotId.gameName ? riotId : cfg.data.riotId;
+    if (!cfg.getApiKey()) {
+      if (!lcu.creds || !lcu.state.summoner) throw new Error('Sans clé Riot, lance le client League of Legends pour lire ton historique (ou ajoute une clé dans les Réglages).');
+      return { puuid: lcu.state.summoner.puuid, games: await hist.get(lcu.state.summoner.puuid, 40), source: 'client' };
+    }
     if (!id || !id.gameName || !id.tagLine) throw new Error('Indique ton Riot ID dans les Réglages, ou lance le client du jeu.');
-    const acc = await api.account(id.gameName, id.tagLine);
+    let acc;
+    try { acc = await api.account(id.gameName, id.tagLine); } catch (e) { if (keyDead(e)) return { puuid: lcu.state.summoner.puuid, games: await hist.get(lcu.state.summoner.puuid, 40), source: 'client' }; throw e; }
     return { puuid: acc.puuid, games: await hist.get(acc.puuid, 40) };
   });
   h('riot:masteries', async (puuid) => api.masteries(puuid, 30));
@@ -416,9 +445,11 @@ app.whenReady().then(async () => {
     /* Le collecteur s'était arrêté à cause de la clé expirée : on le relance */
     if (!collector.running && (colWasRunning || cfg.data.collector.autoStart)) collector.start();
   });
-  hist = new History({ api, dir: app.getPath('userData') });
+  /* Historique et fin de partie : clé Riot si elle marche, sinon l'historique du client LoL (aucune clé nécessaire) */
+  matchApi = withFallback(api, clientMatchApi(lcu, () => cfg.data.platform), () => !!cfg.getApiKey());
+  hist = new History({ api: matchApi, dir: app.getPath('userData') });
   dmgTypes = new DamageTypes({ dir: app.getPath('userData'), lcu });
-  post = new PostGame({ api, getPlatform: () => cfg.data.platform, dir: app.getPath('userData') });
+  post = new PostGame({ api: matchApi, getPlatform: () => cfg.data.platform, dir: app.getPath('userData') });
   post.on('update', (d) => send('postgame', d));
   let postFor = null;
   lcu.on('state', (s) => {
@@ -428,7 +459,7 @@ app.whenReady().then(async () => {
       postFor = s.game.gameId;
       /* Partie simulée : Riot n'a pas de statistiques complètes, on garde l'état final de la partie */
       if (sim) post.start({ gameId: 0, live: lastLive, puuid: s.summoner ? s.summoner.puuid : '', hasKey: true, reason: 'Partie simulée : pas de statistiques complètes chez Riot.' });
-      else post.start({ gameId: s.game.gameId, live: lastLive, puuid: s.summoner ? s.summoner.puuid : '', hasKey: !!cfg.getApiKey() });
+      else post.start({ gameId: s.game.gameId, live: lastLive, puuid: s.summoner ? s.summoner.puuid : '', hasKey: !!cfg.getApiKey() || !!lcu.creds });
     }
   });
   live.on('data', (d) => {

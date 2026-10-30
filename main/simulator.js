@@ -57,6 +57,7 @@ class SimServer extends EventEmitter {
     if (m === 'GET' && url === '/lol-summoner/v1/current-summoner') return S.summoner ? this.send(res, 200, S.summoner) : this.send(res, 404, { message: 'introuvable' });
     if (m === 'GET' && url === '/lol-champ-select/v1/session') return S.phase === 'ChampSelect' && S.session ? this.send(res, 200, S.session) : this.send(res, 404, { message: 'Pas de sélection en cours' });
     if (m === 'GET' && url === '/lol-gameflow/v1/session') return S.gameflow ? this.send(res, 200, S.gameflow) : this.send(res, 404, { message: 'Pas de partie' });
+    if (m === 'GET' && url === '/lol-ranked/v1/current-ranked-stats') { const p = S.summoner && S.players[S.summoner.puuid]; return this.send(res, 200, { queues: p && p.tier ? [{ queueType: 'RANKED_SOLO_5x5', tier: p.tier, division: p.division || 'I', leaguePoints: p.lp || 0, wins: p.wins || 0, losses: p.losses || 0 }] : [] }); }
     let mm = url.match(/^\/lol-ranked\/v1\/ranked-stats\/(.+)$/);
     if (m === 'GET' && mm) { const p = S.players[decodeURIComponent(mm[1])]; return p ? this.send(res, 200, { queueMap: { RANKED_SOLO_5x5: p.tier ? { tier: p.tier, division: p.division || 'NA', leaguePoints: p.lp || 0, wins: p.wins || 0, losses: p.losses || 0 } : { tier: 'NONE', division: 'NA' }, RANKED_FLEX_SR: { tier: 'NONE', division: 'NA' } } }) : this.send(res, 404, {}); }
     mm = url.match(/^\/lol-summoner\/v2\/summoners\/puuid\/(.+)$/);
@@ -66,10 +67,34 @@ class SimServer extends EventEmitter {
     if (m === 'GET' && mm) {
       const id = decodeURIComponent(mm[1]), p = S.players[id];
       if (!p) return this.send(res, 404, {});
-      const games = (p.history || []).map((g, i) => ({ gameId: 9000 + i, gameCreation: Date.now() - (i + 1) * 3600000, gameDuration: g.dur || 1800, queueId: 420, gameMode: 'CLASSIC',
+      const base = 9000 + 100 * Object.keys(S.players).indexOf(id);
+      const games = (p.history || []).map((g, i) => ({ gameId: base + i, platformId: 'EUW1', gameCreation: Date.now() - (i + 1) * 3600000, gameDuration: g.dur || 1800, queueId: 420, gameMode: 'CLASSIC',
         participantIdentities: [{ participantId: 1, player: { puuid: id, gameName: p.gameName, tagLine: p.tagLine } }],
         participants: [{ participantId: 1, championId: g.champ || 0, stats: { win: !!g.win, kills: g.k, deaths: g.d, assists: g.a } }] }));
       return this.send(res, 200, { accountId: 0, games: { gameCount: games.length, games } });
+    }
+    /* Détail complet d'une partie de l'historique (comme l'onglet Historique du client) : le joueur + 9 autres */
+    mm = url.match(/^\/lol-match-history\/v1\/games\/(\d+)$/);
+    if (m === 'GET' && mm) {
+      const gid = +mm[1], keys = Object.keys(S.players), id = keys[Math.floor((gid - 9000) / 100)], p = S.players[id];
+      for (const _ of p ? [1] : []) {
+        const i = (gid - 9000) % 100, g = (p.history || [])[i];
+        if (!g) continue;
+        const dur = g.dur || 1800, roles = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'BOTTOM'];
+        const parts = [], idents = [];
+        for (let k = 0; k < 10; k++) {
+          const mine = k === 0, team = k < 5 ? 100 : 200, win = mine ? !!g.win : (k < 5 ? !!g.win : !g.win);
+          const kk = mine ? g.k : (k * 3) % 9, dd = mine ? g.d : (k * 5) % 8, aa = mine ? g.a : (k * 7) % 12;
+          parts.push({ participantId: k + 1, teamId: team, championId: mine ? (g.champ || 1) : [86, 238, 103, 21, 89, 3, 19, 90, 99, 157][k], spell1Id: k % 5 === 1 ? 11 : 4, spell2Id: k % 5 === 4 ? 3 : 14,
+            timeline: { lane: roles[k % 5], role: k % 5 === 4 ? 'DUO_SUPPORT' : k % 5 === 3 ? 'DUO_CARRY' : 'SOLO' },
+            stats: { win, kills: kk, deaths: dd, assists: aa, totalMinionsKilled: k % 5 === 4 ? 30 : 180 + k * 5, neutralMinionsKilled: k % 5 === 1 ? 140 : 8, goldEarned: 9000 + kk * 400, totalDamageDealtToChampions: 12000 + kk * 1500, visionScore: 18 + k, wardsPlaced: 8 + k, champLevel: 15,
+              item0: 3020, item1: 6655, item2: 0, item3: 0, item4: 0, item5: 0, item6: 3340, perkPrimaryStyle: 8100, perkSubStyle: 8300, perk0: 8112, perk1: 8126, perk2: 8138, perk3: 8135, perk4: 8304, perk5: 8347, statPerk0: 5008, statPerk1: 5008, statPerk2: 5011 } });
+          idents.push({ participantId: k + 1, player: mine ? { puuid: id, gameName: p.gameName, tagLine: p.tagLine } : { puuid: 'autre-' + k, gameName: 'Joueur' + k, tagLine: 'EUW' } });
+        }
+        return this.send(res, 200, { gameId: gid, platformId: 'EUW1', gameCreation: Date.now() - (i + 1) * 3600000, gameDuration: dur, queueId: 420, gameMode: 'CLASSIC', mapId: 11, gameVersion: '16.21.1',
+          participants: parts, participantIdentities: idents, teams: [{ teamId: 100, win: g.win ? 'Win' : 'Fail', towerKills: 7, dragonKills: 2, baronKills: 1, firstDargon: true }, { teamId: 200, win: g.win ? 'Fail' : 'Win', towerKills: 3, dragonKills: 1 }] });
+      }
+      return this.send(res, 404, {});
     }
     /* Données de jeu d'un champion (type de dégâts officiel), fournies par la fenêtre du simulateur */
     mm = url.match(/^\/lol-game-data\/assets\/v1\/champions\/(\d+)\.json$/);
