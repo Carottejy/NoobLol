@@ -1253,7 +1253,7 @@
   function adaptRow(L) {
     const ad = adaptBuy(L); const r = ad && ad.recos[0];
     if (!r) return '';
-    return `<div class="brow adaptrow"><span class="small">⚡ Maintenant</span><div class="bis">${r.items.map((id) => `<button class="bi" data-act="item" data-val="${id}">${itIcon(id, 'ico xs')}</button>`).join('')}<span class="small" style="margin-left:6px"><b>${r.items.map(itemNm).map(esc).join(' ou ')}</b> <span class="muted">— ${esc(r.text)}</span></span></div></div>`;
+    return `<div class="brow adaptrow" title="${esc(r.text)}"><span class="small">⚡ Maintenant</span><div class="bis">${r.items.map((id) => `<button class="bi" data-act="item" data-val="${id}">${itIcon(id, 'ico xs')}</button>`).join('')}<span class="small clamp" style="margin-left:6px"><b>${r.items.map(itemNm).map(esc).join(' ou ')}</b> <span class="muted">— ${esc(r.text)}</span></span></div></div>`;
   }
   function buildCard(L) {
     const b = liveBuild(L);
@@ -1282,7 +1282,6 @@
     h += row('Principaux', A.core && A.core[0] ? A.core[0].items : [], '<span class="arrow">›</span>', A.boots && A.boots[0] ? A.boots[0].item : 0);
     const sit = (A.situational || []).filter((x) => x.items.length);
     h += row('Selon partie', [...new Set(sit.flatMap((x) => x.items.map((o) => o.item)).concat((A.later || []).slice(0, 4).map((x) => x.item)))].slice(0, 8));
-    if (A.skills) h += `<div class="brow"><span class="small muted">Sorts</span><span class="skillord">${esc(A.skills.order)}</span></div>`;
     return h + '</div>';
   }
 
@@ -1490,7 +1489,7 @@
      Mini-carte carrée à gauche (image fixe hors partie, capture en direct en partie), joueurs et objectifs à droite. */
   const OBJ_IC = { drake: '🐉', grubs: '🪲', herald: '🦀', baron: '👾', elder: '🔥' };
   const firstAt = { drake: '5:00', grubs: '8:00', herald: '15:00', baron: '20:00', elder: 'l\'âme' };
-  function objectivesCard(L) {
+  function objectivesCard(L, compact) {
     const myTeam = L && L.me ? L.me.team : 'ORDER';
     const O = Builds.objectives(L, myTeam);
     const status = (r) => {
@@ -1501,6 +1500,12 @@
     };
 
     const score = (sc) => `<span class="osc"><b class="us">${sc.us}</b><span class="muted">–</span><b class="them">${sc.them}</b></span>`;
+    if (compact) {
+      const st = (r) => (!L ? `<span class="muted">${firstAt[r.id]}</span>` : r.state === 'spawn' ? `<span class="ocd" data-ospawn="${Date.now() + r.in * 1000}">${fmt(r.in)}</span>` : r.state === 'up' ? '<span class="pos">✅</span>' : `<span class="muted ell">${esc(r.label || '')}</span>`);
+      const tile = (ic, name, stat, sc, cls) => `<div class="otile ${cls || ''}" title="${esc(name)}"><span class="oic">${ic}</span><span class="ost">${stat}</span>${score(sc)}</div>`;
+      const dt = O.drakeTypes.us.length || O.drakeTypes.them.length ? `<p class="small muted ell" style="margin:4px 0 0">🐉 🟦 ${O.drakeTypes.us.join(', ') || '—'} · 🟥 ${O.drakeTypes.them.join(', ') || '—'}</p>` : '';
+      return `<div class="card objs compact"><h2>🐉 Objectifs <span class="small muted">🟦 nous – 🟥 eux</span></h2><div class="otiles">${O.rows.map((r) => tile(OBJ_IC[r.id], r.name, st(r), r.score, r.state)).join('')}${tile('🏰', 'Tours', '', O.turret)}${tile('💎', 'Inhibiteurs', '', O.inhib)}</div>${dt}</div>`;
+    }
     let h = `<div class="card objs"><div class="row sp nw"><h2 style="margin:0">🐉 Objectifs</h2><span class="small muted">apparition · pris 🟦 nous – 🟥 eux</span></div>`;
     h += O.rows.map((r) => `<div class="orow ${r.state}"><span class="oic">${OBJ_IC[r.id]}</span><div class="onm"><b>${esc(r.name)}</b>${r.id === 'drake' && (O.drakeTypes.us.length || O.drakeTypes.them.length) ? `<span class="small muted ell">🟦 ${O.drakeTypes.us.join(', ') || '—'} · 🟥 ${O.drakeTypes.them.join(', ') || '—'}</span>` : ''}</div><div class="ost">${status(r)}</div>${score(r.score)}</div>`).join('');
     h += `<div class="orow"><span class="oic">🏰</span><div class="onm"><b>Tours</b></div><div class="ost"></div>${score(O.turret)}</div>`;
@@ -1666,6 +1671,53 @@
     const same = core.join() === b.core.join() && boots === b.boots;
     return { c: b.c, role: b.role, start: b.start.slice(), core, boots, next, why: used, same };
   }
+  /* ---------- Ordre des sorts (d'après les parties du collecteur pour ce champion et ce rôle) ---------- */
+  function skillSeq(order, first) {
+    const pts = { Q: 0, W: 0, E: 0, R: 0 }, seq = [];
+    for (let lv = 1; lv <= 18; lv++) {
+      const cap = Math.ceil(lv / 2); /* un sort de base ne dépasse pas le rang (niveau + 1) / 2 */
+      let k;
+      if (lv === 6 || lv === 11 || lv === 16) k = 'R';
+      else if (lv <= 3 && first && first[lv - 1] && first[lv - 1] !== 'R' && pts[first[lv - 1]] < cap) k = first[lv - 1];
+      else k = order.find((x) => pts[x] < 5 && pts[x] < cap) || order.find((x) => pts[x] < 5) || 'Q';
+      pts[k]++; seq.push(k);
+    }
+    return seq;
+  }
+  function skillPlan(c, role) {
+    if (!c || !NB || !D.items) return null;
+    const roles = [role].concat(ROLES.filter((r) => r !== role)).filter(Boolean);
+    for (const r of roles) {
+      const rows = cached(`builds:${c.key}:${r}`, () => NB.stats.builds(+c.key, r, 30));
+      if (rows === undefined) return { loading: true };
+      if (!rows || !rows.length) continue;
+      const mk = `sk:${c.key}:${r}:${rows.length}`;
+      R.skMemo = R.skMemo || {};
+      if (!(mk in R.skMemo)) { const A = Builds.analyze(rows, D, {}); R.skMemo[mk] = A.skills || null; }
+      const sk = R.skMemo[mk]; if (!sk) continue;
+      const order = sk.order.split(' > ').filter((x) => /^[QWE]$/.test(x));
+      if (order.length < 3) continue;
+      const first = sk.first ? sk.first.split(' ') : null;
+      return { order, first, seq: skillSeq(order, first), role: r, share: sk.share, games: sk.games, other: r !== role };
+    }
+    return null;
+  }
+  /* Grille 18 niveaux ; « abil » = points déjà mis (données du jeu) pour dire quoi monter maintenant */
+  function skillHtml(c, plan, level, abil) {
+    if (!plan) return '<p class="muted small">Pas encore de parties avec l\'ordre des sorts pour ce champion dans le collecteur.</p>';
+    if (plan.loading) return '<div class="loader small">Calcul…</div>';
+    const full = c && R.full[c.id]; if (c) wantFull(c.id);
+    const nm = (k) => { const sp = full && full.spells && full.spells['QWER'.indexOf(k)]; return sp ? sp.name : k; };
+    let hint = '';
+    if (abil && level) {
+      const spent = abil.Q + abil.W + abil.E + abil.R;
+      if (level > spent && spent < 18) hint = `<span class="skup">⬆️ Monte <b>${plan.seq[spent]}</b> <span class="small muted">${esc(nm(plan.seq[spent]))}</span></span>`;
+    } else if (level && level < 18) hint = `<span class="small muted">Niveau ${level + 1} : <b>${plan.seq[level]}</b></span>`;
+    const rowK = (k) => `<div class="skr"><b title="${esc(nm(k))}">${k}</b>${plan.seq.map((x, i) => `<i class="${x === k ? 'on' : ''} ${level && i === level - 1 ? 'cur' : ''} ${level && i < level ? 'past' : ''}">${x === k ? i + 1 : ''}</i>`).join('')}</div>`;
+    return `<div class="skhead"><span class="skillord">${plan.order.join(' › ')}</span>${hint}</div>
+      <div class="skgrid">${['Q', 'W', 'E', 'R'].map(rowK).join('')}</div>
+      <p class="small muted" style="margin:4px 0 0">${plan.other ? `⚠️ Pas de données dans ce rôle : ordre vu en ${ROLE_NAME[plan.role]}. ` : ''}${Math.round(plan.share * 100)} % des ${nf(Math.round(plan.games / Math.max(0.01, plan.share)))} parties analysées · ultime aux niveaux 6, 11, 16</p>`;
+  }
   /* Conseils pour mon match-up : texte + objets (images) */
   function matchupTips(ld, b) {
     const c = b && b.c, oc = b && b.oc;
@@ -1715,6 +1767,36 @@
     if (kd && R.recent[kd.puuid].kda >= 3.5) T(`Le joueur le plus dangereux semble être ${(byKey(kd.champ) || {}).name} (KDA moyen ${f1(R.recent[kd.puuid].kda)} sur ses dernières parties).`);
     return tips;
   }
+  /* Version courte (symbole + quelques mots) des conseils, pour l'écran de jeu ; le texte complet reste en info-bulle */
+  const SHORT = [
+    [/^Tu as plus de portée \((\d+) contre (\d+)\)/, (m) => `📏 Plus de portée (${m[1]} vs ${m[2]}) : harcèle-le`],
+    [/^Il a plus de portée \((\d+) contre (\d+)\)/, (m) => `📏 Moins de portée (${m[2]} vs ${m[1]}) : échange sorts prêts`],
+    [/^Ses dégâts sont physiques/, () => '🛡️ Dégâts physiques : armure'],
+    [/^Ses dégâts sont magiques/, () => '🔮 Dégâts magiques : résistance magique'],
+    [/^C'est un assassin/, () => '🗡️ Assassin : garde Saut éclair, jamais à mi-vie'],
+    [/^C'est un tank/, () => '🧱 Tank : farme, va aider ailleurs'],
+    [/^C'est un tireur/, () => '🏹 Tireur : prends l\'avantage tôt'],
+    [/^C'est un mage/, () => '✨ Mage : esquive de côté, frappe après ses sorts'],
+    [/^C'est un combattant/, () => '💪 Combattant : échanges courts'],
+    [/^Méfie-toi à partir du niveau 6 : son ultime « (.+?) »/, (m) => `⚠️ Niv. 6 : ultime « ${m[1]} »`],
+    [/^Conseil de Riot : (.*)$/, (m) => `💡 ${m[1]}`],
+    [/^D'après le collecteur : .*? gagne (\d+) % .*?\((\d+) parties/, (m) => `📊 ${m[1]} % de victoires dans ce match-up (${m[2]} parties)`],
+    [/^Ton adversaire est en forme : (\d+) victoires sur ses (\d+)/, (m) => `🔥 Il est en forme : ${m[1]}/${m[2]} victoires`],
+    [/^Ton adversaire est en difficulté : seulement (\d+) victoires sur ses (\d+)/, (m) => `🧊 Il est en difficulté : ${m[1]}/${m[2]}`],
+    [/^Soins importants en face \((.+?)\)/, (m) => `💊 Anti-soins (${m[1]})`],
+    [/^Équipe surtout magique \((\d+) % AP\)/, (m) => `🔮 ${m[1]} % AP : résistance magique`],
+    [/^Équipe surtout physique \((\d+) % AD\)/, (m) => `🛡️ ${m[1]} % AD : armure`],
+    [/^(\d+) tanks en face \((.+?)\)/, (m) => `🧱 ${m[1]} tanks (${m[2]}) : pénétration`],
+    [/^(\d+) assassins \((.+?)\)/, (m) => `🗡️ Assassins (${m[2]}) : anti-burst`],
+    [/^Dégâts mixtes/, () => '⚖️ Dégâts mixtes : armure + RM'],
+    [/^Ils peuvent engager fort \((.+?)\)/, (m) => `🚨 Engage fort (${m[1]}) : reste derrière`],
+    [/^Composition à distance \((.+?)\)/, (m) => `🎯 À distance (${m[1]}) : engagez ensemble`],
+    [/^(.+?) devien\w* très fort/, (m) => `⏳ ${m[1]} : finissez avant 30 min`],
+    [/^En forme en face : (.+?)\.?$/, (m) => `🔥 En forme : ${m[1]}`],
+    [/^Le joueur le plus dangereux semble être (.+?) \(KDA moyen ([\d,]+)/, (m) => `☠️ Le plus dangereux : ${m[1]} (KDA ${m[2]})`],
+  ];
+  const shortTip = (t) => { for (const [re, f] of SHORT) { const m = t.match(re); if (m) return f(m); } return t; };
+  const tipShortLi = (x) => `<li title="${esc(x.t)}"><span class="clamp">${esc(shortTip(x.t))}</span>${x.items.length ? `<span class="tipico">${x.items.map((id) => `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xxs')}</button>`).join('')}</span>` : ''}</li>`;
   const tipLi = (x) => `<li>${esc(x.t)}${x.items.length ? `<span class="tipit">${x.items.map((id) => `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}<span>${esc(itemNm(id))}</span></button>`).join('')}</span>` : ''}</li>`;
   function viewLoading() {
     const ld = loadingData();
@@ -1754,6 +1836,7 @@
         <div class="row" style="margin-top:8px">${following && S.gameBuild.kind === 'team' ? '<span class="pill on">✅ Suivi dans l\'encart en jeu</span><button class="btn ghost small" data-act="unfollowGameBuild">Ne plus suivre</button>' : `<button class="btn small" data-act="followGameBuild" data-val="team">⭐ Suivre ce build dans l'encart en jeu</button>`}</div>`}</div>`;
       }
     }
+    if (b && b.c) h += `<div class="card skcard"><h2>🔼 Ordre des sorts${b.role ? ` <span class="small muted">${ROLE_NAME[b.role]}</span>` : ''}</h2>${skillHtml(b.c, skillPlan(b.c, b.role), 0, null)}</div>`;
     h += '</div><div>';
     const mt = matchupTips(ld, b);
     h += `<div class="card"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map(tipLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu : clique un adversaire ci-dessus.</p>'}</div>`;
@@ -1789,18 +1872,14 @@
     if (!nd && isLoading()) return viewLoading();
     if (!L && R.post && R.post.status && !nd) return viewPost();
     if (nd) return `<div class="gm nomap"><div class="gm-side">${nd}</div></div>`;
-    const tipsCol = L ? gameTipsCards(L) : '';
     const players = L ? playersPanel(L) : `<div class="card players"><h2>👥 Joueurs</h2><p class="muted idle">${NB ? 'Aucune partie en cours. Dès que la partie démarre, Noob LOL bascule ici tout seul et affiche les 10 joueurs avec leur rang, leur niveau, leurs kills, morts, assistances, objets et leur profil AD / AP. À la fin de la partie, toutes les statistiques s\'affichent ici.' : 'Disponible dans l\'application PC pendant une partie.'}</p></div>`;
-    let side = '';
-    if (L) {
-      const me = L.me && L.me.stats ? L.me : null; const c = me ? D.champs[me.champ] : null;
-      side += `<div class="card gm-strip"><span class="clock">${fmt(L.time)}</span>${me ? `<div class="gm-me">${cIcon(c, 'ico')}<div class="grow"><b>${esc(c ? c.name : '')} · niv. ${me.level}</b><span class="muted small">❤️ ${me.stats.hp}/${me.stats.maxHp} · ⚔️ ${me.stats.ad} · 🔮 ${me.stats.ap} · 🛡️ ${me.stats.armor}/${me.stats.mr} · 👟 ${me.stats.ms}</span></div><span class="gold-big">${nf(me.gold)} 🪙</span></div>` : ''}</div>`;
-    }
-    side += players;
-    const journal = S.game.log.length && L ? `<div class="card journal"><h2>📜 Journal</h2><div class="log">${S.game.log.slice(0, 14).map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>` : '';
-    const build = L ? buildCard(L) : '';
-    side += (build || journal) ? `<div class="gm-tools"><div>${objectivesCard(L)}</div><div>${build}${journal}</div></div>` : objectivesCard(L);
-    return `<div class="gm ${tipsCol ? 'tips' : 'nomap'}">${tipsCol ? `<div class="gm-tips">${tipsCol}</div>` : ''}<div class="gm-side">${side}</div></div>`;
+    if (!L) return `<div class="gm nomap"><div class="gm-side">${players}${objectivesCard(L)}</div></div>`;
+    const me = L.me && L.me.stats ? L.me : null; const c = me ? D.champs[me.champ] : null;
+    const strip = `<div class="card gm-strip"><span class="clock">${fmt(L.time)}</span>${me ? `<div class="gm-me">${cIcon(c, 'ico')}<div class="grow"><b>${esc(c ? c.name : '')} · niv. ${me.level}</b><span class="muted small">❤️ ${me.stats.hp}/${me.stats.maxHp} · ⚔️ ${me.stats.ad} · 🔮 ${me.stats.ap} · 🛡️ ${me.stats.armor}/${me.stats.mr} · 👟 ${me.stats.ms}</span></div><span class="gold-big">${nf(me.gold)} 🪙</span></div>` : ''}</div>`;
+    const journal = S.game.log.length ? `<div class="card journal"><h2>📜 Journal</h2><div class="log">${S.game.log.slice(0, 8).map((l) => `<div class="small ell" title="${esc(l.txt)}"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div></div>` : '';
+    const left = gameTipsCards(L);
+    const right = objectivesCard(L, true) + buildCard(L) + skillCard(L) + journal;
+    return `<div class="gm3">${left ? `<div class="gcol gl">${left}</div>` : ''}<div class="gcol gc">${strip}${players}</div><div class="gcol gr">${right}</div></div>`;
   }
   /* Partie en cours : les mêmes données que l'écran de chargement, reconstruites d'après le jeu (positions réelles) */
   function liveLd(L) {
@@ -1889,6 +1968,7 @@
     if (!ad || !ad.recos.length) return compact ? '' : '<p class="small muted">Rien de particulier à adapter pour l\'instant : suis ton build.</p>';
     return ad.recos.map((r) => `<div class="adapt"><span class="bis">${r.items.map((id) => `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}</button>`).join('')}</span><span class="small"><b>${r.items.map(itemNm).map(esc).join(' ou ')}</b> — ${esc(r.text)}</span></div>`).join('');
   };
+  /* Colonne de gauche en jeu : achats adaptés, builds conseillés, match-up et équipe adverse (résumés) */
   function gameTipsCards(L) {
     if (!D.champs) return '';
     const ld = liveLd(L);
@@ -1897,10 +1977,29 @@
     const b = loadBuild(ld);
     const mt = matchupTips(ld, b), tt = teamTips(ld, b && !b.loading ? b : null);
     const ad = adaptBuy(L);
-    const threats = ad && ad.threats.length ? `<p class="small muted" style="margin:0 0 6px">Les plus dangereux en face : ${ad.threats.map((e) => `<b>${esc(e.c.name)}</b> ${kdaS(e.p)} · ≈${k1g(e.gold)} po`).join(' · ')}</p>` : '';
-    return `<div class="card tipscard gold"><h2>⚡ Achats adaptés à la partie</h2>${threats}${adaptHtml(ad)}</div>
-      <div class="card tipscard"><h2>🎯 Mon match-up${b && b.oc ? ` contre ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips">${mt.map(tipLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu.</p>'}</div>
-      <div class="card tipscard"><h2>🛡️ Face à l'équipe adverse</h2><ul class="tips">${tt.map(tipLi).join('')}</ul></div>`;
+    const threats = ad && ad.threats.length ? `<p class="small muted ell" style="margin:0 0 4px" title="Les plus dangereux en face">☠️ ${ad.threats.map((e) => `<b>${esc(e.c.name)}</b> ${kdaS(e.p)}`).join(' · ')}</p>` : '';
+    const adapt = ad && ad.recos.length ? ad.recos.map((r) => `<div class="adapt" title="${esc(r.text)}"><span class="bis">${r.items.map((id) => `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}</button>`).join('')}</span><span class="small clamp">${esc(r.text)}</span></div>`).join('') : '<p class="small muted" style="margin:0">Rien à adapter pour l\'instant : suis ton build.</p>';
+    /* Builds conseillés : match-up et équipe entière, à suivre dans l'encart en jeu */
+    let builds = '';
+    if (b && !b.loading && b.c) {
+      R.loadBuildCur = b;
+      const tb = teamBuild(ld, b); R.loadTeamBuildCur = tb;
+      const g = R.lcu.game, f = S.gameBuild && g && S.gameBuild.gameId === g.gameId && S.gameBuild.champ === b.c.id ? (S.gameBuild.kind || 'matchup') : '';
+      const ic = (id) => (id ? `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}</button>` : '');
+      const line = (lab, tip, x, kind) => `<div class="bline"><span class="blab" title="${esc(tip)}">${lab}</span><div class="bis">${x.core.map(ic).join('<span class="arrow">›</span>')}${x.boots ? `<span class="rsep"></span>${ic(x.boots)}` : ''}<span class="rsep"></span>${x.next.slice(0, 3).map(ic).join('')}</div>${f === kind ? '<button class="chip on xs" data-act="unfollowGameBuild" title="Suivi dans l\'encart en jeu (clic : ne plus suivre)">✅</button>' : `<button class="chip xs" data-act="followGameBuild" data-val="${kind === 'team' ? 'team' : ''}" title="Suivre ce build dans l'encart en jeu">⭐</button>`}</div>`;
+      builds = `<div class="card tipscard"><h2>🛒 Builds conseillés</h2>${line('🎯', `Contre ${b.oc ? b.oc.name : 'ton adversaire de voie'}`, b, 'matchup')}${tb && !tb.same ? line('🛡️', 'Contre toute l\'équipe adverse', tb, 'team') : ''}<p class="small muted" style="margin:3px 0 0">🎯 match-up${b.oc ? ' vs ' + esc(b.oc.name) : ''}${tb && !tb.same ? ' · 🛡️ toute l\'équipe' : ''} · principaux › bottes | ensuite</p></div>`;
+    }
+    return `<div class="card tipscard gold"><h2>⚡ Achats adaptés</h2>${threats}${adapt}</div>${builds}
+      <div class="card tipscard"><h2>🎯 Match-up${b && b.oc ? ` vs ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips short">${mt.map(tipShortLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu.</p>'}</div>
+      <div class="card tipscard"><h2>🛡️ Équipe adverse</h2><ul class="tips short">${tt.map(tipShortLi).join('')}</ul></div>`;
+  }
+  /* Carte « Ordre des sorts » en jeu */
+  function skillCard(L) {
+    if (!L || !L.me || !D.champs) return '';
+    const meP = L.players.find((p) => p.name === L.me.name); if (!meP) return '';
+    const c = D.champs[meP.champ]; if (!c) return '';
+    const role = liveRoles(L).get(meP.name) || '';
+    return `<div class="card skcard"><h2>🔼 Ordre des sorts <span class="small muted">${role ? ROLE_NAME[role] : ''}</span></h2>${skillHtml(c, skillPlan(c, role), L.me.level || meP.level || 0, L.me.abil)}</div>`;
   }
 
   /* =====================================================================

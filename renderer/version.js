@@ -1,6 +1,12 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.11.3';
+var APP_VERSION = '3.12.0';
 var APP_RELEASES = [
+  { v: '3.12.0', date: '2026-10-30', notes: [
+    'Écran « En jeu » réorganisé en 3 colonnes pour tout voir d\'un coup d\'œil : conseils à gauche, joueurs au centre, objectifs, build, ordre des sorts et journal à droite.',
+    'En jeu : les builds conseillés du chargement (contre ton match-up et contre toute l\'équipe adverse) sont aussi affichés, avec le bouton ⭐ pour les suivre dans l\'encart.',
+    'Conseils résumés avec des symboles (texte complet au survol), objectifs en tuiles compactes.',
+    'Nouveau : ordre des sorts pour ton champion et ton rôle (d\'après le collecteur), sur une grille des niveaux 1 à 18. En jeu, le niveau actuel est entouré et l\'appli te dit quel sort monter quand tu as un point à dépenser. Aussi affiché au chargement.',
+  ]},
   { v: '3.11.3', date: '2026-10-30', notes: [
     'Encart « Ma progression » : des symboles à la place des textes (sbire pour le CS/min, pièce d\'or pour l\'or, œil pour la vision, poignée de main pour la participation, crâne pour les morts, épées pour le KDA) et une largeur réduite à celle d\'une mini-carte (280 pixels).',
   ]},

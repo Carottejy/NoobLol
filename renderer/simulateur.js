@@ -99,6 +99,13 @@
   /* Nom d'un joueur dans les événements du jeu, selon le format choisi */
   const evName = (p) => (SIM.nameMode === 'legacy' ? p.legacy : SIM.nameMode === 'riotid' ? `${p.gameName}#${p.tagLine}` : p.gameName);
   const spellObj = (key) => { const s = D.summByKey[String(key)]; return s ? { displayName: s.name, rawDisplayName: `GeneratedTip_SummonerSpell_${s.id}_DisplayName` } : {}; };
+  /* Points de compétences : Q, W, E puis Q au max, R aux niveaux 6, 11, 16 ; un point reste parfois à dépenser */
+  function simAbilities(level) {
+    const seq = ['Q', 'W', 'E', 'Q', 'Q', 'R', 'Q', 'E', 'Q', 'E', 'R', 'E', 'E', 'W', 'W', 'R', 'W', 'W'];
+    const spent = level - (level % 3 === 0 ? 1 : 0), out = { Q: 0, W: 0, E: 0, R: 0 };
+    seq.slice(0, spent).forEach((k) => { out[k]++; });
+    return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, { abilityLevel: v, displayName: 'Sort ' + k }]));
+  }
   function liveData() {
     const G = SIM.game;
     const players = SIM.players.map((p) => {
@@ -118,7 +125,7 @@
     return {
       activePlayer: { riotId: `${me.gameName}#${me.tagLine}`, riotIdGameName: me.gameName, summonerName: `${me.gameName}#${me.tagLine}`, level: ms.level, currentGold: Math.max(0, ms.gold - ms.spent),
         championStats: { attackDamage: (S.attackdamage || 60) + 3 * ms.level, abilityPower: ms.items.length * 70, armor: (S.armor || 30) + 4 * ms.level, magicResist: (S.spellblock || 30) + 1.5 * ms.level, moveSpeed: S.movespeed || 340,
-          currentHealth: ms.deadUntil > G.t ? 0 : Math.round(maxHp * G.hp), maxHealth: maxHp, resourceValue: Math.round(maxRes * G.mana), resourceMax: resType === 'NONE' ? 0 : maxRes, resourceType: resType } },
+          currentHealth: ms.deadUntil > G.t ? 0 : Math.round(maxHp * G.hp), maxHealth: maxHp, resourceValue: Math.round(maxRes * G.mana), resourceMax: resType === 'NONE' ? 0 : maxRes, resourceType: resType }, abilities: simAbilities(ms.level) },
       allPlayers: players, events: { Events: G.events }, gameData: { gameMode: 'CLASSIC', gameTime: G.t, mapName: 'Map11', mapNumber: 11, mapTerrain: 'Default' },
     };
   }
