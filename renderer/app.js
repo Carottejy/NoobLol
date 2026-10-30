@@ -1297,7 +1297,7 @@
     const rows = [];
     const off = S.opt.pvOff || {}, on = (k) => !off[k];
     const up = (label, cur, target, fmt) => { if (target == null || !(target > 0)) return; const pct = cur / target; rows.push({ label, cur: fmt(cur), target: fmt(target), pct, st: st(pct) }); };
-    const csm = on('cs') && B('csm'); if (csm) up('Sbires', meP.cs, Math.round(csm * m), (v) => String(Math.round(v)));
+    const csm = on('cs') && B('csm'); if (csm) up('CS/min', meP.cs / m, csm, f1);
     const gpm = on('gold') && B('gpm'); if (gpm) up('Or gagné', goldOf(meP, L).v, Math.max(500, Math.round(gpm * m)), k1g);
     const vis = on('vision') && B('vision'); if (vis) up('Vision', meP.ward || 0, Math.max(1, Math.round(vis * m)), (v) => String(Math.round(v)));
     const kills = L.players.filter((p) => p.team === meP.team).reduce((t, p) => t + p.k, 0), kp = on('kp') && B('kp');
@@ -1307,7 +1307,7 @@
     const kda = on('kda') && B('kda'); if (kda && (meP.k + meP.a + meP.d) > 0) up('KDA', (meP.k + meP.a) / Math.max(1, meP.d), kda, f1);
     return rows.length ? { tier: TIER[tier] || tier, role: role ? ROLE_NAME[role] : '', rows } : null;
   }
-  const PV_IND = [['cs', 'Sbires'], ['gold', 'Or gagné'], ['vision', 'Score de vision'], ['kp', 'Participation aux kills'], ['deaths', 'Morts'], ['kda', 'KDA']];
+  const PV_IND = [['cs', 'CS/min'], ['gold', 'Or gagné'], ['vision', 'Score de vision'], ['kp', 'Participation aux kills'], ['deaths', 'Morts'], ['kda', 'KDA']];
   function progSync(L) {
     if (!NB || !NB.progov) return;
     const d = progRows(L);
@@ -2287,7 +2287,7 @@
       ${layoutSettings(ov)}</div>`;
     const pv = ov.prog || {};
     h += `<div class="card"><h2>📈 Encart « Ma progression » par-dessus le jeu</h2>
-      <p class="muted small">Pendant la partie, un petit encart montre où tu en es par rapport à ton objectif de rang (<b>${esc(TIER[targetTier()] || '')}</b>, réglable dans Ma progression) à la minute où tu es : sbires, or gagné, score de vision, participation aux kills, morts et KDA. Vert = objectif atteint, orange = presque, rouge = en retard. Il s'affiche sur le côté gauche de l'écran ; glisse-le pour le déplacer (sa position est retenue).</p>
+      <p class="muted small">Pendant la partie, un petit encart montre où tu en es par rapport à ton objectif de rang (<b>${esc(TIER[targetTier()] || '')}</b>, réglable dans Ma progression) à la minute où tu es : CS/min, or gagné, score de vision, participation aux kills, morts et KDA. Vert = objectif atteint, orange = presque, rouge = en retard. Il s'affiche sur le côté gauche de l'écran ; glisse-le pour le déplacer (sa position est retenue).</p>
       <div class="row"><button class="chip ${pv.enabled !== false ? 'on' : ''}" data-act="pvToggle">${pv.enabled !== false ? '✅ Activé' : 'Désactivé'}</button><button class="btn ghost small" data-act="pvReset">Remettre à sa place</button></div>
       <p class="muted small" style="margin-top:8px">Indicateurs affichés :</p>
       <div class="chips">${PV_IND.map(([k, n]) => `<button class="chip ${(S.opt.pvOff || {})[k] ? '' : 'on'}" data-act="pvInd" data-val="${k}">${(S.opt.pvOff || {})[k] ? '' : '✅ '}${esc(n)}</button>`).join('')}</div></div>`;

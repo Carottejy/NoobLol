@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.11.1';
+var APP_VERSION = '3.11.2';
 var APP_RELEASES = [
+  { v: '3.11.2', date: '2026-10-30', notes: [
+    'Encart « Ma progression » : CS/min à la place du nombre de sbires, et encart deux fois plus grand (texte doublé).',
+  ]},
   { v: '3.11.1', date: '2026-10-30', notes: [
     'Réglages : chaque indicateur de l\'encart « Ma progression » (sbires, or gagné, score de vision, participation aux kills, morts, KDA) peut être affiché ou masqué. L\'encart s\'ajuste à la hauteur des indicateurs gardés.',
   ]},
