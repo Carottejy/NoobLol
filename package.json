@@ -1,7 +1,7 @@
 {
   "name": "nooblol",
   "productName": "Noob LOL",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "Compagnon de jeu League of Legends pour débutants : préparation, sélection des champions et aide en jeu.",
   "author": "Carottejy",
   "license": "UNLICENSED",
@@ -66,6 +66,15 @@
         "name": "Statistiques Noob LOL",
         "description": "Statistiques du collecteur Noob LOL",
         "role": "Viewer"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "seed",
+        "to": "seed",
+        "filter": [
+          "*.nooblolstats"
+        ]
       }
     ]
   }

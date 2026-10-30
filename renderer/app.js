@@ -1139,7 +1139,7 @@
     if (lb && lb.next && L.me && L.me.gold >= lb.next.cost && !(meP && meP.dead)) speak(`Tu as assez d'or pour ${lb.next.name}. Rentre à la base si tu peux.`, `gold-${lb.next.item}`);
   }
   /* ---------- Coaching en direct : uniquement tes données et ce que tout joueur voit dans le tableau des scores (Tab) ---------- */
-  const COACH = [['back', '🏠 Moment pour rentrer (moins de 20 % de vie et au moins 1 800 po, ou moins de 10 % de mana)'], ['lane', '⚔️ Ton adversaire de voie (avance de niveau, objets terminés) et tes objets terminés'], ['dead', '💀 Adversaires morts : fenêtre pour pousser ou prendre un objectif'], ['counter', '🛡️ Objets contre l\'équipe adverse (anti-soins, pénétration)'], ['cs', '🌾 Point farm à 10 et 20 min, plaques des tours à 14 min']];
+  const COACH = [['back', '🏠 Moment pour rentrer (moins de 20 % de vie et au moins 1 800 po, ou moins de 10 % de mana)'], ['lane', '⚔️ Ton adversaire de voie (avance de niveau, objets terminés), pendant les 15 premières minutes'], ['dead', '💀 Adversaires morts : fenêtre pour pousser ou prendre un objectif'], ['counter', '🛡️ Objets contre l\'équipe adverse (anti-soins, pénétration)'], ['cs', '🌾 Point farm à 10 et 20 min, plaques des tours à 14 min']];
   const coachOn = (k) => ((S.opt.coach || {})[k] !== false);
   function coachSay(L, text, key) { if (Voice.said.has(key)) return; speak(text, key); logEv(L.time, '💡 ' + text); }
   const itemName = (id) => ((D.items || {})[String(id)] || {}).name || '';
@@ -1166,7 +1166,9 @@
     }
     /* 4. Adversaire de voie et objets terminés */
     if (coachOn('lane')) {
-      if (opp) {
+      /* Après 15 minutes, plus d'annonce sur le match-up (on note quand même ses objets, sans les dire) */
+      if (opp && L.time >= 900) legendaryIds(opp).forEach((id) => R.coach.opp.add(id));
+      else if (opp) {
         const oc = D.champs[opp.champ], on = oc ? oc.name : 'Ton adversaire';
         if (opp.level >= 6 && myLvl < 6) coachSay(L, `${on} est niveau 6 et pas toi : il a son ultime, sois prudent.`, 'opp-6');
         else if (opp.level - myLvl >= 2) coachSay(L, `${on} a ${opp.level - myLvl} niveaux d'avance : évite le combat et farme près de ta tour.`, 'opp-lead-' + opp.level);

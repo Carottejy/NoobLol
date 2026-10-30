@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULTS = {
+  seedChecked: '',
   platform: 'euw1',
   lolPath: 'C:\\Riot Games\\League of Legends',
   apiKeyEnc: '',

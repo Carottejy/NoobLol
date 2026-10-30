@@ -14,6 +14,7 @@ const { History } = require('./history');
 const { SimServer } = require('./simulator');
 const { DamageTypes } = require('./damage');
 const statsFile = require('./statsfile');
+const { seedPath, applySeed } = require('./seed');
 
 if (!app.requestSingleInstanceLock()) { app.quit(); }
 
@@ -354,7 +355,17 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   cfg = new Config(app.getPath('userData'), safeStorage);
   api = new RiotApi({ getKey: () => cfg.getApiKey(), getPlatform: () => cfg.data.platform });
-  db = await StatsDb.open(path.join(app.getPath('userData'), 'stats.sqlite'));
+  const dbFile = path.join(app.getPath('userData'), 'stats.sqlite');
+  db = await StatsDb.open(dbFile);
+  /* Nouvelle version : remplace la base locale par les statistiques fournies si elles sont plus complètes */
+  if (cfg.data.seedChecked !== app.getVersion()) {
+    try {
+      const r = await applySeed({ db, dbFile, seedFile: seedPath(process.resourcesPath), reopen: () => StatsDb.open(dbFile) });
+      db = r.db;
+      if (r.replaced) console.log(`statistiques fournies installées : ${r.seed} lignes (avant : ${r.local})`);
+    } catch (e) { console.error('statistiques fournies', e); }
+    cfg.data.seedChecked = app.getVersion(); cfg.save();
+  }
   collector = new Collector({ api, db, getConfig: () => cfg.data });
   collector.on('status', (s) => { if (s.running) colWasRunning = true; send('collector', s); });
   keys = new KeyWatch({ cfg, api });

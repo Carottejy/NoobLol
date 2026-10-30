@@ -539,3 +539,22 @@ test('partage des statistiques : fichier .nooblolstats et fusion sans doublon', 
   assert.deepStrictEqual([again.matches, again.picks], [0, 0]);
   assert.strictEqual(b.counts().pending, 1, 'les parties en attente du destinataire sont gardées');
 });
+
+test('statistiques fournies : remplacent la base locale seulement si elle a moins de lignes', async () => {
+  const os = require('os'), fsx = require('fs'), px = require('path');
+  const { StatsDb } = require('../main/db');
+  const { applySeed } = require('../main/seed');
+  const sf = require('../main/statsfile');
+  const dir = fsx.mkdtempSync(px.join(os.tmpdir(), 'seed-'));
+  const mk = async (n) => { const d = await StatsDb.open(null); for (let i = 0; i < n; i++) d.db.run('INSERT INTO picks (match_id, champ, role, win) VALUES (?, ?, ?, 1)', ['EUW1_' + i, 1, 'mid']); return d; };
+  const big = await mk(5);
+  const seedFile = px.join(dir, 'seed.nooblolstats');
+  fsx.writeFileSync(seedFile, sf.pack(big.exportBuffer(), { picks: 5 }));
+  const dbFile = px.join(dir, 'stats.sqlite');
+  let small = await mk(2); small.file = dbFile; small.dirty = true; small.flush();
+  small = await StatsDb.open(dbFile);
+  const r = await applySeed({ db: small, dbFile, seedFile, reopen: () => StatsDb.open(dbFile) });
+  assert.equal(r.replaced, true); assert.equal(r.db.counts().picks, 5); assert.ok(fsx.existsSync(dbFile + '.avant-maj.bak'));
+  const r2 = await applySeed({ db: r.db, dbFile, seedFile, reopen: () => StatsDb.open(dbFile) });
+  assert.equal(r2.replaced, false);
+});
