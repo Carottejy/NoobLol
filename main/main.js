@@ -119,13 +119,15 @@ function setOverlay(data) {
 
 /* ---------- Encart « Ma progression » par-dessus le jeu (comme celui du build : on peut seulement le déplacer) ---------- */
 const PV_W = 230, PV_H = 168;
+const progH = (d) => 36 + 22 * Math.max(1, ((d && d.rows) || []).length);
 let progov = null, progovData = null, pvSaveT = null;
 function progBounds() {
   const o = (cfg.data.overlay || {}).prog || {};
   const onScreen = o.x != null && o.y != null && screen.getAllDisplays().some((d) => o.x + PV_W > d.bounds.x + 20 && o.x < d.bounds.x + d.bounds.width - 20 && o.y + PV_H > d.bounds.y + 20 && o.y < d.bounds.y + d.bounds.height - 20);
-  if (onScreen) return { x: Math.round(o.x), y: Math.round(o.y), width: PV_W, height: PV_H };
+  const h = progH(progovData);
+  if (onScreen) return { x: Math.round(o.x), y: Math.round(o.y), width: PV_W, height: h };
   const b = gameDisplay().bounds;
-  return { x: Math.round(b.x + 12), y: Math.round(b.y + b.height * 0.32), width: PV_W, height: PV_H };
+  return { x: Math.round(b.x + 12), y: Math.round(b.y + b.height * 0.32), width: PV_W, height: h };
 }
 function setProgOverlay(data) {
   progovData = data || null;
@@ -147,6 +149,9 @@ function setProgOverlay(data) {
     progov.on('closed', () => { progov = null; });
     return;
   }
+  /* Hauteur selon le nombre d'indicateurs affichés */
+  const hh = progH(progovData), bb = progov.getBounds();
+  if (bb.height !== hh) progov.setBounds({ x: bb.x, y: bb.y, width: PV_W, height: hh });
   progov.webContents.send('progov:data', progovData);
   if (!progov.isVisible()) { progov.showInactive(); progov.setAlwaysOnTop(true, 'screen-saver'); }
 }
