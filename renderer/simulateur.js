@@ -94,7 +94,7 @@
   }
   function gameflow() {
     const m = (p) => ({ puuid: p.puuid, championId: p.champ, gameName: p.gameName, tagLine: p.tagLine, summonerName: p.legacy, internalName: p.legacy, selectedPosition: SIM.positions ? p.role.toUpperCase() : '', spell1Id: p.spells[0], spell2Id: p.spells[1] });
-    return { gameData: { gameId: SIM.gameId, queue: { id: SIM.queue }, teamOne: SIM.players.filter((p) => p.team === 'ORDER').map(m), teamTwo: SIM.players.filter((p) => p.team === 'CHAOS').map(m) } };
+    return { gameData: { gameId: SIM.gameId, queue: { id: SIM.queue }, teamOne: shuffled(SIM.players.filter((p) => p.team === 'ORDER')).map(m), teamTwo: shuffled(SIM.players.filter((p) => p.team === 'CHAOS')).map(m) } };
   }
   /* Nom d'un joueur dans les événements du jeu, selon le format choisi */
   const evName = (p) => (SIM.nameMode === 'legacy' ? p.legacy : SIM.nameMode === 'riotid' ? `${p.gameName}#${p.tagLine}` : p.gameName);
@@ -175,6 +175,11 @@
   const levelAt = (t, off) => Math.max(1, Math.min(18, Math.floor(1 + 9 * Math.pow(Math.max(0, t) / 600, 0.75) + off)));
   const respawnFor = (lvl, t) => Math.round(6 + lvl * 2.2 + (t > 1800 ? 8 : t > 1200 ? 4 : 0));
   const byTeam = (team) => SIM.players.filter((p) => p.team === team);
+  /* Écran de chargement : top, jungle, mid, support, ADC */
+  const LOAD_ORDER = ['top', 'jungle', 'middle', 'utility', 'bottom'];
+  const byTeamLoad = (team) => byTeam(team).sort((a, b) => LOAD_ORDER.indexOf(a.role) - LOAD_ORDER.indexOf(b.role));
+  /* Le vrai client ne donne pas les joueurs dans l'ordre des rôles : on mélange pour vérifier que Noob LOL les remet en ordre */
+  const shuffled = (l) => { const k = SIM.gameId; return l.slice().sort((a, b) => ((a.cell * 7 + k) % 11) - ((b.cell * 7 + k) % 11)); };
   const alive = (team) => byTeam(team).filter((p) => SIM.game.st[p.cell].deadUntil <= SIM.game.t);
   const other = (team) => (team === 'ORDER' ? 'CHAOS' : 'ORDER');
   const jungler = (team) => byTeam(team).find((p) => p.role === 'jungle') || byTeam(team)[0];
@@ -326,7 +331,7 @@
         <span class="pname ${p.isMe ? 'me' : ''}">${esc(p.gameName)}</span>
         <div class="lbar"><i style="width:${pr}%"></i></div><span class="lpct">${pr} %</span></div>`; };
     const midY = ((o.row1 + o.cardH) * H + o.row2 * H) / 2;
-    return `<div class="lscreen">${byTeam('ORDER').map((p, i) => card(p, rows[0][i])).join('')}${byTeam('CHAOS').map((p, i) => card(p, rows[1][i])).join('')}
+    return `<div class="lscreen">${byTeamLoad('ORDER').map((p, i) => card(p, rows[0][i])).join('')}${byTeamLoad('CHAOS').map((p, i) => card(p, rows[1][i])).join('')}
       <div class="lmid" style="top:${Math.round(midY)}px">${L.done ? '<span class="ready">✅ Tout le monde est prêt.</span>' : '<button class="btn ghost sm" data-act="fillLoading">⏩ Terminer le chargement</button>'}<button class="btn hex sm" data-act="skipLoading">▶ Lancer la partie</button>
       <span class="muted">${Date.now() - L.t0 < 2000 ? 'Lancement du jeu (phase « GameStart »)' : Date.now() - L.t0 < 4000 ? 'Jeu lancé (phase « InProgress »)' : 'Jeu lancé : il répond déjà (chrono à 0)'} · F11 pour le plein écran</span></div></div>`;
   }

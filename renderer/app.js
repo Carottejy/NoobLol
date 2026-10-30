@@ -1122,12 +1122,8 @@
       if (lvl >= 6) speak('Niveau 6 : ton ultime est disponible.', 'ult-6');
       if (lvl >= 11) speak('Niveau 11 : améliore ton ultime.', 'ult-11');
       if (lvl >= 16) speak('Niveau 16 : améliore ton ultime une dernière fois.', 'ult-16');
-      /* Après un achat : balise de contrôle si tu n'en as pas (à partir de 6 min, au plus une fois toutes les 3 min) */
       const ids = meP.items.map((i) => i.id).sort().join(',');
       const value = meP.items.reduce((sum, i) => sum + (((D.items || {})[String(i.id)] || { gold: { total: 0 } }).gold.total * (i.count || 1)), 0);
-      if (R.remind && R.remind.ids !== ids && value > R.remind.value && L.time > 360 && !meP.items.some((i) => i.id === 2055) && meP.items.filter((i) => i.slot < 6).length < 6 && L.time - (R.remind.ctrlAt || 0) > 180) {
-        speak('Pense à acheter une balise de contrôle.'); R.remind.ctrlAt = L.time;
-      }
       R.remind = Object.assign(R.remind || {}, { ids, value });
       /* Support : passer à la Lentille d'oracle pour détruire les balises adverses */
       const role = liveRoles(L).get(meP.name);
@@ -1501,6 +1497,7 @@
      ou le jeu répond déjà), pas pendant le lancement où l'écran du jeu n'est pas encore affiché */
   const loadScreenShown = () => isLoading() && (!!R.live || (R.lcu.phase !== 'GameStart' && R.inProgressAt && Date.now() - R.inProgressAt >= 3000));
   function wantFull(id) { if (!id || R.full[id] || R.full[id] === null) return; R.full[id] = null; Dd.champFull(id).then((f) => { R.full[id] = f; soon(); }).catch(() => {}); }
+  const LOAD_ORDER = ['top', 'jungle', 'mid', 'support', 'adc', 'x'];
   function loadingData() {
     const g = R.lcu.game, sp = R.lcu.summoner;
     const meG = g.players.find((p) => sp && p.puuid && p.puuid === sp.puuid) || null;
@@ -1521,6 +1518,8 @@
       try { as = Builds.assignRoles(keys, D, dist || {}, fixed); } catch (e) { as = fixed; }
       t.forEach((p) => role.set(p, as[p.champ] || fixed[p.champ] || ''));
     }
+    /* Ordre de l'écran de chargement : top, jungle, mid, support, ADC (rôle inconnu : à la fin) */
+    teams.forEach((t) => t.sort((a, b) => LOAD_ORDER.indexOf(role.get(a) || 'x') - LOAD_ORDER.indexOf(role.get(b) || 'x') || 0));
     const myRole = meG ? role.get(meG) : '';
     const oppG = (R.loadOpp && teams[1].find((p) => +p.champ === +R.loadOpp)) || (myRole && teams[1].find((p) => role.get(p) === myRole)) || null;
     return { g, meG, myTeam, teams, role, myRole, oppG };
@@ -1622,6 +1621,20 @@
     (fromStats && A.later ? A.later.map((x) => x.item) : CORE[K.kind].map(okItem)).forEach((id) => { if (id && next.length < 5 && !core.includes(id) && !next.includes(id)) next.push(id); });
     return { c, role, oc, K, fromStats, games: fromStats ? A.games : 0, adapted: fromStats && A.adapted, start, core: core.slice(0, 3), boots, next: next.slice(0, 5), recos };
   }
+  /* Build tourné vers TOUTE l'équipe adverse : les objets qui la contrent passent dans les principaux */
+  const RECO_PRIO = { heal: 0, burst: 1, mr: 2, armor: 2, pen: 3 };
+  function teamBuild(ld, b) {
+    if (!b || b.loading || !b.c) return null;
+    const recos = b.recos.slice().sort((x, y) => (RECO_PRIO[x.id] ?? 5) - (RECO_PRIO[y.id] ?? 5));
+    const core = b.core.slice(0, 1), used = [];
+    for (const r of recos) { if (core.length >= 3) break; const id = r.items.find((x) => !core.includes(x)); if (id) { core.push(id); used.push(r); } }
+    b.core.forEach((id) => { if (core.length < 3 && !core.includes(id)) core.push(id); });
+    const next = [];
+    b.core.concat(...recos.map((r) => r.items), b.next).forEach((id) => { if (id && next.length < 5 && !core.includes(id) && !next.includes(id)) next.push(id); });
+    const boots = bootsFor(b.c, b.role, ld);
+    const same = core.join() === b.core.join() && boots === b.boots;
+    return { c: b.c, role: b.role, start: b.start.slice(), core, boots, next, why: used, same };
+  }
   /* Conseils pour mon match-up : texte + objets (images) */
   function matchupTips(ld, b) {
     const c = b && b.c, oc = b && b.oc;
@@ -1694,7 +1707,21 @@
         ${b.next.length ? `<div class="brow"><span class="small muted">Ensuite</span><div class="bis">${b.next.map(ic).join('')}</div></div>` : ''}
         ${b.recos.map((x) => `<div class="brow sub"><span></span><div class="bis small muted">↳ ${x.items.map((id) => itIcon(id, 'ico xxs')).join('')} ${esc(x.text)}</div></div>`).join('')}
         </div>
-        <div class="row" style="margin-top:8px">${following ? '<span class="pill on">✅ Suivi dans l\'encart en jeu</span><button class="btn ghost small" data-act="unfollowGameBuild">Ne plus suivre</button>' : `<button class="btn small" data-act="followGameBuild">⭐ Suivre ce build dans l'encart en jeu</button>`}</div></div>`;
+        <div class="row" style="margin-top:8px">${following && S.gameBuild.kind !== 'team' ? '<span class="pill on">✅ Suivi dans l\'encart en jeu</span><button class="btn ghost small" data-act="unfollowGameBuild">Ne plus suivre</button>' : `<button class="btn small" data-act="followGameBuild">⭐ Suivre ce build dans l'encart en jeu</button>`}</div></div>`;
+      const tb = teamBuild(ld, b);
+      R.loadTeamBuildCur = tb;
+      if (tb) {
+        const en = ld.teams[1].map((p) => byKey(p.champ)).filter(Boolean);
+        h += `<div class="card"><div class="row sp nw"><h2 style="margin:0">🛡️ Build contre toute l'équipe adverse</h2></div>
+        <p class="small muted">Tourné vers les ${en.length} adversaires (${esc(en.map((x) => x.name).join(', '))}) plutôt que vers ton seul adversaire de voie : les objets qui les contrent passent en priorité.</p>
+        ${tb.same ? '<p class="small">Rien de particulier à contrer dans leur composition : le build conseillé ci-dessus convient aussi contre toute l\'équipe.</p>' : `<div class="mybuild compact" style="border:0;padding:0;background:none">
+        <div class="brow"><span class="small muted">Départ</span><div class="bis">${tb.start.map(ic).join('')}</div></div>
+        <div class="brow"><span class="small muted">Principaux</span><div class="bis">${tb.core.map(ic).join('<span class="arrow">›</span>')}${tb.boots ? `<span class="rsep"></span>${ic(tb.boots)}` : ''}</div></div>
+        ${tb.next.length ? `<div class="brow"><span class="small muted">Ensuite</span><div class="bis">${tb.next.map(ic).join('')}</div></div>` : ''}
+        ${tb.why.map((x) => `<div class="brow sub"><span></span><div class="bis small muted">↳ ${x.items.map((id) => itIcon(id, 'ico xxs')).join('')} ${esc(x.text)}</div></div>`).join('')}
+        </div>
+        <div class="row" style="margin-top:8px">${following && S.gameBuild.kind === 'team' ? '<span class="pill on">✅ Suivi dans l\'encart en jeu</span><button class="btn ghost small" data-act="unfollowGameBuild">Ne plus suivre</button>' : `<button class="btn small" data-act="followGameBuild" data-val="team">⭐ Suivre ce build dans l'encart en jeu</button>`}</div>`}</div>`;
+      }
     }
     h += '</div><div>';
     const mt = matchupTips(ld, b);
@@ -2170,7 +2197,7 @@
       <div class="row" style="margin-top:8px"><span class="small muted">Vitesse</span>${[0.9, 1.05, 1.25].map((r) => `<button class="chip ${S.opt.voiceRate === r ? 'on' : ''}" data-act="voiceRate" data-val="${r}">${r < 1 ? 'Lente' : r > 1.1 ? 'Rapide' : 'Normale'}</button>`).join('')}
       <span class="small muted">Volume</span>${[50, 75, 100].map((r) => `<button class="chip ${S.opt.voiceVol === r ? 'on' : ''}" data-act="voiceVol" data-val="${r}">${r} %</button>`).join('')}</div>
       <p class="small muted" style="margin:10px 0 4px">Coaching en direct (annoncé et noté dans le journal) :</p><div class="chips">${COACH.map(([k, l]) => `<button class="chip ${coachOn(k) ? 'on' : ''}" data-act="coachToggle" data-val="${k}">${l}</button>`).join('')}</div>
-      <div class="chips" style="margin-top:8px"><button class="chip ${S.opt.reminders !== false ? 'on' : ''}" data-act="remToggle">💡 Rappels : ultime (niveaux 6, 11, 16), balise de contrôle après un achat, Lentille d'oracle pour les supports</button></div>
+      <div class="chips" style="margin-top:8px"><button class="chip ${S.opt.reminders !== false ? 'on' : ''}" data-act="remToggle">💡 Rappels : ultime (niveaux 6, 11, 16), Lentille d'oracle pour les supports</button></div>
       ${!vs.length ? '<p class="small warn">Aucune voix française trouvée : ajoute-en une dans Windows (Paramètres → Heure et langue → Voix).</p>' : ''}</div>`;
   }
   /* Réglage fin de l'encart de chargement : caler les infos sur les cartes du jeu */
@@ -2427,8 +2454,8 @@
       case 'targetTier': S.targetTier = v; save(); render(true); break;
       case 'goalStep': { const G0 = ((R.hist && R.hist.games) || []).filter((g) => !S.progRole || MATCH_ROLE[g.role] === S.progRole); const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goals[g.rk] = { metric: g.metric, target: t, custom: true }; save(); render(true); break; }
       case 'loadOpp': R.loadOpp = +v; render(true); break;
-      case 'followGameBuild': { const b = R.loadBuildCur, g = R.lcu.game; if (!b || !g) break;
-        S.gameBuild = { gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: b.next.slice() } };
+      case 'followGameBuild': { const team = v === 'team', b = team ? R.loadTeamBuildCur : R.loadBuildCur, g = R.lcu.game; if (!b || !g) break;
+        S.gameBuild = { kind: team ? 'team' : 'matchup', gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: team ? 'Conseillé vs équipe' : `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: b.next.slice() } };
         save(); R.ovKey = ''; toast('⭐ Ce build sera suivi dans l\'encart en jeu'); render(true); break; }
       case 'unfollowGameBuild': S.gameBuild = null; save(); R.ovKey = ''; render(true); break;
       case 'statsExport': NB.stats.exportFile().then((r) => { if (r) toast(`📤 ${nf(r.matches)} parties exportées (${(r.size / 1048576).toFixed(1).replace('.', ',')} Mo) : ${r.path.split(/[\\/]/).pop()}`); }).catch((e) => toast('❌ ' + e.message)); break;

@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.9.0';
+var APP_VERSION = '3.10.0';
 var APP_RELEASES = [
+  { v: '3.10.0', date: '2026-10-30', notes: [
+    'Écran de chargement : les incrustations sont toujours dans l\'ordre top, jungle, mid, support, ADC (le client ne donne pas toujours les joueurs dans cet ordre). Même ordre dans l\'appli.',
+    'Chargement : nouveau « Build contre toute l\'équipe adverse », en plus du build pour ton match-up. Les objets qui contrent leur composition (anti-soins, anti-burst, résistances, pénétration) passent dans les principaux, et les bottes suivent leurs dégâts. Il peut être suivi dans l\'encart en jeu.',
+    'Annonces vocales : plus de rappel pour acheter une balise de contrôle.',
+  ]},
   { v: '3.9.0', date: '2026-10-30', notes: [
     'Annonces vocales : plus d\'annonce sur ton adversaire de voie (avance de niveau, objets terminés) après 15 minutes de jeu.',
     'Statistiques fournies avec l\'appli (51 640 parties, 506 634 lignes, patchs 16.20 et 16.21) : à la première ouverture de cette version, si ta base contient moins de lignes, elle est remplacée par celle-ci. L\'ancienne est gardée à côté (stats.sqlite.avant-maj.bak).',
