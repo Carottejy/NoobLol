@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.11.2';
+var APP_VERSION = '3.11.3';
 var APP_RELEASES = [
+  { v: '3.11.3', date: '2026-10-30', notes: [
+    'Encart « Ma progression » : des symboles à la place des textes (sbire pour le CS/min, pièce d\'or pour l\'or, œil pour la vision, poignée de main pour la participation, crâne pour les morts, épées pour le KDA) et une largeur réduite à celle d\'une mini-carte (280 pixels).',
+  ]},
   { v: '3.11.2', date: '2026-10-30', notes: [
     'Encart « Ma progression » : CS/min à la place du nombre de sbires, et encart deux fois plus grand (texte doublé).',
   ]},

@@ -1297,14 +1297,14 @@
     const rows = [];
     const off = S.opt.pvOff || {}, on = (k) => !off[k];
     const up = (label, cur, target, fmt) => { if (target == null || !(target > 0)) return; const pct = cur / target; rows.push({ label, cur: fmt(cur), target: fmt(target), pct, st: st(pct) }); };
-    const csm = on('cs') && B('csm'); if (csm) up('CS/min', meP.cs / m, csm, f1);
-    const gpm = on('gold') && B('gpm'); if (gpm) up('Or gagné', goldOf(meP, L).v, Math.max(500, Math.round(gpm * m)), k1g);
-    const vis = on('vision') && B('vision'); if (vis) up('Vision', meP.ward || 0, Math.max(1, Math.round(vis * m)), (v) => String(Math.round(v)));
+    const csm = on('cs') && B('csm'); if (csm) up('cs', meP.cs / m, csm, f1);
+    const gpm = on('gold') && B('gpm'); if (gpm) up('gold', goldOf(meP, L).v, Math.max(500, Math.round(gpm * m)), k1g);
+    const vis = on('vision') && B('vision'); if (vis) up('vision', meP.ward || 0, Math.max(1, Math.round(vis * m)), (v) => String(Math.round(v)));
     const kills = L.players.filter((p) => p.team === meP.team).reduce((t, p) => t + p.k, 0), kp = on('kp') && B('kp');
-    if (kp && kills >= 3) up('Participation', (meP.k + meP.a) / kills, kp, (v) => Math.round(v * 100) + ' %');
+    if (kp && kills >= 3) up('kp', (meP.k + meP.a) / kills, kp, (v) => Math.round(v * 100) + ' %');
     const dl = on('deaths') && B('deaths');
-    if (dl) { const max = Math.max(1, Math.round((dl * m) / 30)); const pct = meP.d ? max / meP.d : 1.2; rows.push({ label: 'Morts', cur: String(meP.d), target: 'max ' + max, pct: Math.min(1.2, pct), st: meP.d <= max ? 'ok' : meP.d === max + 1 ? 'mid' : 'ko' }); }
-    const kda = on('kda') && B('kda'); if (kda && (meP.k + meP.a + meP.d) > 0) up('KDA', (meP.k + meP.a) / Math.max(1, meP.d), kda, f1);
+    if (dl) { const max = Math.max(1, Math.round((dl * m) / 30)); const pct = meP.d ? max / meP.d : 1.2; rows.push({ label: 'deaths', cur: String(meP.d), target: 'max ' + max, pct: Math.min(1.2, pct), st: meP.d <= max ? 'ok' : meP.d === max + 1 ? 'mid' : 'ko' }); }
+    const kda = on('kda') && B('kda'); if (kda && (meP.k + meP.a + meP.d) > 0) up('kda', (meP.k + meP.a) / Math.max(1, meP.d), kda, f1);
     return rows.length ? { tier: TIER[tier] || tier, role: role ? ROLE_NAME[role] : '', rows } : null;
   }
   const PV_IND = [['cs', 'CS/min'], ['gold', 'Or gagné'], ['vision', 'Score de vision'], ['kp', 'Participation aux kills'], ['deaths', 'Morts'], ['kda', 'KDA']];

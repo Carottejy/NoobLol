@@ -118,7 +118,7 @@ function setOverlay(data) {
 }
 
 /* ---------- Encart « Ma progression » par-dessus le jeu (comme celui du build : on peut seulement le déplacer) ---------- */
-const PV_W = 440, PV_H = 330;
+const PV_W = 280, PV_H = 330;
 const progH = (d) => 66 + 44 * Math.max(1, ((d && d.rows) || []).length);
 let progov = null, progovData = null, pvSaveT = null;
 function progBounds() {
