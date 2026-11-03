@@ -1091,7 +1091,11 @@
   /* ---------- Annonces vocales (synthèse vocale du système, en français) ---------- */
   const Voice = { said: new Set() };
   function frVoices() { try { return window.speechSynthesis.getVoices().filter((v) => /^fr/i.test(v.lang)); } catch (e) { return []; } }
+  /* Les annonces vocales ne lisent pas les scores (ex. « 2/0/1 ») : on les retire du texte prononcé */
+  const noScores = (t) => String(t || '').replace(/\s*\(\s*\d+\s*\/\s*\d+\s*\/\s*\d+\s*\)/g, '').replace(/\s+en\s+\d+\s*\/\s*\d+\s*\/\s*\d+/g, '').replace(/\s*\d+\s*\/\s*\d+\s*\/\s*\d+/g, '')
+    .replace(/\(\s*[,;]?\s*\)/g, '').replace(/\(\s*,\s*/g, '(').replace(/\s+([,.:;)])/g, '$1').replace(/\s{2,}/g, ' ').trim();
   function speak(text, key) {
+    text = noScores(text);
     if (!S.opt.voice || !window.speechSynthesis) return;
     if (key) { if (Voice.said.has(key)) return; Voice.said.add(key); }
     try {
