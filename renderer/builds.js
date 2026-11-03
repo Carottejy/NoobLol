@@ -53,7 +53,7 @@ var Builds = (() => {
     return ['1', '2', '3'].sort((a, b) => n[b] - n[a] || firstAt(a) - firstAt(b)).map((k) => SKILL[k]).join(' > ');
   }
 
-  function analyze(rows, D, { opp = 0, enemies = [] } = {}) {
+  function analyze(rows, D, { opp = 0, enemies = [], duo = 0 } = {}) {
     const res = { games: rows.length, wins: rows.filter((r) => r.win).length };
     if (!rows.length) return res;
     const vs = opp ? rows.filter((r) => r.opp === opp) : [];
@@ -63,7 +63,8 @@ var Builds = (() => {
     res.team = cur;
 
     /* Poids d'une partie analysée : adversaire de voie identique (×4) et équipe adverse qui ressemble à l'actuelle */
-    const W = (r) => (opp && r.opp === opp ? 4 : 1) * (0.25 + similarity(r, cur, enemies, D));
+    /* duo : l'ADC adverse quand je joue support (les parties face au même ADC comptent double) */
+    const W = (r) => (opp && r.opp === opp ? 4 : 1) * (duo && ids(r.enemies).includes(duo) ? 2 : 1) * (0.25 + similarity(r, cur, enemies, D));
     res.adapted = !!(opp || cur);
     /* Runes : parmi les parties contre l'adversaire si possible, classées selon la composition adverse */
     const runeRows = useVs ? vs : rows;

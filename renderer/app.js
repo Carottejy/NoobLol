@@ -1597,6 +1597,50 @@
     pen: { ap: [3135, 4645], marksman: [3036, 6694], assassin: [6694, 3036], fighter: [3071, 6694], tank: [], enchanter: [3135] },
     burst: { ap: [3157, 3102], marksman: [3026, 3139], assassin: [3026, 3156], fighter: [3053, 6333], tank: [], enchanter: [3190] },
   };
+  /* ---------- Support : la voie du bas entière (support et ADC adverses, et mon ADC) ---------- */
+  const BOT = {
+    engage: new Set(['Leona', 'Nautilus', 'Alistar', 'Thresh', 'Rell', 'Blitzcrank', 'Rakan', 'Pyke', 'Maokai', 'TahmKench', 'Poppy', 'Amumu', 'Braum']),
+    poke: new Set(['Lux', 'Xerath', 'Zyra', 'Brand', 'Velkoz', 'Karma', 'Seraphine', 'Zilean', 'Hwei', 'Swain', 'Neeko', 'Morgana']),
+    sustain: new Set(['Soraka', 'Yuumi', 'Sona', 'Nami', 'Milio', 'Seraphine', 'Renata', 'Senna', 'Samira', 'Aphelios', 'Vladimir', 'Swain']),
+    aggro: new Set(['Samira', 'Draven', 'Lucian', 'Tristana', 'Kalista', 'Nilah', 'Kaisa', 'Caitlyn', 'Ezreal', 'Varus', 'MissFortune']),
+    attackSpeed: new Set(['Jinx', 'KogMaw', 'Twitch', 'Vayne', 'Kaisa', 'Zeri', 'Xayah', 'Tristana', 'Sivir', 'Ashe', 'Kalista', 'Nilah', 'Aphelios', 'Varus', 'Draven', 'Smolder', 'Corki']),
+    immobile: new Set(['Jinx', 'KogMaw', 'Aphelios', 'Ashe', 'Varus', 'Jhin', 'MissFortune', 'Senna', 'Smolder', 'Sivir', 'Ziggs', 'Yunara']),
+  };
+  /* Évolutions de l'objet de support (quête) : proposées selon mon ADC et mon style */
+  const QUEST = { attack: 3877, tank: 3876, enchanter: 3870, heal: 3871, ap: 3869 };
+  const hasItem = (id) => !!(D.items && D.items[String(id)]);
+  function botLane(ld) {
+    if (ld.myRole !== 'support') return null;
+    const role = (p) => ld.role.get(p);
+    const eAdcG = ld.teams[1].find((p) => role(p) === 'adc'), eSupG = ld.oppG || ld.teams[1].find((p) => role(p) === 'support');
+    const mAdcG = ld.teams[0].find((p) => role(p) === 'adc' && p !== ld.meG);
+    const eAdc = eAdcG ? byKey(eAdcG.champ) : null, eSup = eSupG ? byKey(eSupG.champ) : null, mAdc = mAdcG ? byKey(mAdcG.champ) : null;
+    return eAdc || eSup || mAdc ? { eAdc, eSup, mAdc } : null;
+  }
+  function botRecos(bl, c, role) {
+    if (!bl) return [];
+    const K = myKit(c, role), out = [];
+    const add = (id, text, ids, score) => { const items = [...new Set(ids.map((x) => okItem(x) || (hasItem(x) ? +x : 0)).filter(Boolean))].slice(0, 2); if (items.length) out.push({ id, text, items, score, bot: true }); };
+    const { eAdc, eSup, mAdc } = bl;
+    const duo = [eAdc, eSup].filter(Boolean);
+    const n = (x) => x.name;
+    if (eSup && BOT.engage.has(eSup.id)) add('bot-engage', `${n(eSup)} engage sur ton ADC : de quoi le délivrer ou le protéger`, K.kind === 'tank' ? [3190, 3109, 3111] : [3222, 3190, 3111], 0.9);
+    if (eSup && BOT.poke.has(eSup.id)) add('bot-poke', `${n(eSup)} harcèle de loin : des soins et boucliers pour tenir la voie`, K.kind === 'tank' ? [3190, 3107] : [6617, 3107], 0.7);
+    const heal = duo.filter((x) => BOT.sustain.has(x.id));
+    if (heal.length) add('bot-heal', `Ils se soignent dans la voie du bas (${heal.map(n).join(', ')}) : un objet anti-soins`, DEF.heal[K.kind], 0.75);
+    if (eAdc && BOT.aggro.has(eAdc.id)) add('bot-aggro', `${n(eAdc)} est très agressif en voie : protège ton ADC des combats précoces`, K.kind === 'tank' ? [3109, 3190] : K.kind === 'ap' ? [3157] : [3190, 3109], 0.6);
+    const duoAd = duo.length ? duo.map(champAd).reduce((a, b) => a + b, 0) / duo.length : 0.5;
+    if (duo.length === 2 && duoAd >= 0.75) add('bot-armor', `Duo adverse physique (${duo.map(n).join(' + ')}) : de l'armure`, DEF.armor[K.kind], 0.5);
+    else if (duo.length === 2 && duoAd <= 0.3) add('bot-mr', `Duo adverse magique (${duo.map(n).join(' + ')}) : de la résistance magique`, DEF.mr[K.kind], 0.5);
+    if (mAdc) {
+      if (BOT.attackSpeed.has(mAdc.id) && K.kind === 'enchanter') add('ally-as', `${n(mAdc)} frappe vite : l'Encensoir ardent renforce ses attaques`, [3504], 0.65);
+      if (BOT.immobile.has(mAdc.id)) add('ally-peel', `${n(mAdc)} n'a pas de fuite : de quoi le protéger`, K.kind === 'tank' ? [3109, 3190] : K.kind === 'ap' ? [3165] : [3222, 3107], 0.55);
+      /* Évolution de la quête de l'objet de support */
+      const q = BOT.attackSpeed.has(mAdc.id) ? QUEST.attack : K.kind === 'tank' ? QUEST.tank : K.kind === 'ap' ? QUEST.ap : BOT.immobile.has(mAdc.id) ? QUEST.heal : QUEST.enchanter;
+      if (hasItem(q)) add('quest', `Évolution de ton objet de support conseillée avec ${n(mAdc)}`, [q], 0.3);
+    }
+    return out.sort((a, b) => b.score - a.score);
+  }
   function teamRecos(ld, c, role) {
     const en = ld.teams[1].map((p) => byKey(p.champ)).filter(Boolean);
     if (!en.length || !c) return [];
@@ -1641,12 +1685,14 @@
     if (rows === undefined) return { c, role, oc, loading: true };
     let A = null;
     if (rows && rows.length) {
-      const mk = `load:${c.key}:${role}:${oc ? oc.key : 0}:${enemyKeys.join(',')}:${rows.length}`;
-      if (R.loadMemo && R.loadMemo.k === mk) A = R.loadMemo.A; else { A = Builds.analyze(rows, D, { opp: oc ? +oc.key : 0, enemies: enemyKeys }); R.loadMemo = { k: mk, A }; }
+      const bl0 = botLane(ld), duo = bl0 && bl0.eAdc ? +bl0.eAdc.key : 0;
+      const mk = `load:${c.key}:${role}:${oc ? oc.key : 0}:${duo}:${enemyKeys.join(',')}:${rows.length}`;
+      if (R.loadMemo && R.loadMemo.k === mk) A = R.loadMemo.A; else { A = Builds.analyze(rows, D, { opp: oc ? +oc.key : 0, enemies: enemyKeys, duo }); R.loadMemo = { k: mk, A }; }
     }
     const fromStats = !!(A && A.games);
     const K = myKit(c, role);
-    const recos = teamRecos(ld, c, role);
+    const bl = botLane(ld);
+    const recos = botRecos(bl, c, role).concat(teamRecos(ld, c, role));
     /* Statistiques : objets adaptés à l'équipe adverse trouvés dans les parties des bons joueurs, ajoutés aux recommandations */
     if (fromStats) (A.situational || []).forEach((x) => { const r = recos.find((y) => y.id === x.id); const ids = x.items.map((o) => o.item).filter(okItem); if (r) r.items = [...new Set(ids.concat(r.items))].slice(0, 2); else if (ids.length) recos.push({ id: x.id, text: x.why, items: ids.slice(0, 2) }); });
     const start = fromStats && A.start && A.start[0] ? A.start[0].items : startFor(c, role, oc);
@@ -1654,12 +1700,16 @@
     if (fromStats && A.later) A.later.forEach((x) => { if (core.length < 3 && !core.includes(x.item)) core.push(x.item); });
     if (core.length < 3) CORE[K.kind].map(okItem).filter(Boolean).forEach((id) => { if (core.length < 3 && !core.includes(id)) core.push(id); });
     if (core.length < 3) legOf((it) => (it.tags || []).includes(K.tag)).forEach((it) => { if (core.length < 3 && !core.includes(+it.id)) core.push(+it.id); });
-    const boots = fromStats && A.boots && A.boots[0] ? A.boots[0].item : bootsFor(c, role, ld);
+    /* Support : l'objet le plus utile pour la voie du bas passe dans les principaux (2e position) */
+    const topBot = recos.find((r) => r.bot && r.id !== 'quest' && r.score >= 0.6);
+    if (topBot) { const id = topBot.items.find((x) => !core.includes(x)); if (id) { core.splice(1, 0, id); core = core.filter((x, i) => core.indexOf(x) === i); } }
+    let boots = fromStats && A.boots && A.boots[0] ? A.boots[0].item : bootsFor(c, role, ld);
+    if (bl && bl.eSup && BOT.engage.has(bl.eSup.id) && okItem(3111) && K.kind !== 'enchanter') boots = 3111;
     /* Objets suivants : d'abord ceux qui répondent à l'équipe adverse, puis la suite habituelle */
     const next = [];
     recos.forEach((r) => r.items.forEach((id) => { if (!core.includes(id) && !next.includes(id)) next.push(id); }));
     (fromStats && A.later ? A.later.map((x) => x.item) : CORE[K.kind].map(okItem)).forEach((id) => { if (id && next.length < 5 && !core.includes(id) && !next.includes(id)) next.push(id); });
-    return { c, role, oc, K, fromStats, games: fromStats ? A.games : 0, adapted: fromStats && A.adapted, start, core: core.slice(0, 3), boots, next: next.slice(0, 5), recos };
+    return { c, role, oc, K, bl, fromStats, games: fromStats ? A.games : 0, adapted: fromStats && A.adapted, start, core: core.slice(0, 3), boots, next: next.slice(0, 5), recos };
   }
   /* Build tourné vers TOUTE l'équipe adverse : les objets qui la contrent passent dans les principaux */
   const RECO_PRIO = { heal: 0, burst: 1, mr: 2, armor: 2, pen: 3 };
@@ -1729,6 +1779,12 @@
     wantFull(oc.id); wantFull(c.id);
     const fo = R.full[oc.id], tips = [], K = b.K || myKit(c, b.role);
     const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
+    /* Support : toute la voie du bas (leur duo et ton ADC) */
+    if (b.bl) {
+      const { eAdc, eSup, mAdc } = b.bl;
+      T(`Voie du bas : toi${mAdc ? ` + ${mAdc.name}` : ''} contre ${[eAdc, eSup].filter(Boolean).map((x) => x.name).join(' + ') || '?'}.`);
+      (b.recos || []).filter((r) => r.bot).forEach((r) => T(`${r.text} : ${r.items.map(itemNm).join(' ou ')}.`, r.items));
+    }
     const rc = c.stats.attackrange || 0, ro = oc.stats.attackrange || 0;
     if (rc - ro >= 150) T(`Tu as plus de portée (${rc} contre ${ro}) : touche-le avec tes attaques quand il s'approche de tes sbires pour les achever.`);
     else if (ro - rc >= 150) T(`Il a plus de portée (${ro} contre ${rc}) : échange seulement quand tes sorts sont prêts, et accepte de perdre quelques sbires plutôt que ta vie.${startFor(c, b.role, oc).includes(1054) ? ` L'${itemNm(1054)} t'aide à tenir la voie.` : ''}`, startFor(c, b.role, oc).includes(1054) ? [1054] : []);
@@ -1757,8 +1813,8 @@
     const names = (l) => l.map((x) => x.c.name).join(', ');
     const tips = [];
     const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
-    (b && b.recos ? b.recos : []).forEach((r) => T(`${r.text} : ${r.items.map(itemNm).join(' ou ')}.`, r.items));
-    if (!(b && b.recos && b.recos.some((r) => r.id === 'mr' || r.id === 'armor'))) T('Dégâts mixtes en face : équilibre armure et résistance magique.');
+    (b && b.recos ? b.recos : []).filter((r) => !r.bot).forEach((r) => T(`${r.text} : ${r.items.map(itemNm).join(' ou ')}.`, r.items));
+    if (!(b && b.recos && b.recos.some((r) => !r.bot && (r.id === 'mr' || r.id === 'armor')))) T('Dégâts mixtes en face : équilibre armure et résistance magique.');
     const engage = en.filter((x) => x.c.tags.includes('Tank') && (x.c.tags.includes('Support') || x.c.tags.includes('Fighter')));
     if (engage.length) T(`Ils peuvent engager fort (${names(engage)}) : reste derrière tes tanks en combat et garde Saut éclair pour te dégager.`);
     const poke = en.filter((x) => (x.c.stats.attackrange || 0) >= 500 && (x.c.tags.includes('Mage') || x.c.tags.includes('Marksman')));
@@ -1787,6 +1843,16 @@
     [/^D'après le collecteur : .*? gagne (\d+) % .*?\((\d+) parties/, (m) => `📊 ${m[1]} % de victoires dans ce match-up (${m[2]} parties)`],
     [/^Ton adversaire est en forme : (\d+) victoires sur ses (\d+)/, (m) => `🔥 Il est en forme : ${m[1]}/${m[2]} victoires`],
     [/^Ton adversaire est en difficulté : seulement (\d+) victoires sur ses (\d+)/, (m) => `🧊 Il est en difficulté : ${m[1]}/${m[2]}`],
+    [/^Voie du bas : (.+?)\.?$/, (m) => `👥 ${m[1]}`],
+    [/^(.+?) engage sur ton ADC/, (m) => `🚨 ${m[1]} engage : protège/délivre ton ADC`],
+    [/^(.+?) harcèle de loin/, (m) => `🎯 ${m[1]} harcèle : soins et boucliers`],
+    [/^Ils se soignent dans la voie du bas \((.+?)\)/, (m) => `💊 Anti-soins (${m[1]})`],
+    [/^(.+?) est très agressif en voie/, (m) => `⚔️ ${m[1]} agressif : protège ton ADC tôt`],
+    [/^Duo adverse physique/, () => '🛡️ Duo physique : armure'],
+    [/^Duo adverse magique/, () => '🔮 Duo magique : résistance magique'],
+    [/^(.+?) frappe vite/, (m) => `⚡ ${m[1]} frappe vite : Encensoir`],
+    [/^(.+?) n'a pas de fuite/, (m) => `🧷 ${m[1]} sans fuite : protège-le`],
+    [/^Évolution de ton objet de support conseillée avec (.+?)$/, (m) => `🗺️ Évolution de l'objet de support (avec ${m[1]})`],
     [/^Soins importants en face \((.+?)\)/, (m) => `💊 Anti-soins (${m[1]})`],
     [/^Équipe surtout magique \((\d+) % AP\)/, (m) => `🔮 ${m[1]} % AP : résistance magique`],
     [/^Équipe surtout physique \((\d+) % AD\)/, (m) => `🛡️ ${m[1]} % AD : armure`],
@@ -1816,8 +1882,8 @@
     else if (b.loading) h += '<div class="card"><div class="loader small">Calcul du build…</div></div>';
     else {
       const following = S.gameBuild && S.gameBuild.gameId === ld.g.gameId && S.gameBuild.champ === b.c.id;
-      h += `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">🛒 Build conseillé · ${esc(b.c.name)}${b.oc ? ' vs ' + esc(b.oc.name) : ''}</h2></div>
-        <p class="small muted">${b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
+      h += `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">🛒 Build conseillé · ${esc(b.c.name)}${b.bl ? ` vs ${esc([b.bl.eSup, b.bl.eAdc].filter(Boolean).map((x) => x.name).join(' + '))}${b.bl.mAdc ? ` · avec ${esc(b.bl.mAdc.name)}` : ''}` : b.oc ? ' vs ' + esc(b.oc.name) : ''}</h2></div>
+        <p class="small muted">${b.bl ? `Pensé pour toute la voie du bas : leur support${b.bl.eAdc ? ` et leur ADC (${esc(b.bl.eAdc.name)})` : ''}${b.bl.mAdc ? `, et ton ADC (${esc(b.bl.mAdc.name)})` : ''}. ` : ''}${b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
         <div class="mybuild compact" style="border:0;padding:0;background:none">
         <div class="brow"><span class="small muted">Départ</span><div class="bis">${b.start.map(ic).join('')}</div></div>
         <div class="brow"><span class="small muted">Principaux</span><div class="bis">${b.core.map(ic).join('<span class="arrow">›</span>')}${b.boots ? `<span class="rsep"></span>${ic(b.boots)}` : ''}</div></div>
@@ -1991,7 +2057,7 @@
       const g = R.lcu.game, f = S.gameBuild && g && S.gameBuild.gameId === g.gameId && S.gameBuild.champ === b.c.id ? (S.gameBuild.kind || 'matchup') : '';
       const ic = (id) => (id ? `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico xs')}</button>` : '');
       const line = (lab, tip, x, kind) => `<div class="bline"><span class="blab" title="${esc(tip)}">${lab}</span><div class="bis">${x.core.map(ic).join('<span class="arrow">›</span>')}${x.boots ? `<span class="rsep"></span>${ic(x.boots)}` : ''}<span class="rsep"></span>${x.next.slice(0, 3).map(ic).join('')}</div>${f === kind ? '<button class="chip on xs" data-act="unfollowGameBuild" title="Suivi dans l\'encart en jeu (clic : ne plus suivre)">✅</button>' : `<button class="chip xs" data-act="followGameBuild" data-val="${kind === 'team' ? 'team' : ''}" title="Suivre ce build dans l'encart en jeu">⭐</button>`}</div>`;
-      builds = `<div class="card tipscard"><h2>🛒 Builds conseillés</h2>${line('🎯', `Contre ${b.oc ? b.oc.name : 'ton adversaire de voie'}`, b, 'matchup')}${tb && !tb.same ? line('🛡️', 'Contre toute l\'équipe adverse', tb, 'team') : ''}<p class="small muted" style="margin:3px 0 0">🎯 match-up${b.oc ? ' vs ' + esc(b.oc.name) : ''}${tb && !tb.same ? ' · 🛡️ toute l\'équipe' : ''} · principaux › bottes | ensuite</p></div>`;
+      builds = `<div class="card tipscard"><h2>🛒 Builds conseillés</h2>${line('🎯', b.bl ? `Voie du bas : contre ${[b.bl.eSup, b.bl.eAdc].filter(Boolean).map((x) => x.name).join(' + ')}${b.bl.mAdc ? `, avec ${b.bl.mAdc.name}` : ''}` : `Contre ${b.oc ? b.oc.name : 'ton adversaire de voie'}`, b, 'matchup')}${tb && !tb.same ? line('🛡️', 'Contre toute l\'équipe adverse', tb, 'team') : ''}<p class="small muted" style="margin:3px 0 0">🎯 match-up${b.oc ? ' vs ' + esc(b.oc.name) : ''}${tb && !tb.same ? ' · 🛡️ toute l\'équipe' : ''} · principaux › bottes | ensuite</p></div>`;
     }
     return `<div class="card tipscard gold"><h2>⚡ Achats adaptés</h2>${threats}${adapt}</div>${builds}
       <div class="card tipscard"><h2>🎯 Match-up${b && b.oc ? ` vs ${esc(b.oc.name)}` : ''}</h2>${mt.length ? `<ul class="tips short">${mt.map(tipShortLi).join('')}</ul>` : '<p class="muted small">Adversaire de voie inconnu.</p>'}</div>
@@ -2598,7 +2664,7 @@
       case 'goalStep': { const G0 = ((R.hist && R.hist.games) || []).filter((g) => !S.progRole || MATCH_ROLE[g.role] === S.progRole); const g = currentGoal(G0); const t = Math.max(g.M.step, Math.round((g.target + (+v) * g.M.step) * 100) / 100); S.goals[g.rk] = { metric: g.metric, target: t, custom: true }; save(); render(true); break; }
       case 'loadOpp': R.loadOpp = +v; render(true); break;
       case 'followGameBuild': { const team = v === 'team', b = team ? R.loadTeamBuildCur : R.loadBuildCur, g = R.lcu.game; if (!b || !g) break;
-        S.gameBuild = { kind: team ? 'team' : 'matchup', gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: team ? 'Conseillé vs équipe' : `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: b.next.slice() } };
+        S.gameBuild = { kind: team ? 'team' : 'matchup', gameId: g.gameId, champ: b.c.id, build: { id: 'game-' + g.gameId, name: team ? 'Conseillé vs équipe' : b.bl ? `Conseillé vs ${[b.bl.eSup, b.bl.eAdc].filter(Boolean).map((x) => x.name).join(' + ')}` : `Conseillé${b.oc ? ' vs ' + b.oc.name : ''}`, champ: b.c.id, roles: b.role ? [b.role] : [], start: b.start.slice(), core: b.core.slice(), boots: b.boots || 0, situational: b.next.slice() } };
         save(); R.ovKey = ''; toast('⭐ Ce build sera suivi dans l\'encart en jeu'); render(true); break; }
       case 'unfollowGameBuild': S.gameBuild = null; save(); R.ovKey = ''; render(true); break;
       case 'statsExport': NB.stats.exportFile().then((r) => { if (r) toast(`📤 ${nf(r.matches)} parties exportées (${(r.size / 1048576).toFixed(1).replace('.', ',')} Mo) : ${r.path.split(/[\\/]/).pop()}`); }).catch((e) => toast('❌ ' + e.message)); break;
