@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.14.0';
+var APP_VERSION = '3.14.1';
 var APP_RELEASES = [
+  { v: '3.14.1', date: '2026-11-03', notes: [
+    'Encart « Ma progression » : largeur réduite au strict nécessaire (il prend la taille de son contenu) et texte un peu plus petit.',
+    'Annonces vocales : une même annonce n\'est jamais répétée en moins de 30 secondes, et n\'est pas ajoutée si elle attend déjà son tour.',
+    'Correction : un joueur pouvait manquer dans le panneau des joueurs en jeu quand plusieurs joueurs avaient un nom masqué.',
+  ]},
   { v: '3.14.0', date: '2026-11-03', notes: [
     'Support : le build conseillé du match-up tient compte de toute la voie du bas, le support ET l\'ADC adverses, et ton propre ADC. Exemples : support adverse qui engage → objet pour délivrer ou protéger ton ADC (et bottes de Mercure pour un tank), support qui harcèle → soins et boucliers, soins dans leur duo → anti-soins, ADC adverse agressif → protection précoce, ton ADC qui frappe vite → Encensoir ardent, ton ADC sans fuite → objet de protection, et l\'évolution conseillée de ton objet de support.',
     'L\'objet le plus utile pour la voie du bas passe dans les principaux ; les statistiques du collecteur donnent plus de poids aux parties face au même ADC. Les conseils du match-up résument la voie (toi + ton ADC contre leur duo).',

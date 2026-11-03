@@ -15,6 +15,8 @@
       d.rows.map((r) => `<div class="m"><span class="l" title="${esc(TIP[r.label] || r.label)}">${ICON[r.label] || esc(r.label)}</span><span class="v"><b class="${r.st}">${esc(r.cur)}</b> <i>/ ${esc(r.target)}</i></span>
         <div class="bar"><u class="${r.st}" style="width:${Math.max(3, Math.min(100, Math.round(r.pct * 100)))}%"></u></div></div>`).join('');
     box.className = '';
+    /* La fenêtre prend juste la taille du contenu */
+    requestAnimationFrame(() => { const r = box.getBoundingClientRect(); if (window.noob && window.noob.progov && window.noob.progov.size) window.noob.progov.size(Math.ceil(r.width) + 6, Math.ceil(r.height) + 6).catch(() => {}); });
   }
   if (window.noob && window.noob.progov) window.noob.progov.onData(draw);
   else draw({ tier: 'Or', role: 'Mid', rows: [{ label: 'cs', cur: '6,4', target: '5,0', pct: 0.88, st: 'mid' }] });

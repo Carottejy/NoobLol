@@ -1089,7 +1089,7 @@
   }
 
   /* ---------- Annonces vocales (synthèse vocale du système, en français) ---------- */
-  const Voice = { said: new Set() };
+  const Voice = { said: new Set(), recent: new Map(), pending: new Set() };
   function frVoices() { try { return window.speechSynthesis.getVoices().filter((v) => /^fr/i.test(v.lang)); } catch (e) { return []; } }
   /* Les annonces vocales ne lisent pas les scores (ex. « 2/0/1 ») : on les retire du texte prononcé */
   const noScores = (t) => String(t || '').replace(/\s*\(\s*\d+\s*\/\s*\d+\s*\/\s*\d+\s*\)/g, '').replace(/\s+en\s+\d+\s*\/\s*\d+\s*\/\s*\d+/g, '').replace(/\s*\d+\s*\/\s*\d+\s*\/\s*\d+/g, '')
@@ -1098,8 +1098,18 @@
     text = noScores(text);
     if (!S.opt.voice || !window.speechSynthesis) return;
     if (key) { if (Voice.said.has(key)) return; Voice.said.add(key); }
+    /* Jamais deux fois la même annonce en 30 s, ni deux fois dans la file d'attente (les chiffres qui changent ne comptent pas) */
+    const sig = text.toLowerCase().replace(/\d[\d\s.,]*/g, '#').replace(/\s+/g, ' ').trim();
+    const now = Date.now();
+    if (Voice.pending.has(sig) || now - (Voice.recent.get(sig) || 0) < 30000) return;
+    Voice.recent.set(sig, now);
+    if (Voice.recent.size > 200) for (const [k, t] of Voice.recent) if (now - t > 60000) Voice.recent.delete(k);
     try {
       const u = new SpeechSynthesisUtterance(text);
+      Voice.pending.add(sig);
+      const done = () => { Voice.pending.delete(sig); Voice.recent.set(sig, Date.now()); };
+      u.onend = done; u.onerror = done;
+      setTimeout(() => Voice.pending.delete(sig), 60000); /* au cas où la fin ne serait jamais signalée */
       u.lang = 'fr-FR';
       const all = window.speechSynthesis.getVoices();
       const v = all.find((x) => x.name === S.opt.voiceName) || frVoices()[0];

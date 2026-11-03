@@ -120,15 +120,16 @@ function setOverlay(data) {
 
 /* ---------- Encart « Ma progression » par-dessus le jeu (comme celui du build : on peut seulement le déplacer) ---------- */
 const PV_W = 280, PV_H = 330;
+let progSize = null;
 const progH = (d) => 66 + 44 * Math.max(1, ((d && d.rows) || []).length);
 let progov = null, progovData = null, pvSaveT = null;
 function progBounds() {
   const o = (cfg.data.overlay || {}).prog || {};
   const onScreen = o.x != null && o.y != null && screen.getAllDisplays().some((d) => o.x + PV_W > d.bounds.x + 20 && o.x < d.bounds.x + d.bounds.width - 20 && o.y + PV_H > d.bounds.y + 20 && o.y < d.bounds.y + d.bounds.height - 20);
-  const h = progH(progovData);
-  if (onScreen) return { x: Math.round(o.x), y: Math.round(o.y), width: PV_W, height: h };
+  const h = progSize ? progSize.h : progH(progovData), w = progSize ? progSize.w : PV_W;
+  if (onScreen) return { x: Math.round(o.x), y: Math.round(o.y), width: w, height: h };
   const b = gameDisplay().bounds;
-  return { x: Math.round(b.x + 12), y: Math.round(b.y + b.height * 0.32), width: PV_W, height: h };
+  return { x: Math.round(b.x + 12), y: Math.round(b.y + b.height * 0.32), width: w, height: h };
 }
 function setProgOverlay(data) {
   progovData = data || null;
@@ -151,8 +152,6 @@ function setProgOverlay(data) {
     return;
   }
   /* Hauteur selon le nombre d'indicateurs affichés */
-  const hh = progH(progovData), bb = progov.getBounds();
-  if (bb.height !== hh) progov.setBounds({ x: bb.x, y: bb.y, width: PV_W, height: hh });
   progov.webContents.send('progov:data', progovData);
   if (!progov.isVisible()) { progov.showInactive(); progov.setAlwaysOnTop(true, 'screen-saver'); }
 }
@@ -374,6 +373,7 @@ function handlers() {
   h('minimap:isOpen', () => !!(mini && !mini.isDestroyed()));
   h('overlay:update', (d) => { setOverlay(d); return true; });
   h('progov:update', (d) => { setProgOverlay(d); return true; });
+  h('progov:size', (w, h) => { if (progov && !progov.isDestroyed()) { const b = progov.getBounds(); w = Math.max(80, Math.min(600, Math.round(+w || 0))); h = Math.max(40, Math.min(800, Math.round(+h || 0))); if (b.width !== w || b.height !== h) progov.setBounds({ x: b.x, y: b.y, width: w, height: h }); progSize = { w, h }; } return true; });
   h('progov:reset', () => { cfg.set({ overlay: { prog: { x: null, y: null } } }); if (progov && !progov.isDestroyed()) progov.setBounds(progBounds()); return true; });
   h('sim:open', () => openSimulator());
   h('sim:isOpen', () => !!(simWin && !simWin.isDestroyed()));

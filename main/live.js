@@ -23,6 +23,13 @@ function simplify(d) {
     spells: [spellId((p.summonerSpells || {}).summonerSpellOne), spellId((p.summonerSpells || {}).summonerSpellTwo)],
     spellNames: [((p.summonerSpells || {}).summonerSpellOne || {}).displayName || '', ((p.summonerSpells || {}).summonerSpellTwo || {}).displayName || ''],
   }));
+  /* Noms masqués ou identiques (mode anonyme, robots…) : chaque joueur doit garder un nom unique, sinon il disparaît des listes */
+  const seen = new Set();
+  players.forEach((p) => {
+    let n = p.name;
+    if (!n || seen.has(n)) { n = `${p.champName || 'Joueur'} (${p.team === 'ORDER' ? 'bleu' : 'rouge'})`; let i = 2; while (seen.has(n)) n = `${p.champName || 'Joueur'} (${p.team === 'ORDER' ? 'bleu' : 'rouge'} ${i++})`; p.hidden = true; }
+    p.name = n; seen.add(n);
+  });
   const me = players.find((p) => p.aliases.some((a) => apAliases.includes(norm(a)) || apAliases.includes(norm(a).split('#')[0]))) || null;
   const ap = d.activePlayer || {};
   return {

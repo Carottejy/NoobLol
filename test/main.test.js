@@ -592,3 +592,13 @@ test('sans clé Riot : parties et chronologie du client converties au format mat
   assert.deepEqual(await api.matchIds('moi', {}), ['EUW1_123']);
   assert.equal((await api.match('EUW1_123')).info.gameId, 123);
 });
+
+test('partie en cours : des joueurs aux noms masqués restent tous dans la liste', () => {
+  const { simplify } = require('../main/live');
+  const pl = (name, champ, team) => ({ riotId: name, riotIdGameName: name, summonerName: name, championName: champ, rawChampionName: 'game_character_displayname_' + champ, team, level: 10, items: [], scores: {}, summonerSpells: {} });
+  const d = { gameData: { gameTime: 600 }, activePlayer: { riotId: 'Carotte#EUW', level: 10 }, allPlayers: [pl('Carotte#EUW', 'Swain', 'ORDER'), pl('', 'Yasuo', 'ORDER'), pl('', 'Ahri', 'ORDER'), pl('', 'Lux', 'CHAOS')] };
+  const L = simplify(d);
+  const names = L.players.map((p) => p.name);
+  assert.equal(new Set(names).size, 4);
+  assert.ok(L.me && L.me.name === 'Carotte#EUW');
+});
