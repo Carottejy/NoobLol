@@ -1181,6 +1181,8 @@
       if (opp && L.time >= 900) legendaryIds(opp).forEach((id) => R.coach.opp.add(id));
       else if (opp) {
         const oc = D.champs[opp.champ], on = oc ? oc.name : 'Ton adversaire';
+        const rt = RUNE_TIPS[(opp.runes || {}).key];
+        if (rt && L.time > 20 && L.time < 300) coachSay(L, `${on} a pris ${rt[0]} : ${rt[1]}.`, 'opp-rune');
         if (opp.level >= 6 && myLvl < 6) coachSay(L, `${on} est niveau 6 et pas toi : il a son ultime, sois prudent.`, 'opp-6');
         else if (opp.level - myLvl >= 2) coachSay(L, `${on} a ${opp.level - myLvl} niveaux d'avance : évite le combat et farme près de ta tour.`, 'opp-lead-' + opp.level);
         for (const id of legendaryIds(opp)) if (!R.coach.opp.has(id)) { R.coach.opp.add(id); coachSay(L, `${on} a terminé ${itemName(id)}.`, 'opp-item-' + id); }
@@ -1782,6 +1784,41 @@
       <div class="skgrid">${['Q', 'W', 'E', 'R'].map(rowK).join('')}</div>
       <p class="small muted" style="margin:4px 0 0">${plan.other ? `⚠️ Pas de données dans ce rôle : ordre vu en ${ROLE_NAME[plan.role]}. ` : ''}${Math.round(plan.share * 100)} % des ${nf(Math.round(plan.games / Math.max(0.01, plan.share)))} parties analysées · ultime aux niveaux 6, 11, 16</p>`;
   }
+  /* ---------- Runes de l'adversaire (visibles par tous avec Tab) → comment jouer contre lui ---------- */
+  const RUNE_TIPS = {
+    8112: ['Électrocution', 'il fait un gros pic de dégâts en 3 coups : quand ses sorts sont prêts, ne te laisse pas toucher deux fois de suite, et échange juste après qu\'il l\'a déclenchée (elle se recharge ~20 s)'],
+    8128: ['Moisson noire', 'il achève les cibles à moins de la moitié de leur vie : ne reste pas à mi-vie à sa portée'],
+    9923: ['Grêle de lames', 'ses 3 premières attaques sont très rapides : recule quand il engage, et réponds une fois cette rafale passée'],
+    8124: ['Prédateur', 'il arrive très vite par surprise : garde de la vision sur les côtés de ta voie'],
+    8008: ['Tempo mortel', 'plus le combat dure, plus il frappe vite : fais des échanges courts'],
+    8021: ['Jeu de jambes', 'il se soigne et accélère en frappant : ne le poursuis pas trop loin, l\'anti-soins aide'],
+    8010: ['Conquérant', 'il gagne les combats longs : fais des échanges courts et recule avant qu\'il ne soit chargé'],
+    8005: ['Attaque soutenue', 'après sa 3e attaque sur toi, tu subis plus de dégâts : recule dès sa 2e attaque'],
+    8214: ['Invocation : Aery', 'il te harcèle à chaque sort ou attaque : reste derrière tes sbires'],
+    8229: ['Comète arcanique', 'il harcèle de loin : bouge sur le côté juste après qu\'il t\'a touché avec un sort'],
+    8230: ['Ruée de phase', 'il devient très rapide après 3 coups : ne le poursuis pas loin, et méfie-toi s\'il fonce sur toi'],
+    8437: ['Poigne de l\'immortel', 'il gagne les échanges courts au corps à corps et devient plus résistant : harcèle-le à distance, ne reste pas collé à lui'],
+    8439: ['Répercussion', 'il est très résistant pendant 2-3 s après t\'avoir immobilisé : recule d\'abord, frappe ensuite'],
+    8465: ['Gardien', 'il protège ses alliés : vise plutôt une autre cible'],
+    8351: ['Augmentation glaciale', 'ses attaques et sorts ralentissent : garde Saut éclair pour fuir'],
+    8360: ['Grimoire déchaîné', 'il change ses sorts d\'invocateur pendant la partie : regarde ses sorts avec Tab'],
+    8369: ['Frappe préventive', 'il veut ouvrir les échanges pour gagner de l\'or : laisse-le venir et réponds'],
+  };
+  const TREE = { 8000: 'Précision', 8100: 'Domination', 8200: 'Sorcellerie', 8300: 'Inspiration', 8400: 'Volonté' };
+  const TREE_TIPS = {
+    8400: 'arbre secondaire Volonté : il a pris de la résistance pour tenir la voie, tes échanges seront moins rentables',
+    8100: 'arbre secondaire Domination : il cherche les kills, attention aux engagements quand tu es bas en vie',
+    8300: 'arbre secondaire Inspiration : son Saut éclair revient sans doute plus vite',
+    8000: 'arbre secondaire Précision : il récupère vie ou mana sur les kills et dure plus longtemps en combat',
+    8200: 'arbre secondaire Sorcellerie : plus de vitesse ou de dégâts, il essaiera de te harceler',
+  };
+  function runeTips(name, r) {
+    if (!r || !r.key) return [];
+    const out = [], k = RUNE_TIPS[r.key];
+    out.push(`Runes de ${name} : ${k ? k[0] : r.keyName || 'rune inconnue'}${TREE[r.sec] ? ` + ${TREE[r.sec]}` : ''}${k ? ` — ${k[1]}.` : '.'}`);
+    if (TREE_TIPS[r.sec] && r.sec !== r.pri) out.push(`${name}, ${TREE_TIPS[r.sec]}.`);
+    return out;
+  }
   /* Conseils pour mon match-up : texte + objets (images) */
   function matchupTips(ld, b) {
     const c = b && b.c, oc = b && b.oc;
@@ -1789,6 +1826,10 @@
     wantFull(oc.id); wantFull(c.id);
     const fo = R.full[oc.id], tips = [], K = b.K || myKit(c, b.role);
     const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
+    /* Runes de mon adversaire de voie (et de leur ADC si je suis support), lues dans la partie en cours */
+    const liveOf = (g) => g && g.live && g.live.runes;
+    runeTips(oc.name, liveOf(ld.oppG)).forEach((t) => T(t));
+    if (b.bl && b.bl.eAdc) { const eg = ld.teams[1].find((p) => ld.role.get(p) === 'adc'); if (eg) runeTips(b.bl.eAdc.name, liveOf(eg)).slice(0, 1).forEach((t) => T(t)); }
     /* Support : toute la voie du bas (leur duo et ton ADC) */
     if (b.bl) {
       const { eAdc, eSup, mAdc } = b.bl;
@@ -1853,6 +1894,9 @@
     [/^D'après le collecteur : .*? gagne (\d+) % .*?\((\d+) parties/, (m) => `📊 ${m[1]} % de victoires dans ce match-up (${m[2]} parties)`],
     [/^Ton adversaire est en forme : (\d+) victoires sur ses (\d+)/, (m) => `🔥 Il est en forme : ${m[1]}/${m[2]} victoires`],
     [/^Ton adversaire est en difficulté : seulement (\d+) victoires sur ses (\d+)/, (m) => `🧊 Il est en difficulté : ${m[1]}/${m[2]}`],
+    [/^Runes de (.+?) : (.+?) — (.+?)\.?$/, (m) => `🔮 ${m[1]} · ${m[2]} : ${m[3]}`],
+    [/^Runes de (.+?) : (.+?)\.$/, (m) => `🔮 ${m[1]} · ${m[2]}`],
+    [/^(.+?), arbre secondaire (\S+) : (.+?)\.?$/, (m) => `🌿 ${m[1]} · ${m[2]} : ${m[3]}`],
     [/^Voie du bas : (.+?)\.?$/, (m) => `👥 ${m[1]}`],
     [/^(.+?) engage sur ton ADC/, (m) => `🚨 ${m[1]} engage : protège/délivre ton ADC`],
     [/^(.+?) harcèle de loin/, (m) => `🎯 ${m[1]} harcèle : soins et boucliers`],

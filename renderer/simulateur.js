@@ -106,6 +106,13 @@
     seq.slice(0, spent).forEach((k) => { out[k]++; });
     return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, { abilityLevel: v, displayName: 'Sort ' + k }]));
   }
+  /* Runes simulées : une rune principale plausible selon le type de champion */
+  const SIM_KEYS = [[8112, 'Électrocution', 8100, 8300], [8010, 'Conquérant', 8000, 8400], [8437, 'Poigne de l\'immortel', 8400, 8000], [8229, 'Comète arcanique', 8200, 8300], [8008, 'Tempo mortel', 8000, 8100], [8214, 'Invocation : Aery', 8200, 8400], [8439, 'Répercussion', 8400, 8300], [9923, 'Grêle de lames', 8100, 8000]];
+  function simRunes(p) {
+    const c = champ(p.champ) || { tags: [] }, t = c.tags || [];
+    const k = t.includes('Tank') ? (p.role === 'utility' ? SIM_KEYS[6] : SIM_KEYS[2]) : t.includes('Assassin') ? SIM_KEYS[0] : t.includes('Marksman') ? SIM_KEYS[4] : t.includes('Mage') ? (p.role === 'utility' ? SIM_KEYS[5] : SIM_KEYS[3]) : t.includes('Fighter') ? SIM_KEYS[1] : SIM_KEYS[7];
+    return { keystone: { id: k[0], displayName: k[1], rawDisplayName: '' }, primaryRuneTree: { id: k[2], displayName: '' }, secondaryRuneTree: { id: k[3], displayName: '' } };
+  }
   function liveData() {
     const G = SIM.game;
     const players = SIM.players.map((p) => {
@@ -115,7 +122,7 @@
         level: st.level, isDead: st.deadUntil > G.t, respawnTimer: Math.max(0, st.deadUntil - G.t), isBot: false,
         items: st.items.map((id, slot) => ({ itemID: id, slot, count: 1 })).concat([{ itemID: st.trinket, slot: 6, count: 1 }]),
         scores: { kills: st.k, deaths: st.d, assists: st.a, creepScore: Math.round(st.cs), wardScore: Math.round(st.ward) },
-        summonerSpells: { summonerSpellOne: spellObj(p.spells[0]), summonerSpellTwo: spellObj(p.spells[1]) } };
+        summonerSpells: { summonerSpellOne: spellObj(p.spells[0]), summonerSpellTwo: spellObj(p.spells[1]) }, runes: simRunes(p) };
     });
     const me = meP(), ms = G.st[me.cell], c = champ(me.champ) || { stats: {}, partype: 'Mana' };
     const S = c.stats || {};

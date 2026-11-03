@@ -21,6 +21,8 @@ function simplify(d) {
     items: (p.items || []).map((i) => ({ id: i.itemID, slot: i.slot, count: i.count })).sort((a, b) => a.slot - b.slot),
     k: (p.scores || {}).kills || 0, d: (p.scores || {}).deaths || 0, a: (p.scores || {}).assists || 0, cs: (p.scores || {}).creepScore || 0, ward: Math.round((p.scores || {}).wardScore || 0),
     spells: [spellId((p.summonerSpells || {}).summonerSpellOne), spellId((p.summonerSpells || {}).summonerSpellTwo)],
+    /* Runes visibles par tous (tableau des scores, touche Tab) : rune principale et arbres */
+    runes: p.runes ? { key: ((p.runes.keystone || {}).id) || 0, keyName: ((p.runes.keystone || {}).displayName) || '', pri: ((p.runes.primaryRuneTree || {}).id) || 0, sec: ((p.runes.secondaryRuneTree || {}).id) || 0 } : null,
     spellNames: [((p.summonerSpells || {}).summonerSpellOne || {}).displayName || '', ((p.summonerSpells || {}).summonerSpellTwo || {}).displayName || ''],
   }));
   /* Noms masqués ou identiques (mode anonyme, robots…) : chaque joueur doit garder un nom unique, sinon il disparaît des listes */

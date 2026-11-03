@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.14.1';
+var APP_VERSION = '3.15.0';
 var APP_RELEASES = [
+  { v: '3.15.0', date: '2026-11-03', notes: [
+    'En jeu : les runes de ton adversaire de voie (visibles par tous avec Tab) donnent des conseils de jeu. Exemples : Électrocution → ne te laisse pas toucher deux fois de suite et échange juste après ; Conquérant → échanges courts ; Poigne de l\'immortel → harcèle-le à distance ; Répercussion → recule après son contrôle. Son arbre secondaire est aussi expliqué.',
+    'En support, les runes de l\'ADC adverse sont aussi prises en compte. Une annonce vocale résume la rune de ton adversaire en début de partie.',
+  ]},
   { v: '3.14.1', date: '2026-11-03', notes: [
     'Encart « Ma progression » : largeur réduite au strict nécessaire (il prend la taille de son contenu) et texte un peu plus petit.',
     'Annonces vocales : une même annonce n\'est jamais répétée en moins de 30 secondes, et n\'est pas ajoutée si elle attend déjà son tour.',
