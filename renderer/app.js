@@ -1035,6 +1035,7 @@
     } catch (e) { /* ignoré */ }
     try { overlaySync(L); } catch (e) { /* ignoré */ }
     try { progSync(L); } catch (e) { /* ignoré */ }
+    try { adviceSnap(L); } catch (e) { /* ignoré */ }
     renderTop();
     if (S.mode === 'game' && !busy()) render(true); else save();
   }
@@ -1301,6 +1302,68 @@
     return h + '</div>';
   }
 
+  /* ---------- Historique des conseils : ce qui a été affiché pendant chaque partie, pour le revoir ensuite ---------- */
+  const ADV_KEY = 'nooblol-conseils';
+  const loadAdvice = () => { try { return JSON.parse(localStorage.getItem(ADV_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  function saveAdvice(A) {
+    const ids = Object.keys(A).sort((a, b) => (A[b].at || 0) - (A[a].at || 0));
+    ids.slice(60).forEach((k) => delete A[k]); /* les 60 dernières parties */
+    try { localStorage.setItem(ADV_KEY, JSON.stringify(A)); } catch (e) { /* stockage plein */ }
+  }
+  const tipRec = (x) => ({ t: x.t, items: x.items || [] });
+  function adviceSnap(L) {
+    const g = R.lcu.game, gid = g && g.gameId;
+    if (!gid || !started(L) || !D.champs || !D.items) return;
+    if (R.advT && Date.now() - R.advT < 15000) return;
+    R.advT = Date.now();
+    const ld = liveLd(L); if (!ld.meG) return;
+    R.advLastGid = gid;
+    const A = loadAdvice();
+    const rec = A[gid] || (A[gid] = { gameId: gid, at: Date.now(), matchup: [], team: [], adapt: [], builds: {}, voice: [] });
+    rec.dur = L.time;
+    const b = loadBuild(ld);
+    const addTips = (list, tips) => tips.forEach((x) => { if (!list.some((y) => y.t === x.t)) list.push(tipRec(x)); });
+    if (b && !b.loading && b.c) {
+      rec.champ = b.c.id; rec.role = b.role; rec.opp = b.oc ? b.oc.id : '';
+      if (b.bl) rec.bot = { eAdc: b.bl.eAdc && b.bl.eAdc.id, eSup: b.bl.eSup && b.bl.eSup.id, mAdc: b.bl.mAdc && b.bl.mAdc.id };
+      if (!rec.builds.matchup) rec.builds.matchup = { start: b.start, core: b.core, boots: b.boots, next: b.next, fromStats: b.fromStats, games: b.games };
+      const tb = teamBuild(ld, b);
+      if (tb && !tb.same && !rec.builds.team) rec.builds.team = { start: tb.start, core: tb.core, boots: tb.boots, next: tb.next };
+      addTips(rec.matchup, matchupTips(ld, b));
+      addTips(rec.team, teamTips(ld, b));
+      const sp = skillPlan(b.c, b.role);
+      if (sp && !sp.loading && !rec.skills) rec.skills = { order: sp.order, seq: sp.seq };
+    }
+    const ad = adaptBuy(L);
+    (ad ? ad.recos : []).forEach((r) => { const sig = r.id + ':' + r.items.join(','); if (!rec.adapt.some((x) => x.sig === sig)) rec.adapt.push({ sig, at: Math.round(L.time), text: r.text, items: r.items }); });
+    const gb = S.gameBuild && S.gameBuild.gameId === gid ? S.gameBuild : null;
+    rec.followed = gb ? { name: gb.build.name, kind: gb.kind || 'matchup', items: (gb.build.core || []).concat(gb.build.boots ? [gb.build.boots] : []) } : rec.followed || null;
+    rec.voice = S.game.log.filter((l) => /^💡 /.test(l.txt)).map((l) => ({ t: Math.round(l.t), txt: l.txt.slice(2).trim() })).sort((a, b2) => a.t - b2.t).slice(0, 80);
+    saveAdvice(A);
+  }
+  function adviceTab(gameId) {
+    const rec = loadAdvice()[gameId];
+    if (!rec) return '<div class="card"><p class="muted">Aucun conseil enregistré pour cette partie. Les conseils affichés en jeu sont enregistrés à partir de la version 3.16, pour les parties jouées avec Noob LOL ouvert.</p></div>';
+    const c = rec.champ && D.champs ? D.champs[rec.champ] : null, oc = rec.opp && D.champs ? D.champs[rec.opp] : null;
+    const ic = (id) => (id ? `<button class="bi" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico sm')}</button>` : '');
+    const bld = (x) => `<div class="mybuild compact" style="border:0;padding:0;background:none">
+      <div class="brow"><span class="small muted">Départ</span><div class="bis">${(x.start || []).map(ic).join('')}</div></div>
+      <div class="brow"><span class="small muted">Principaux</span><div class="bis">${(x.core || []).map(ic).join('<span class="arrow">›</span>')}${x.boots ? `<span class="rsep"></span>${ic(x.boots)}` : ''}</div></div>
+      ${(x.next || []).length ? `<div class="brow"><span class="small muted">Ensuite</span><div class="bis">${x.next.map(ic).join('')}</div></div>` : ''}</div>`;
+    const nm = (id) => (id && D.champs && D.champs[id] ? D.champs[id].name : '');
+    const vsTxt = rec.bot ? `vs ${[nm(rec.bot.eSup), nm(rec.bot.eAdc)].filter(Boolean).join(' + ')}${rec.bot.mAdc ? ` · avec ${nm(rec.bot.mAdc)}` : ''}` : oc ? `vs ${oc.name}` : '';
+    let h = `<div class="card"><h2>💡 Conseils affichés pendant cette partie</h2><p class="small muted">${c ? `${cIcon(c, 'ico xs')} <b>${esc(c.name)}</b>${rec.role ? ' · ' + ROLE_NAME[rec.role] : ''} ${esc(vsTxt)} · ` : ''}enregistrés jusqu'à ${fmt(rec.dur || 0)} de jeu.</p></div>`;
+    h += '<div class="cols">';
+    h += `<div><div class="card"><h2>🛒 Build conseillé ${esc(vsTxt)}</h2>${rec.builds.matchup ? bld(rec.builds.matchup) : '<p class="muted small">—</p>'}</div>`;
+    if (rec.builds.team) h += `<div class="card"><h2>🛡️ Build contre toute l'équipe adverse</h2>${bld(rec.builds.team)}</div>`;
+    h += `<div class="card"><h2>⭐ Build suivi dans l'encart</h2>${rec.followed ? `<p class="small"><b>${esc(rec.followed.name)}</b></p><div class="bis">${rec.followed.items.map(ic).join('')}</div>` : '<p class="muted small">Aucun build suivi.</p>'}</div>`;
+    if (rec.skills) h += `<div class="card skcard"><h2>🔼 Ordre des sorts conseillé</h2><div class="skhead"><span class="skillord">${rec.skills.order.join(' › ')}</span></div><div class="skgrid">${['Q', 'W', 'E', 'R'].map((k) => `<div class="skr"><b>${k}</b>${rec.skills.seq.map((x, i) => `<i class="${x === k ? 'on' : ''}">${x === k ? i + 1 : ''}</i>`).join('')}</div>`).join('')}</div></div>`;
+    h += `<div class="card"><h2>⚡ Achats adaptés proposés pendant la partie</h2>${rec.adapt.length ? rec.adapt.map((r) => `<div class="adapt"><span class="small muted" style="width:42px;flex:none">${fmt(r.at)}</span><span class="bis">${r.items.map(ic).join('')}</span><span class="small">${esc(r.text)}</span></div>`).join('') : '<p class="muted small">Aucun.</p>'}</div></div>`;
+    h += `<div><div class="card"><h2>🎯 Conseils de match-up ${esc(vsTxt)}</h2>${rec.matchup.length ? `<ul class="tips">${rec.matchup.map((x) => tipLi({ t: x.t, items: x.items || [] })).join('')}</ul>` : '<p class="muted small">—</p>'}</div>
+      <div class="card"><h2>🛡️ Conseils face à l'équipe adverse</h2>${rec.team.length ? `<ul class="tips">${rec.team.map((x) => tipLi({ t: x.t, items: x.items || [] })).join('')}</ul>` : '<p class="muted small">—</p>'}</div>
+      <div class="card"><h2>🔊 Conseils du coach (annonces)</h2>${rec.voice.length ? `<div class="log">${rec.voice.map((l) => `<div class="small"><span class="muted">${fmt(l.t)}</span> ${esc(l.txt)}</div>`).join('')}</div>` : '<p class="muted small">Aucune annonce.</p>'}</div></div>`;
+    return h + '</div>';
+  }
   /* Encart « Ma progression » par-dessus le jeu : tes chiffres et la cible pour ton rang visé, à cette minute de la partie */
   function progRows(L) {
     if (!L || !L.me || !started(L)) return null;
@@ -2129,7 +2192,7 @@
   /* =====================================================================
      FIN DE PARTIE : toutes les statistiques, en onglets
      ===================================================================== */
-  const POST_TABS = [['resume', '🏁', 'Résumé'], ['equipe', '📈', 'Équipe'], ['moi', '🙋', 'Ma partie'], ['morts', '💀', 'Mes morts'], ['carte', '🗺️', 'Carte'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds']];
+  const POST_TABS = [['resume', '🏁', 'Résumé'], ['equipe', '📈', 'Équipe'], ['moi', '🙋', 'Ma partie'], ['morts', '💀', 'Mes morts'], ['carte', '🗺️', 'Carte'], ['degats', '⚔️', 'Dégâts'], ['or', '🪙', 'Or et farm'], ['vision', '👁️', 'Vision'], ['builds', '🛒', 'Builds'], ['conseils', '💡', 'Conseils']];
   const k1 = (n) => (n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',') + 'k' : String(Math.round(n || 0)));
   function curveSvg(vals, { title = '', unit = 'po' } = {}) {
     if (!vals || vals.length < 2) return '<p class="muted small">Courbe indisponible.</p>';
@@ -2221,6 +2284,7 @@
       if (P.status === 'live-only') h += `<div class="card"><p class="muted">${P.reason === 'nokey' ? 'Statistiques complètes indisponibles : le client League of Legends n\'était pas lancé (ou ajoute une clé Riot dans les Réglages).' : esc(P.reason || 'Statistiques complètes indisponibles pour cette partie.')} Voici l'état final de la partie :</p></div>`;
       if (P.live) h += playersPanel(P.live);
       else h += '<div class="loader">Récupération…</div>';
+      if (P.status === 'live-only' && R.advLastGid) h += adviceTab(R.advLastGid);
       return h;
     }
     const G = Builds.postgame(P.match, P.timeline, P.puuid || myPuuid(), myIds(P));
@@ -2236,7 +2300,9 @@
     const name = (p) => { const c = byKey(p.championId); return `<div class="pp">${cIcon(c, 'ico sm')}<div class="grow"><b class="ell">${esc(c ? c.name : p.championName)}</b><span class="small pmeta"><span class="muted ell">${esc(p.name)}</span>${rankTag(p.puuid)}</span></div></div>`; };
     const teamBlock = (t, i, cols, cells) => `<div class="pteam ${i ? 'them' : 'us'}"><div class="pth"><b>${i ? '🟥 Adversaires' : '🟦 Mon équipe'}</b> <span class="tag ${t.win ? 'gold' : ''}">${t.win ? 'Victoire' : 'Défaite'}</span></div>
       <div class="ptable" style="--cols:${cols}">${t.players.map((p) => `<div class="prow2 ${p.puuid === puuid ? 'me' : ''}">${name(p)}${cells(p, t)}</div>`).join('')}</div></div>`;
-    if (tab === 'resume') {
+    if (tab === 'conseils') {
+      h += adviceTab(P.match.info.gameId);
+    } else if (tab === 'resume') {
       const obj = (k) => [us.objectives[k] ? us.objectives[k].kills : 0, them.objectives[k] ? them.objectives[k].kills : 0];
       const OBJS = [['🐉', 'Dragons', 'dragon'], ['🪲', 'Larves', 'horde'], ['🦀', 'Héraut', 'riftHerald'], ['👾', 'Nashor', 'baron'], ['🏰', 'Tours', 'tower'], ['💎', 'Inhibiteurs', 'inhibitor']];
       h += `<div class="cols"><div class="card"><h2>Équipes</h2><div class="vsstats">

@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.15.0';
+var APP_VERSION = '3.16.0';
 var APP_RELEASES = [
+  { v: '3.16.0', date: '2026-11-06', notes: [
+    'Statistiques fournies mises à jour : 90 082 parties, 881 969 lignes (patchs 16.20 à 16.22). Ta base est remplacée à la première ouverture si elle contient moins de lignes (l\'ancienne est gardée à côté).',
+    'Historique : nouvel onglet « 💡 Conseils » dans le détail d\'une partie. Il garde ce qui a été affiché en jeu : builds conseillés (match-up et équipe), build suivi, ordre des sorts, achats adaptés proposés (avec l\'heure), conseils de match-up et face à l\'équipe adverse, et annonces du coach. Enregistré pour les 60 dernières parties jouées avec Noob LOL ouvert.',
+  ]},
   { v: '3.15.0', date: '2026-11-03', notes: [
     'En jeu : les runes de ton adversaire de voie (visibles par tous avec Tab) donnent des conseils de jeu. Exemples : Électrocution → ne te laisse pas toucher deux fois de suite et échange juste après ; Conquérant → échanges courts ; Poigne de l\'immortel → harcèle-le à distance ; Répercussion → recule après son contrôle. Son arbre secondaire est aussi expliqué.',
     'En support, les runes de l\'ADC adverse sont aussi prises en compte. Une annonce vocale résume la rune de ton adversaire en début de partie.',
