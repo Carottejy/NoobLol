@@ -1,6 +1,12 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.16.0';
+var APP_VERSION = '3.17.0';
 var APP_RELEASES = [
+  { v: '3.17.0', date: '2026-11-09', notes: [
+    'Réglages : nouvelle option « NoobStatMotor » (désactivée par défaut). Activée, elle calcule les builds conseillés à la sélection, au chargement et en jeu à partir de la base de builds par règles (173 champions, 19 profils, 190 builds) au lieu des statistiques du collecteur.',
+    'Le moteur suit l\'algorithme de la base : profil du champion selon son rôle, situations détectées dans l\'équipe adverse (soins, assassins, tanks, dégâts AD/AP, contrôles, suppression…), choix du build le plus adapté, 2 ajustements au maximum, validation (groupes exclusifs, mana, bottes de Cassiopeia, objet de support), objets de départ et composants à acheter tôt contre ton adversaire de voie.',
+    'En jeu, il donne le prochain objet à acheter, l\'objet à remplacer quand l\'inventaire est plein, et des conseils selon l\'état de la partie (en avance, en retard, partie longue). Les runes restent celles du collecteur.',
+    'Correction : les évolutions de l\'objet de support conseillées en support (Opposition céleste, Traîneau du solstice, Pointe de Zaz\'Zak) pointaient vers le mauvais objet.',
+  ]},
   { v: '3.16.0', date: '2026-11-06', notes: [
     'Statistiques fournies mises à jour : 90 082 parties, 881 969 lignes (patchs 16.20 à 16.22). Ta base est remplacée à la première ouverture si elle contient moins de lignes (l\'ancienne est gardée à côté).',
     'Historique : nouvel onglet « 💡 Conseils » dans le détail d\'une partie. Il garde ce qui a été affiché en jeu : builds conseillés (match-up et équipe), build suivi, ordre des sorts, achats adaptés proposés (avec l\'heure), conseils de match-up et face à l\'équipe adverse, et annonces du coach. Enregistré pour les 60 dernières parties jouées avec Noob LOL ouvert.',

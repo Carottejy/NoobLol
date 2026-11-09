@@ -59,6 +59,23 @@ var Dd = (() => {
     return st.loading;
   }
 
+  /* Noms anglais des objets (pour NoobStatMotor, dont les objets sont identifiés par leur nom anglais officiel) */
+  function itemsEn() {
+    if (st.itemsEn) return st.itemsEn;
+    st.itemsEn = getJSON(cdn('data/en_US/item.json')).then((j) => {
+      const out = {};
+      const ids = Object.keys(j.data).sort((a, b) => +a - +b);
+      /* d'abord les objets de la Faille de l'invocateur, puis les autres (objets transformés) */
+      [true, false].forEach((sr) => ids.forEach((id) => {
+        const x = j.data[id];
+        if (!x.maps || !!x.maps['11'] !== sr || x.requiredChampion || +id >= 100000) return;
+        const k = String(x.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+        if (k && !(k in out)) out[k] = id;
+      }));
+      return out;
+    }).catch((e) => { st.itemsEn = null; throw e; });
+    return st.itemsEn;
+  }
   function champFull(id) {
     if (st.full[id]) return Promise.resolve(st.full[id]);
     return getJSON(cdn(`data/${LANG}/champion/${id}.json`)).then((j) => (st.full[id] = j.data[id]));
@@ -152,5 +169,5 @@ var Dd = (() => {
   }
   const plain = (html) => { const t = document.createElement('div'); t.innerHTML = rich(html).replace(/<br>/g, ' '); return t.textContent.replace(/\s+/g, ' ').trim(); };
 
-  return { st, load, champFull, img, rich, plain, diffChamp, patchDiff };
+  return { st, load, champFull, itemsEn, img, rich, plain, diffChamp, patchDiff };
 })();

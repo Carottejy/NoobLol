@@ -21,7 +21,7 @@
     mode: 'prep', tab: 'home', view: { champ: null, item: null }, favs: [], notes: {}, skin: {}, champRole: {},
     cf: { q: '', tag: '', range: '', diff: '', fav: false }, itf: { q: '', tag: '', stats: [], any: false, price: '', sort: 'price' }, rune: { tree: 0, sel: null }, lexQ: '', role: 'top', metaRole: 'mid',
     select: { role: '', opp: '', manualEnemies: ['', '', '', '', ''], manualMe: '' },
-    goal: { metric: '', target: 0 }, goals: {}, progRole: '', targetTier: '', game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], gameBuild: null, ed: null,
+    goal: { metric: '', target: 0 }, goals: {}, progRole: '', targetTier: '', game: newGame(), opt: { sound: true, vibrate: true, editEnemies: false, miniEmbed: true, voice: true, reminders: true, voiceName: '', voiceRate: 1.05, nsm: false, voiceVol: 90 }, postTab: 'resume', lastPick: null, tipN: 0, myRunes: [], myItems: [], selItems: {}, seeded: [], gameBuild: null, ed: null,
   });
   function load() {
     try {
@@ -923,10 +923,12 @@
       <span class="muted small">${sd.locked ? '🔒 Champion verrouillé' : '👆 Champion survolé'}${role ? ` · lane ${ROLE_SRC[sd.roleSrc] || ''}` : ''}${oc ? ` · adversaire : <b>${esc(oc.name)}</b>` : ''}</span></div><button class="btn ghost small" data-act="champ" data-val="${esc(c.id)}">Fiche</button></div>`;
     if (!NB) return h + '<p class="muted small">Les builds viennent des statistiques de l\'application PC.</p></div>';
     if (!role) return h + '<p class="muted small">Choisis ta lane ci-dessus pour voir les builds.</p></div>';
+    const nsmHtml = nsmOn() ? nsmCard(c, role, (sd.enemies || []).map(byKey).filter(Boolean), oc) : '';
     const mu = opp ? cached(`mu:${c.key}:${opp}:${role}`, () => NB.stats.matchup(+c.key, opp, role, 30)) : null;
     if (mu && mu.games) h += `<p class="tip" style="margin-top:8px">Contre <b>${esc(oc.name)}</b> : <b class="${mu.wins / mu.games >= 0.5 ? 'pos' : 'neg'}">${pct(mu.wins, mu.games)}</b> de victoires sur ${mu.games} parties analysées.</p>`;
     const rows = cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30));
-    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div>';
+    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div>' + nsmHtml;
+    if ((!rows || !rows.length) && nsmHtml) return h + '</div>' + nsmHtml;
     if (!rows || !rows.length) return h + `<p class="muted small">Pas encore de parties analysées pour ${esc(c.name)} en ${ROLE_NAME[role]}. Les runes « recommandées » du client sont un bon choix. ${R.col && R.col.running ? 'Le collecteur tourne : reviens plus tard.' : 'Démarre le collecteur dans les Réglages.'}</p></div>`;
     const A = Builds.analyze(rows, D, { opp, enemies: sd.enemies });
     h += `<div class="kpis"><div><b>${pct(A.wins, A.games)}</b><span>victoires</span></div><div><b>${nf(A.games)}</b><span>parties analysées</span></div><div><b>${oc ? nf(A.vsGames) : '—'}</b><span>${oc ? 'contre ' + esc(oc.name) : 'adversaire inconnu'}</span></div></div></div>`;
@@ -942,7 +944,14 @@
     if (A.spells && A.spells.length) h += `<h3>Sorts d'invocateur</h3><div class="row">${A.spells.map((x, i) => `<button class="pair rbtn ${R.applied.spells === x.spells ? 'done' : ''}" ${canApply ? `data-act="applySpells" data-i="${i}"` : 'disabled'}>${spellPair(x.spells)} <span class="small">${wr(x)}</span>${R.applied.spells === x.spells ? ' ✅' : ''}</button>`).join('')}</div>`;
     h += `<p class="muted small" style="margin-top:6px">${canApply ? 'Clique sur une page ou une paire de sorts : elle est créée / sélectionnée directement dans le client.' : 'Pendant une vraie sélection, un clic applique la page ou les sorts dans le client.'}</p></div>`;
 
-    /* Kit d'objets */
+    /* Kit d'objets : NoobStatMotor (option) ou statistiques du collecteur */
+    if (nsmHtml) {
+      h += nsmHtml;
+      if (A.skills) h += `<div class="card"><h2>🔼 Ordre des sorts</h2><div class="row"><span class="skillord">${esc(A.skills.order)}</span>${A.skills.first ? `<span class="small muted">niveaux 1-3 : ${esc(A.skills.first)}</span>` : ''}</div></div>`;
+      const f0 = needFull(c.id);
+      if (f0) h += tipsCards(f0, 'ally');
+      return h;
+    }
     h += `<div class="card"><div class="row sp"><h2 style="margin:0">🛒 Kit d'objets</h2>${A.timelineGames ? ctx(A.earlyVs, A.earlyGames) : ''}</div>`;
     if (!A.timelineGames) {
       const st = champStats(c.key, role);
@@ -1202,7 +1211,9 @@
     /* 6. Achats adaptés à la partie (une fois par type de besoin, après 8 min) */
     if (coachOn('counter') && L.time > 480) {
       const ad = adaptBuy(L), r = ad && ad.recos[0];
-      if (r && r.score >= 0.7) coachSay(L, `${r.text} : ${itemName(r.items[0])}.`, 'adapt-' + r.id);
+      if (r && r.id === 'nsm-next') coachSay(L, `Prochain objet conseillé : ${itemName(r.items[0])}.`, 'adapt-nsm-' + r.items[0]);
+      else if (r && r.id === 'nsm-swap') coachSay(L, `${r.text} : ${itemName(r.items[0])}.`, 'adapt-nsm-swap-' + r.items[0]);
+      else if (r && r.score >= 0.7 && !String(r.id).startsWith('nsm')) coachSay(L, `${r.text} : ${itemName(r.items[0])}.`, 'adapt-' + r.id);
     }
     /* 7. Point farm à 10 et 20 min, plaques à 14 min */
     if (coachOn('cs')) {
@@ -1253,6 +1264,14 @@
     const personal = chosen || forChamp(S.myItems, c.id, role).sort((a, b) => (b.roles.includes(role) ? 1 : 0) - (a.roles.includes(role) ? 1 : 0))[0];
     if (personal) return { c, role, personal, owned: owned0, next: Builds.nextItem(itemPlan(personal), owned0, D) };
     if (!role) return { c, role: '' };
+    if (nsmOn()) {
+      const en = L.players.filter((p) => p.team !== L.me.team), opP = en.find((p) => LR.get(p.name) === role);
+      const B = nsmBuild(c, role, en.map((p) => D.champs[p.champ]).filter(Boolean), opP ? D.champs[opP.champ] : null, nsmState(L, opP ? opP.name : ''));
+      if (!B.unknown) {
+        const nb = { id: 'nsm', name: `🧠 NoobStatMotor · ${B.r.base}`, champ: c.id, roles: [role], start: B.start, core: B.core, boots: B.boots, situational: B.next };
+        return { c, role, personal: nb, nsm: B.r, owned: owned0, next: Builds.nextItem(itemPlan(nb), owned0, D) };
+      }
+    }
     const enemies = L.players.filter((p) => p.team !== L.me.team);
     const oppP = enemies.find((p) => LR.get(p.name) === role);
     const opp = oppP && D.champs[oppP.champ] ? +D.champs[oppP.champ].key : (lp && lp.opp) || 0;
@@ -1682,7 +1701,7 @@
     immobile: new Set(['Jinx', 'KogMaw', 'Aphelios', 'Ashe', 'Varus', 'Jhin', 'MissFortune', 'Senna', 'Smolder', 'Sivir', 'Ziggs', 'Yunara']),
   };
   /* Évolutions de l'objet de support (quête) : proposées selon mon ADC et mon style */
-  const QUEST = { attack: 3877, tank: 3876, enchanter: 3870, heal: 3871, ap: 3869 };
+  const QUEST = { attack: 3877, tank: 3869, enchanter: 3870, heal: 3876, ap: 3871 }; /* Chant de sang, Opposition céleste, Faiseur de rêves, Traîneau du solstice, Pointe de Zaz'Zak */
   const hasItem = (id) => !!(D.items && D.items[String(id)]);
   function botLane(ld) {
     if (ld.myRole !== 'support') return null;
@@ -1751,11 +1770,77 @@
     if (K.kind === 'tank' || (melee && oc && (oc.stats.attackrange || 0) >= 400)) return [firstOk([1054]), 2003].filter(Boolean);
     return [firstOk([1055]), 2003].filter(Boolean);
   }
+  /* =====================================================================
+     NOOBSTATMOTOR (option des Réglages) : builds calculés par règles depuis data/nooblol_builds.md
+     au lieu des statistiques du collecteur.
+     ===================================================================== */
+  const nsmOn = () => !!(S.opt.nsm && typeof NSM !== 'undefined' && NSM.version);
+  /* Nom anglais (ou français) d'un objet du fichier → identifiant Riot */
+  function nsmId(name) {
+    if (!name || !D.items) return 0;
+    R.nsmIds = R.nsmIds || {};
+    if (name in R.nsmIds) return R.nsmIds[name];
+    /* noms du fichier encore différents de ceux de Data Dragon */
+    const k = ({ ludenscompanion: 'ludensecho' })[NSM.norm(name)] || NSM.norm(name), fr = NSM.item(name) && NSM.item(name).fr ? NSM.norm(NSM.item(name).fr) : '';
+    let id = 0;
+    if (R.nsmEn && R.nsmEn[k]) id = +R.nsmEn[k];
+    if (!id && fr) { const x = Object.values(D.items).filter((it) => it.maps && it.maps['11'] && !it.requiredChampion && +it.id < 100000 && NSM.norm(it.name) === fr).sort((a, b) => +a.id - +b.id)[0]; if (x) id = +x.id; }
+    if (!R.nsmEn && !R.nsmEnLoading) { R.nsmEnLoading = true; Dd.itemsEn().then((m) => { R.nsmEn = m; R.nsmIds = {}; render(true); }).catch(() => { R.nsmEnLoading = false; }); }
+    if (id || R.nsmEn) R.nsmIds[name] = id;
+    return id;
+  }
+  const nsmIds = (names) => [...new Set((names || []).map(nsmId).filter(Boolean))];
+  /* État de la partie pour le moteur : écart d'or avec mon adversaire de voie, minute, avance en kills */
+  function nsmState(L, oppName) {
+    if (!L || !L.me) return null;
+    const meP = L.players.find((p) => p.name === L.me.name); if (!meP) return null;
+    const op = oppName ? L.players.find((p) => p.name === oppName) : null;
+    return { gold: op ? goldOf(meP, L).v - goldOf(op, L).v : 0, time: L.time, laneKills: op ? meP.k - op.k : 0 };
+  }
+  /* Le build du moteur, au format des builds de l'appli */
+  function nsmBuild(c, role, enemyChamps, oc, state) {
+    const r = NSM.build(c, { role, enemies: enemyChamps.map((x) => ({ id: x.id, name: x.name })), opp: oc ? { id: oc.id, name: oc.name } : null, state });
+    if (!r || r.unknown) return { unknown: true };
+    const ids = r.items.map((n) => ({ n, id: nsmId(n) })).filter((x) => x.id);
+    const boots = (ids.find((x) => NSM.isBoots(x.n)) || {}).id || 0;
+    const sup = ids.filter((x) => NSM.isSupport(x.n)).map((x) => x.id);
+    const leg = ids.filter((x) => !NSM.isBoots(x.n) && !NSM.isSupport(x.n)).map((x) => x.id);
+    const lane = oc ? NSM.lane({ id: c.id, name: c.name }, role, { id: oc.id, name: oc.name }) : [];
+    return { r, start: nsmIds(NSM.start({ id: c.id, name: c.name }, role, oc ? { id: oc.id, name: oc.name } : null)), core: sup.concat(leg).slice(0, 3), boots, next: sup.concat(leg).slice(3), all: ids.map((x) => x.id),
+      lane: lane.map((x) => ({ text: x.text, items: nsmIds(x.items) })), flow: NSM.flow(state) };
+  }
+  const nsmWhy = (r) => `${r.situations.length ? r.situations.map((x) => x.fr + (x.who.length ? ` (${x.who.join(', ')})` : '')).join(' · ') : 'rien de particulier en face'}`;
+  /* Carte complète du moteur (sélection des champions et Réglages) */
+  function nsmCard(c, role, enemyChamps, oc) {
+    const B = nsmBuild(c, role, enemyChamps, oc, null);
+    if (B.unknown) return `<div class="card"><h2>🧠 NoobStatMotor</h2><p class="muted small">${esc(c.name)} n'est pas encore dans la base du moteur : les conseils habituels restent affichés.</p></div>`;
+    const r = B.r, ic = (id) => `<span class="itm" data-act="item" data-val="${id}">${itIcon(id, 'ico')}</span>`;
+    return `<div class="card gold"><div class="row sp"><h2 style="margin:0">🧠 NoobStatMotor · ${esc(r.base)}</h2><span class="tag">${esc(r.profileLabel)}</span></div>
+      <p class="small muted">Build calculé par règles (base du ${esc(r.version)}) : profil <b>${esc(r.profileLabel)}</b>${role ? ' en ' + ROLE_NAME[role] : ''}. Situations détectées : ${esc(nsmWhy(r))}.</p>
+      <div class="kit">
+        <div class="step"><span class="lab">1. Départ</span><div class="row">${B.start.map(ic).join('')}</div></div>
+        <div class="step main"><span class="lab">2. Ordre d'achat</span><div class="row">${B.all.map((id, i) => `${i ? '<span class="arrow">›</span>' : ''}${ic(id)}`).join('')}</div></div>
+      </div>
+      ${r.changes.length ? `<p class="small">🔧 Ajustements : ${r.changes.map(esc).join(' · ')}</p>` : ''}
+      ${r.notes.length ? r.notes.map((n) => `<p class="small muted">ℹ️ ${esc(n)}</p>`).join('') : ''}
+      ${B.lane.length ? `<h3>🎯 Contre ${esc(oc.name)} en voie</h3>${B.lane.map((x) => `<div class="row nw small" style="margin:3px 0">${x.items.map((id) => itIcon(id, 'ico sm')).join('')}<span>${esc(x.text)}</span></div>`).join('')}` : ''}</div>`;
+  }
+  function nsmSettings() {
+    const ok = typeof NSM !== 'undefined' && NSM.version;
+    return `<div class="card"><h2>🧠 Moteur de builds</h2>
+      <p class="muted small">Par défaut, les builds conseillés (sélection, chargement et en jeu) viennent des statistiques des parties analysées par le collecteur. Avec <b>NoobStatMotor</b>, ils sont calculés par règles à partir de la base de builds (19 profils de champions, 10 builds chacun) : profil de ton champion selon son rôle, situations détectées dans l'équipe adverse, ajustements objet par objet, état de la partie et match-up de voie. Les runes restent celles du collecteur.</p>
+      <div class="row"><button class="chip ${S.opt.nsm ? 'on' : ''}" data-act="nsmToggle" ${ok ? '' : 'disabled'}>${S.opt.nsm ? '✅ NoobStatMotor activé' : 'NoobStatMotor désactivé'}</button>${ok ? `<span class="small muted">Base du ${esc(NSM.version)}</span>` : '<span class="small neg">Base introuvable</span>'}</div></div>`;
+  }
   function loadBuild(ld) {
     if (!ld.meG || !D.champs) return null;
     const c = byKey(ld.meG.champ); if (!c) return null;
     const role = ld.myRole, oc = ld.oppG ? byKey(ld.oppG.champ) : null;
     const enemyKeys = ld.teams[1].map((p) => +p.champ).filter(Boolean);
+    if (nsmOn() && role) {
+      const st = ld.L ? nsmState(ld.L, ld.oppG && ld.oppG.live ? ld.oppG.live.name : '') : null;
+      const B = nsmBuild(c, role, enemyKeys.map(byKey).filter(Boolean), oc, st);
+      if (!B.unknown) return { c, role, oc, K: myKit(c, role), bl: botLane(ld), nsm: B.r, nsmB: B, fromStats: false, games: 0, start: B.start, core: B.core, boots: B.boots, next: B.next, recos: [] };
+    }
     const rows = role && NB ? cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30)) : null;
     if (rows === undefined) return { c, role, oc, loading: true };
     let A = null;
@@ -1790,6 +1875,7 @@
   const RECO_PRIO = { heal: 0, burst: 1, mr: 2, armor: 2, pen: 3 };
   function teamBuild(ld, b) {
     if (!b || b.loading || !b.c) return null;
+    if (b.nsm) return { c: b.c, role: b.role, start: b.start.slice(), core: b.core.slice(), boots: b.boots, next: b.next.slice(), why: [], same: true };
     const recos = b.recos.slice().sort((x, y) => (RECO_PRIO[x.id] ?? 5) - (RECO_PRIO[y.id] ?? 5));
     const core = b.core.slice(0, 1), used = [];
     for (const r of recos) { if (core.length >= 3) break; const id = r.items.find((x) => !core.includes(x)); if (id) { core.push(id); used.push(r); } }
@@ -1893,6 +1979,7 @@
     const liveOf = (g) => g && g.live && g.live.runes;
     runeTips(oc.name, liveOf(ld.oppG)).forEach((t) => T(t));
     if (b.bl && b.bl.eAdc) { const eg = ld.teams[1].find((p) => ld.role.get(p) === 'adc'); if (eg) runeTips(b.bl.eAdc.name, liveOf(eg)).slice(0, 1).forEach((t) => T(t)); }
+    if (b.nsmB) b.nsmB.lane.forEach((x) => T(x.text + (x.items.length ? ' : ' + x.items.map(itemNm).join(' ou ') : '') + '.', x.items));
     /* Support : toute la voie du bas (leur duo et ton ADC) */
     if (b.bl) {
       const { eAdc, eSup, mAdc } = b.bl;
@@ -1928,7 +2015,8 @@
     const tips = [];
     const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
     (b && b.recos ? b.recos : []).filter((r) => !r.bot).forEach((r) => T(`${r.text} : ${r.items.map(itemNm).join(' ou ')}.`, r.items));
-    if (!(b && b.recos && b.recos.some((r) => !r.bot && (r.id === 'mr' || r.id === 'armor')))) T('Dégâts mixtes en face : équilibre armure et résistance magique.');
+    if (b && b.nsm) { b.nsm.situations.forEach((x) => T(`NoobStatMotor — ${x.fr}${x.who.length ? ` (${x.who.join(', ')})` : ''}.`)); b.nsm.notes.forEach((n) => T(n)); (b.nsmB.flow || []).forEach((n) => T(n)); }
+    if (!(b && b.nsm) && !(b && b.recos && b.recos.some((r) => !r.bot && (r.id === 'mr' || r.id === 'armor')))) T('Dégâts mixtes en face : équilibre armure et résistance magique.');
     const engage = en.filter((x) => x.c.tags.includes('Tank') && (x.c.tags.includes('Support') || x.c.tags.includes('Fighter')));
     if (engage.length) T(`Ils peuvent engager fort (${names(engage)}) : reste derrière tes tanks en combat et garde Saut éclair pour te dégager.`);
     const poke = en.filter((x) => (x.c.stats.attackrange || 0) >= 500 && (x.c.tags.includes('Mage') || x.c.tags.includes('Marksman')));
@@ -2000,7 +2088,7 @@
     else {
       const following = S.gameBuild && S.gameBuild.gameId === ld.g.gameId && S.gameBuild.champ === b.c.id;
       h += `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">🛒 Build conseillé · ${esc(b.c.name)}${b.bl ? ` vs ${esc([b.bl.eSup, b.bl.eAdc].filter(Boolean).map((x) => x.name).join(' + '))}${b.bl.mAdc ? ` · avec ${esc(b.bl.mAdc.name)}` : ''}` : b.oc ? ' vs ' + esc(b.oc.name) : ''}</h2></div>
-        <p class="small muted">${b.bl ? `Pensé pour toute la voie du bas : leur support${b.bl.eAdc ? ` et leur ADC (${esc(b.bl.eAdc.name)})` : ''}${b.bl.mAdc ? `, et ton ADC (${esc(b.bl.mAdc.name)})` : ''}. ` : ''}${b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
+        <p class="small muted">${b.bl ? `Pensé pour toute la voie du bas : leur support${b.bl.eAdc ? ` et leur ADC (${esc(b.bl.eAdc.name)})` : ''}${b.bl.mAdc ? `, et ton ADC (${esc(b.bl.mAdc.name)})` : ''}. ` : ''}${b.nsm ? `🧠 NoobStatMotor : profil ${esc(b.nsm.profileLabel)}, build « ${esc(b.nsm.base)} ». Situations : ${esc(nsmWhy(b.nsm))}.${b.nsm.changes.length ? ' Ajustements : ' + esc(b.nsm.changes.join(' · ')) + '.' : ''}` : b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
         <div class="mybuild compact" style="border:0;padding:0;background:none">
         <div class="brow"><span class="small muted">Départ</span><div class="bis">${b.start.map(ic).join('')}</div></div>
         <div class="brow"><span class="small muted">Principaux</span><div class="bis">${b.core.map(ic).join('<span class="arrow">›</span>')}${b.boots ? `<span class="rsep"></span>${ic(b.boots)}` : ''}</div></div>
@@ -2078,7 +2166,7 @@
     const role = new Map(P.map((x) => [x, x.role]));
     const myRole = meG ? meG.role : '';
     const oppG = (R.loadOpp && teams[1].find((x) => x.champ === +R.loadOpp)) || (myRole && teams[1].find((x) => x.role === myRole)) || null;
-    return { g: { players: P, gameId: R.lcu.game ? R.lcu.game.gameId : 0 }, meG, myTeam, teams, role, myRole, oppG };
+    return { g: { players: P, gameId: R.lcu.game ? R.lcu.game.gameId : 0 }, meG, myTeam, teams, role, myRole, oppG, L };
   }
 
   /* =====================================================================
@@ -2093,6 +2181,26 @@
     const c = D.champs[meP.champ]; if (!c) return null;
     const role = liveRoles(L).get(meP.name) || '';
     const K = myKit(c, role);
+    if (nsmOn() && role) {
+      /* NoobStatMotor : prochain objet et objet à remplacer d'après l'état de la partie (section 4.4 du fichier) */
+      const LR = liveRoles(L), en = L.players.filter((p) => p.team !== meP.team), opP = en.find((p) => LR.get(p.name) === role);
+      const st = nsmState(L, opP ? opP.name : '');
+      const B = nsmBuild(c, role, en.map((p) => D.champs[p.champ]).filter(Boolean), opP ? D.champs[opP.champ] : null, st);
+      if (!B.unknown) {
+        const enNames = {}; B.r.items.forEach((n) => { enNames[nsmId(n)] = n; });
+        const ownedNames = meP.items.map((i) => enNames[i.id] || (D.items[String(i.id)] && Builds.isLegendary(D.items[String(i.id)]) ? 'id:' + i.id : '')).filter(Boolean);
+        const nx = NSM.next(B.r, ownedNames);
+        const recos = [];
+        /* même prochain objet que la carte « Mon build » */
+        const nb = { core: B.core, boots: B.boots, situational: B.next };
+        const n2 = Builds.nextItem(itemPlan(nb), meP.items.map((i) => i.id), D);
+        if (n2 && n2.item) recos.push({ id: 'nsm-next', score: 1, text: `Prochain objet du build « ${B.r.base} » (NoobStatMotor)`, items: [+n2.item] });
+        if (nx && nx.replace && nsmId(nx.replace.by)) { const outId = +String(nx.replace.out).replace('id:', ''); recos.push({ id: 'nsm-swap', score: 0.9, text: `Remplace ${itemNm(outId) || nx.replace.out} par cet objet`, items: [nsmId(nx.replace.by)] }); }
+        B.flow.forEach((f, i) => recos.push({ id: 'nsm-flow' + i, score: 0.5, text: f, items: [] }));
+        const threats = en.map((p) => ({ p, c: D.champs[p.champ], gold: goldOf(p, L).v })).filter((e) => e.c).sort((a, b2) => b2.gold - a.gold).slice(0, 3);
+        return { recos: recos.filter((r) => r.items.length || r.id.startsWith('nsm-flow')).slice(0, 3), fed: null, wAD: 0.5, threats, K, nsm: B.r };
+      }
+    }
     const en = L.players.filter((p) => p.team !== L.me.team).map((p) => {
       const ch = D.champs[p.champ];
       const its = p.items.filter((i) => i.slot < 6).map((i) => D.items[String(i.id)]).filter(Boolean);
@@ -2510,7 +2618,7 @@
   }
   function voiceSettings() {
     const vs = frVoices();
-    return `<div class="card"><h2>🔊 Annonces vocales en jeu</h2>
+    return nsmSettings() + `<div class="card"><h2>🔊 Annonces vocales en jeu</h2>
       <p class="muted small">Une voix t'annonce les objectifs (30 s avant et à l'apparition), les objectifs pris par chaque équipe, les inhibiteurs, et quand tu as assez d'or pour ton prochain objet.</p>
       <div class="chips"><button class="chip ${S.opt.voice ? 'on' : ''}" data-act="opt" data-val="voice">${S.opt.voice ? '🔊 Activées' : '🔇 Désactivées'}</button><button class="chip" data-act="voiceTest">▶ Tester</button></div>
       <div class="row" style="margin-top:8px"><div class="grow"><label>Voix</label><select data-voice="1">${vs.length ? vs.map((v) => `<option value="${esc(v.name)}" ${v.name === S.opt.voiceName ? 'selected' : ''}>${esc(v.name)}</option>`).join('') : '<option value="">Voix française par défaut</option>'}</select></div></div>
@@ -2687,6 +2795,7 @@
       case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
       case 'pvToggle': { const on = (((R.cfg || {}).overlay || {}).prog || {}).enabled === false; NB.config.set({ overlay: { prog: { enabled: on } } }).then((c) => { R.cfg = c; R.pvKey = ''; render(true); }).catch(() => {}); break; }
       case 'pvInd': { S.opt.pvOff = Object.assign({}, S.opt.pvOff); if (S.opt.pvOff[v]) delete S.opt.pvOff[v]; else S.opt.pvOff[v] = true; save(); R.pvKey = ''; if (R.live) progSync(R.live); render(true); break; }
+      case 'nsmToggle': S.opt.nsm = !S.opt.nsm; save(); R.loadMemo = null; R.ovKey = ''; toast(S.opt.nsm ? '🧠 NoobStatMotor activé : les builds sont calculés par règles' : 'Builds d\'après les statistiques du collecteur'); render(true); break;
       case 'pvReset': NB.progov.reset().then(() => toast('Encart « Ma progression » replacé')).catch(() => {}); break;
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;
       case 'applyMyRunes': {

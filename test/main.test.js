@@ -602,3 +602,28 @@ test('partie en cours : des joueurs aux noms masqués restent tous dans la liste
   assert.equal(new Set(names).size, 4);
   assert.ok(L.me && L.me.name === 'Carotte#EUW');
 });
+
+test('NoobStatMotor : exemples du fichier de builds et validité de tous les builds', () => {
+  global.NSM_DATA = require('../renderer/nsm-data.js');
+  const N = require('../renderer/noobstatmotor.js');
+  const swain = N.build('Swain', { role: 'top', enemies: ['Darius', 'Lee Sin', 'Ahri', 'Jinx', 'Leona'] });
+  assert.equal(swain.profile, 'MAGE_BATTLE'); assert.equal(swain.base, 'Contre AD / plongeurs');
+  assert.deepEqual(swain.items, ['Plated Steelcaps', "Liandry's Torment", "Zhonya's Hourglass", "Rylai's Crystal Scepter", "Rabadon's Deathcap", 'Void Staff']);
+  const jinx = N.build('Jinx', { role: 'adc', enemies: ['Malzahar', 'Zed', 'Soraka', 'Sejuani', 'Garen'] });
+  assert.deepEqual(jinx.items, ["Mercury's Treads", 'Yun Tal Wildarrows', 'Infinity Edge', 'Mortal Reminder', 'Mercurial Scimitar', 'Guardian Angel']);
+  const garen = N.build('Garen', { role: 'top', enemies: ['Ahri', 'Lux', 'Brand'], state: { gold: -2000, time: 1080 } });
+  assert.equal(garen.base, 'Contre AP');
+  assert.ok(N.flow({ gold: -2000 })[0].startsWith('En retard'));
+  assert.ok(N.champ({ id: 'MonkeyKing', name: 'Wukong' }) && N.champ({ id: 'Kaisa', name: "Kai'Sa" }));
+  const cass = N.build('Cassiopeia', { role: 'mid', enemies: [] });
+  assert.ok(!cass.items.some(N.isBoots));
+  const D = NSM_DATA, R = { TOP: 'top', JGL: 'jungle', MID: 'mid', ADC: 'adc', SUP: 'support' };
+  for (const [n, e] of Object.entries(D.champions)) for (const r of Object.keys(e.roles)) {
+    const x = N.build(n, { role: R[r], enemies: ['Soraka', 'Zed', 'Malzahar', 'Sejuani', 'Garen'] });
+    const groups = x.items.flatMap((it) => (N.item(it) || {}).groups || []);
+    assert.equal(new Set(groups).size, groups.length, n + ' ' + r);
+    assert.equal(x.items.length, 6, n + ' ' + r);
+    assert.ok(x.items.filter(N.isBoots).length <= 1 && x.items.filter(N.isSupport).length <= (r === 'SUP' ? 1 : 1));
+    if (e.res !== 'MANA') assert.ok(!x.items.some((it) => (N.item(it) || {}).mana_only), n);
+  }
+});
