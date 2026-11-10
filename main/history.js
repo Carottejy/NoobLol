@@ -15,7 +15,7 @@ function summarize(m, puuid) {
   const tk = sum('kills'), td = sum('totalDamageDealtToChampions'), tg = sum('goldEarned');
   return {
     id: (m.metadata || {}).matchId || '', created: info.gameCreation || 0, queue: info.queueId || 0, mode: info.gameMode || '', map: info.mapId || 0, dur,
-    champ: p.championId, role: p.teamPosition || '', win: !!p.win, remake: !!p.gameEndedInEarlySurrender,
+    rv: 2, champ: p.championId, role: p.teamPosition || '', win: !!p.win, remake: !!p.gameEndedInEarlySurrender,
     k: p.kills || 0, d: p.deaths || 0, a: p.assists || 0, cs: (p.totalMinionsKilled || 0) + (p.neutralMinionsKilled || 0),
     gold: p.goldEarned || 0, dmg: p.totalDamageDealtToChampions || 0, kp: tk ? ((p.kills || 0) + (p.assists || 0)) / tk : 0,
     dmgShare: td ? (p.totalDamageDealtToChampions || 0) / td : 0, goldShare: tg ? (p.goldEarned || 0) / tg : 0,
@@ -41,7 +41,8 @@ class History {
     let fetched = 0;
     for (const id of ids) {
       if (out.length >= count) break;
-      if (!(id in mine)) {
+      /* rv : version du calcul du poste (les anciennes parties lues dans le client sont relues) */
+      if (!(id in mine) || (mine[id] && mine[id].rv !== 2)) {
         try { mine[id] = summarize(await this.api.match(id, 5), puuid); fetched++; } catch (e) { if (e.status === 404) mine[id] = null; else continue; }
       }
       if (useful(mine[id])) out.push(mine[id]);

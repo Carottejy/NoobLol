@@ -13,6 +13,42 @@ function positionOf(p) {
   return lane;
 }
 
+/* Postes d'une équipe : chaque poste n'est donné qu'une fois. Châtiment = jungle (seul un joueur avec Châtiment peut
+   être jungle), objet de support = support, puis les voies indiquées par le client quand elles ne se contredisent pas,
+   et enfin le poste restant. Les voies du client sont peu fiables en partie normale (un top qui « rôde » peut être noté jungle). */
+const SUP_ITEMS = new Set([3865, 3866, 3867, 3869, 3870, 3871, 3876, 3877]);
+function assignTeam(ps) {
+  const pos = new Map(), free = new Set(['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY']);
+  const set = (p, r) => { pos.set(p, r); free.delete(r); };
+  const smite = ps.filter((p) => p.spell1Id === 11 || p.spell2Id === 11);
+  if (smite.length === 1) set(smite[0], 'JUNGLE');
+  const items = (p) => [0, 1, 2, 3, 4, 5, 6].map((i) => (p.stats || {})['item' + i]);
+  const sup = ps.filter((p) => !pos.has(p) && items(p).some((i) => SUP_ITEMS.has(i)));
+  if (sup.length === 1) set(sup[0], 'UTILITY');
+  const hint = (p) => {
+    const t = p.timeline || {}, lane = LANE[String(t.lane || '').toUpperCase()] || '', role = String(t.role || '').toUpperCase();
+    if (lane === 'BOTTOM') return /SUPPORT/.test(role) ? 'UTILITY' : 'BOTTOM';
+    if (lane === 'JUNGLE' && !(p.spell1Id === 11 || p.spell2Id === 11)) return '';
+    return lane;
+  };
+  for (let pass = 0; pass < 2; pass++) {
+    ps.forEach((p) => {
+      if (pos.has(p)) return;
+      const h = hint(p);
+      if (!h || !free.has(h)) return;
+      const rivals = ps.filter((q) => !pos.has(q) && hint(q) === h);
+      if (rivals.length === 1 || pass === 1) set(p, h);
+    });
+  }
+  /* Postes restants : le support est celui qui a le moins de sbires, l'ADC celui qui en a le plus parmi ceux qui restent */
+  const left = ps.filter((p) => !pos.has(p));
+  const cs = (p) => ((p.stats || {}).totalMinionsKilled || 0);
+  if (free.has('UTILITY') && left.length > 1) { const p = left.slice().sort((a, b) => cs(a) - cs(b))[0]; set(p, 'UTILITY'); left.splice(left.indexOf(p), 1); }
+  if (free.has('BOTTOM') && left.length > 1) { const p = left.slice().sort((a, b) => cs(b) - cs(a))[0]; set(p, 'BOTTOM'); left.splice(left.indexOf(p), 1); }
+  left.forEach((p) => { const r = [...free].find((x) => x !== 'JUNGLE' || p.spell1Id === 11 || p.spell2Id === 11) || [...free][0]; if (r) set(p, r); });
+  return pos;
+}
+
 function perksOf(s) {
   if (!s || !s.perkPrimaryStyle) return undefined;
   const sel = (ids) => ids.filter(Boolean).map((perk) => ({ perk }));
@@ -31,13 +67,15 @@ const matchIdOf = (g, platform) => `${String(g.platformId || platform || 'EUW1')
 function toV5(g, platform) {
   if (!g || !g.gameId) return null;
   const ids = g.participantIdentities || [];
+  const posOf = new Map();
+  [100, 200].forEach((t) => assignTeam((g.participants || []).filter((p) => p.teamId === t)).forEach((v, k) => posOf.set(k, v)));
   const participants = (g.participants || []).map((p) => {
     const pl = (ids.find((x) => x.participantId === p.participantId) || {}).player || {};
     const s = p.stats || {};
     return Object.assign({}, s, {
       participantId: p.participantId, teamId: p.teamId, championId: p.championId, championName: '',
       puuid: pl.puuid || '', riotIdGameName: pl.gameName || pl.summonerName || '', riotIdTagline: pl.tagLine || '', summonerName: pl.summonerName || pl.gameName || '',
-      summoner1Id: p.spell1Id, summoner2Id: p.spell2Id, teamPosition: positionOf(p), individualPosition: positionOf(p),
+      summoner1Id: p.spell1Id, summoner2Id: p.spell2Id, teamPosition: p.teamPosition || posOf.get(p) || positionOf(p), individualPosition: positionOf(p),
       win: !!s.win, perks: perksOf(s), gameEndedInEarlySurrender: !!s.gameEndedInEarlySurrender,
     });
   });

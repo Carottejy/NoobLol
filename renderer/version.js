@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.19.1';
+var APP_VERSION = '3.19.2';
 var APP_RELEASES = [
+  { v: '3.19.2', date: '2026-11-10', notes: [
+    'Correction : dans « Mes dernières parties » (et la progression, la fin de partie), le poste lu dans l\'historique du client pouvait être faux, par exemple « Jungle » pour un top. Les postes sont maintenant répartis par équipe : seul le joueur avec Châtiment peut être jungle, l\'objet de support désigne le support, chaque poste n\'est donné qu\'une fois. Les parties déjà enregistrées sont relues.',
+  ]},
   { v: '3.19.1', date: '2026-11-10', notes: [
     'Sélection : la carte de ton champion (victoires, parties analysées, parties contre ton adversaire) passe dans la colonne de gauche, sous les équipes et au-dessus des conseils de jeu.',
     'Correction : les colonnes qui défilent (sélection et écran de jeu) remontaient toutes seules en haut à chaque rafraîchissement ; elles gardent maintenant leur position.',
