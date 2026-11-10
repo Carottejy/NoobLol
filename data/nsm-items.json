@@ -1,0 +1,1383 @@
+{
+"Berserker's Greaves": {
+"fr": "Jambières du berserker",
+"cost": 1100,
+"cat": "boots",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ms": 45,
+"as": 35
+}
+},
+"Sorcerer's Shoes": {
+"fr": "Chaussures du sorcier",
+"cost": 1100,
+"cat": "boots",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ms": 45,
+"fpen": 12
+}
+},
+"Plated Steelcaps": {
+"fr": "Coques en acier renforcé",
+"cost": 1200,
+"cat": "boots",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ms": 45,
+"arm": 25
+}
+},
+"Mercury's Treads": {
+"fr": "Sandales de Mercure",
+"cost": 1250,
+"cat": "boots",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ms": 45,
+"mr": 20,
+"ten": 30
+}
+},
+"Ionian Boots of Lucidity": {
+"fr": "Bottes de lucidité ioniennes",
+"cost": 900,
+"cat": "boots",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ms": 45,
+"ah": 15
+}
+},
+"Boots of Swiftness": {
+"fr": "Bottes de rapidité",
+"cost": 1000,
+"cat": "boots",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ms": 55
+}
+},
+"Celestial Opposition": {
+"fr": "Opposition céleste",
+"cost": 0,
+"cat": "support",
+"groups": [
+"Support"
+],
+"mana_only": false,
+"stats": {
+"hp": 200,
+"hp5": 75,
+"mp5": 75
+}
+},
+"Solstice Sleigh": {
+"fr": "Traîneau du solstice",
+"cost": 0,
+"cat": "support",
+"groups": [
+"Support"
+],
+"mana_only": false,
+"stats": {
+"hp": 200,
+"hp5": 75,
+"mp5": 75
+}
+},
+"Bloodsong": {
+"fr": "Chant de sang",
+"cost": 0,
+"cat": "support",
+"groups": [
+"Support"
+],
+"mana_only": false,
+"stats": {
+"hp": 200,
+"hp5": 75,
+"mp5": 75
+}
+},
+"Dream Maker": {
+"fr": "Faiseur de rêves",
+"cost": 0,
+"cat": "support",
+"groups": [
+"Support"
+],
+"mana_only": false,
+"stats": {
+"hp": 200,
+"hp5": 75,
+"mp5": 75
+}
+},
+"Zaz'Zak's Realmspike": {
+"fr": "Pointe du royaume de Zaz'Zak",
+"cost": 0,
+"cat": "support",
+"groups": [
+"Support"
+],
+"mana_only": false,
+"stats": {
+"hp": 200,
+"hp5": 75,
+"mp5": 75
+}
+},
+"Abyssal Mask": {
+"fr": "Masque abyssal",
+"cost": 2650,
+"cat": "legendary",
+"groups": [
+"Blight"
+],
+"mana_only": false,
+"stats": {
+"ah": 15,
+"hp": 350,
+"mr": 45
+}
+},
+"Archangel's Staff": {
+"fr": "Bâton de l'archange",
+"cost": 2900,
+"cat": "legendary",
+"groups": [
+"Manaflow",
+"Lifeline"
+],
+"mana_only": true,
+"stats": {
+"ap": 70,
+"ah": 25,
+"mana": 600
+}
+},
+"Ardent Censer": {
+"fr": "Encensoir ardent",
+"cost": 2200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 45,
+"hsp": 10,
+"mp5": 125,
+"ms": 4
+}
+},
+"Axiom Arc": {
+"fr": "Arc axiomatique",
+"cost": 2750,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"ah": 20,
+"leth": 18
+}
+},
+"Banshee's Veil": {
+"fr": "Voile de la banshee",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Annul"
+],
+"mana_only": false,
+"stats": {
+"ap": 105,
+"mr": 40
+}
+},
+"Black Cleaver": {
+"fr": "Couperet noir",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Fatality"
+],
+"mana_only": false,
+"stats": {
+"ad": 40,
+"ah": 20,
+"hp": 400
+}
+},
+"Blackfire Torch": {
+"fr": "Torche de feu noir",
+"cost": 2800,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ap": 80,
+"ah": 20,
+"mana": 600
+}
+},
+"Blade of the Ruined King": {
+"fr": "Lame du roi déchu",
+"cost": 3200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 40,
+"ls": 10,
+"as": 25
+}
+},
+"Bloodletter's Curse": {
+"fr": "Malédiction sanglante",
+"cost": 2900,
+"cat": "legendary",
+"groups": [
+"Blight"
+],
+"mana_only": false,
+"stats": {
+"ap": 65,
+"hp": 400,
+"ah": 15
+}
+},
+"Bloodthirster": {
+"fr": "Soif-de-sang",
+"cost": 3400,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 80,
+"ls": 15
+}
+},
+"Cosmic Drive": {
+"fr": "Propulseur cosmique",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 350,
+"ah": 25,
+"ap": 70,
+"ms": 4
+}
+},
+"Cryptbloom": {
+"fr": "Floraison funèbre",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Blight"
+],
+"mana_only": false,
+"stats": {
+"ap": 75,
+"ah": 20,
+"mpen": 30
+}
+},
+"Chempunk Chainsword": {
+"fr": "Tronçonneuse chimtech",
+"cost": 3100,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 45,
+"ah": 15,
+"hp": 450
+}
+},
+"Dawncore": {
+"fr": "Cœur de l'aube",
+"cost": 2500,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ap": 45,
+"hsp": 16,
+"mp5": 100
+}
+},
+"Dead Man's Plate": {
+"fr": "Plaque du mort",
+"cost": 2900,
+"cat": "legendary",
+"groups": [
+"Momentum"
+],
+"mana_only": false,
+"stats": {
+"arm": 55,
+"hp": 350,
+"ms": 4
+}
+},
+"Death's Dance": {
+"fr": "Danse de la mort",
+"cost": 3300,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 60,
+"ah": 15,
+"arm": 50
+}
+},
+"Echoes of Helia": {
+"fr": "Échos d'Hélia",
+"cost": 2200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ah": 20,
+"ap": 35,
+"hp": 200,
+"mp5": 125
+}
+},
+"Eclipse": {
+"fr": "Éclipse",
+"cost": 2900,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 60,
+"ah": 15
+}
+},
+"Edge of Night": {
+"fr": "Lisière de la nuit",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Annul"
+],
+"mana_only": false,
+"stats": {
+"ad": 50,
+"hp": 250,
+"leth": 15
+}
+},
+"Endless Hunger": {
+"fr": "Faim insatiable",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 60,
+"omni": 5,
+"ten": 20
+}
+},
+"Essence Reaver": {
+"fr": "Faucheuse d'essence",
+"cost": 2900,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ad": 60,
+"ah": 15,
+"crit": 25
+}
+},
+"Experimental Hexplate": {
+"fr": "Hexplaque expérimentale",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 450,
+"ad": 40,
+"uh": 30,
+"as": 20
+}
+},
+"Force of Nature": {
+"fr": "Force de la nature",
+"cost": 2800,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 400,
+"mr": 55,
+"ms": 4
+}
+},
+"Frozen Heart": {
+"fr": "Cœur gelé",
+"cost": 2500,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ah": 20,
+"arm": 75,
+"mana": 400
+}
+},
+"Guardian Angel": {
+"fr": "Ange gardien",
+"cost": 3200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"arm": 45
+}
+},
+"Guinsoo's Rageblade": {
+"fr": "Lame enragée de Guinsoo",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 30,
+"ap": 30,
+"as": 25
+}
+},
+"Heartsteel": {
+"fr": "Cœur d'acier",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 900,
+"hp5": 100
+}
+},
+"Hextech Rocketbelt": {
+"fr": "Ceinture-roquette Hextech",
+"cost": 2650,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ah": 20,
+"ap": 70,
+"hp": 300
+}
+},
+"Hollow Radiance": {
+"fr": "Rayonnement creux",
+"cost": 2800,
+"cat": "legendary",
+"groups": [
+"Immolate"
+],
+"mana_only": false,
+"stats": {
+"ah": 10,
+"hp": 400,
+"mr": 40,
+"hp5": 100
+}
+},
+"Horizon Focus": {
+"fr": "Focalisateur d'horizon",
+"cost": 2750,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 125,
+"ah": 25
+}
+},
+"Hubris": {
+"fr": "Orgueil",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 60,
+"ah": 10,
+"leth": 18
+}
+},
+"Hullbreaker": {
+"fr": "Brise-coque",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 40,
+"hp": 500,
+"ms": 4
+}
+},
+"Iceborn Gauntlet": {
+"fr": "Gantelet de glace",
+"cost": 2900,
+"cat": "legendary",
+"groups": [
+"Spellblade"
+],
+"mana_only": false,
+"stats": {
+"ah": 15,
+"arm": 50,
+"hp": 300
+}
+},
+"Imperial Mandate": {
+"fr": "Mandat impérial",
+"cost": 2250,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ah": 20,
+"ap": 60,
+"mp5": 125
+}
+},
+"Infinity Edge": {
+"fr": "Lame d'infini",
+"cost": 3450,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 65,
+"crit": 25
+}
+},
+"Jak'Sho, The Protean": {
+"fr": "Jak'Sho le Protéiforme",
+"cost": 3200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"arm": 45,
+"mr": 45,
+"hp": 350
+}
+},
+"Kaenic Rookern": {
+"fr": "Rookern de Kaenic",
+"cost": 2900,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 400,
+"mr": 80,
+"hp5": 100
+}
+},
+"Knight's Vow": {
+"fr": "Serment du chevalier",
+"cost": 2300,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ah": 10,
+"arm": 40,
+"hp": 200,
+"hp5": 100
+}
+},
+"Kraken Slayer": {
+"fr": "Tueur de krakens",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 45,
+"ms": 4,
+"as": 40
+}
+},
+"Liandry's Torment": {
+"fr": "Tourment de Liandry",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 60,
+"hp": 300
+}
+},
+"Lich Bane": {
+"fr": "Fléau de liche",
+"cost": 2900,
+"cat": "legendary",
+"groups": [
+"Spellblade"
+],
+"mana_only": false,
+"stats": {
+"ap": 100,
+"ah": 10,
+"ms": 4
+}
+},
+"Locket of the Iron Solari": {
+"fr": "Médaillon de l'Iron Solari",
+"cost": 2200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"arm": 25,
+"mr": 25,
+"hp": 200,
+"ah": 10
+}
+},
+"Lord Dominik's Regards": {
+"fr": "Salutations de Lord Dominik",
+"cost": 3100,
+"cat": "legendary",
+"groups": [
+"Fatality"
+],
+"mana_only": false,
+"stats": {
+"ad": 35,
+"crit": 25,
+"apen": 40
+}
+},
+"Luden's Companion": {
+"fr": "Compagnon de Luden",
+"cost": 2750,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ap": 100,
+"ah": 10,
+"mana": 600
+}
+},
+"Malignance": {
+"fr": "Malignance",
+"cost": 2700,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ap": 90,
+"ah": 15,
+"mana": 600,
+"uh": 20
+}
+},
+"Manamune": {
+"fr": "Manamune",
+"cost": 2900,
+"cat": "legendary",
+"groups": [
+"Manaflow"
+],
+"mana_only": true,
+"stats": {
+"ad": 35,
+"ah": 15,
+"mana": 500
+}
+},
+"Maw of Malmortius": {
+"fr": "Gueule de Malmortius",
+"cost": 3100,
+"cat": "legendary",
+"groups": [
+"Lifeline"
+],
+"mana_only": false,
+"stats": {
+"ah": 15,
+"ad": 60,
+"mr": 40
+}
+},
+"Mejai's Soulstealer": {
+"fr": "Voleur d'âmes de Mejai",
+"cost": 1500,
+"cat": "legendary",
+"groups": [
+"Glory"
+],
+"mana_only": false,
+"stats": {
+"ap": 20,
+"hp": 100
+}
+},
+"Mercurial Scimitar": {
+"fr": "Cimeterre mercuriel",
+"cost": 3200,
+"cat": "legendary",
+"groups": [
+"Quicksilver"
+],
+"mana_only": false,
+"stats": {
+"ad": 50,
+"ls": 10,
+"mr": 35
+}
+},
+"Mikael's Blessing": {
+"fr": "Bénédiction de Mikael",
+"cost": 2300,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"hp": 250,
+"ah": 15,
+"hsp": 12,
+"mp5": 100
+}
+},
+"Moonstone Renewer": {
+"fr": "Renouveau de pierre de lune",
+"cost": 2200,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ah": 20,
+"ap": 25,
+"hp": 200,
+"mp5": 125
+}
+},
+"Morellonomicon": {
+"fr": "Morellonomicon",
+"cost": 2850,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 75,
+"ah": 15,
+"hp": 350
+}
+},
+"Mortal Reminder": {
+"fr": "Rappel mortel",
+"cost": 3300,
+"cat": "legendary",
+"groups": [
+"Fatality"
+],
+"mana_only": false,
+"stats": {
+"ad": 35,
+"apen": 35,
+"crit": 25
+}
+},
+"Nashor's Tooth": {
+"fr": "Dent de Nashor",
+"cost": 2900,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ah": 15,
+"ap": 80,
+"as": 50
+}
+},
+"Navori Flickerblade": {
+"fr": "Lame scintillante de Navori",
+"cost": 2650,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"crit": 25,
+"ms": 4,
+"as": 40
+}
+},
+"Opportunity": {
+"fr": "Opportunité",
+"cost": 2700,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"leth": 18
+}
+},
+"Overlord's Bloodmail": {
+"fr": "Cotte du suzerain",
+"cost": 3300,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 550,
+"ad": 30
+}
+},
+"Phantom Dancer": {
+"fr": "Danseur fantôme",
+"cost": 2650,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"crit": 25,
+"ms": 10,
+"as": 65
+}
+},
+"Profane Hydra": {
+"fr": "Hydre profane",
+"cost": 2850,
+"cat": "legendary",
+"groups": [
+"Hydra"
+],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"ah": 10,
+"leth": 18
+}
+},
+"Rabadon's Deathcap": {
+"fr": "Coiffe de Rabadon",
+"cost": 3500,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 130
+}
+},
+"Randuin's Omen": {
+"fr": "Présage de Randuin",
+"cost": 2700,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"arm": 75,
+"hp": 350
+}
+},
+"Rapid Firecannon": {
+"fr": "Canon ultrarapide",
+"cost": 2650,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"crit": 25,
+"ms": 4,
+"as": 35
+}
+},
+"Ravenous Hydra": {
+"fr": "Hydre vorace",
+"cost": 3300,
+"cat": "legendary",
+"groups": [
+"Hydra"
+],
+"mana_only": false,
+"stats": {
+"ad": 65,
+"ah": 15,
+"ls": 12
+}
+},
+"Redemption": {
+"fr": "Rédemption",
+"cost": 2300,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"hp": 200,
+"ah": 15,
+"hsp": 10,
+"mp5": 100
+}
+},
+"Riftmaker": {
+"fr": "Faiseur de failles",
+"cost": 3100,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ah": 15,
+"ap": 70,
+"hp": 350
+}
+},
+"Rod of Ages": {
+"fr": "Bâton séculaire",
+"cost": 2600,
+"cat": "legendary",
+"groups": [
+"Eternity"
+],
+"mana_only": true,
+"stats": {
+"ap": 45,
+"hp": 350,
+"mana": 500
+}
+},
+"Runaan's Hurricane": {
+"fr": "Ouragan de Runaan",
+"cost": 2650,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"crit": 25,
+"ms": 4,
+"as": 40
+}
+},
+"Rylai's Crystal Scepter": {
+"fr": "Sceptre de cristal de Rylai",
+"cost": 2600,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 65,
+"hp": 400
+}
+},
+"Serpent's Fang": {
+"fr": "Croc du serpent",
+"cost": 2500,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"leth": 15
+}
+},
+"Serylda's Grudge": {
+"fr": "Rancune de Serylda",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Fatality"
+],
+"mana_only": false,
+"stats": {
+"ad": 45,
+"ah": 15,
+"apen": 35
+}
+},
+"Shadowflame": {
+"fr": "Flamme d'ombre",
+"cost": 3200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 110,
+"fpen": 15
+}
+},
+"Shurelya's Battlesong": {
+"fr": "Chant de bataille de Shurelya",
+"cost": 2200,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ap": 50,
+"ah": 15,
+"mp5": 125,
+"ms": 4
+}
+},
+"Spear of Shojin": {
+"fr": "Lance de Shojin",
+"cost": 3100,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 45,
+"hp": 450,
+"ah": 25
+}
+},
+"Spirit Visage": {
+"fr": "Visage spirituel",
+"cost": 2700,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 400,
+"hp5": 100,
+"mr": 50,
+"ah": 10
+}
+},
+"Staff of Flowing Water": {
+"fr": "Bâton des flots",
+"cost": 2250,
+"cat": "legendary",
+"groups": [],
+"mana_only": true,
+"stats": {
+"ap": 35,
+"ah": 15,
+"mp5": 125,
+"hsp": 10
+}
+},
+"Statikk Shiv": {
+"fr": "Shiv statikk",
+"cost": 2700,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 45,
+"ms": 4,
+"as": 30
+}
+},
+"Stormsurge": {
+"fr": "Choc de tempête",
+"cost": 2800,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ap": 90,
+"fpen": 15,
+"ms": 6
+}
+},
+"Stridebreaker": {
+"fr": "Briseur de foulées",
+"cost": 3300,
+"cat": "legendary",
+"groups": [
+"Hydra"
+],
+"mana_only": false,
+"stats": {
+"ad": 40,
+"hp": 450,
+"as": 25
+}
+},
+"Sundered Sky": {
+"fr": "Ciel fendu",
+"cost": 3100,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 400,
+"ad": 40,
+"ah": 10
+}
+},
+"Sunfire Aegis": {
+"fr": "Égide du feu solaire",
+"cost": 2700,
+"cat": "legendary",
+"groups": [
+"Immolate"
+],
+"mana_only": false,
+"stats": {
+"hp": 350,
+"arm": 50,
+"ah": 10
+}
+},
+"Sterak's Gage": {
+"fr": "Gage de Sterak",
+"cost": 3200,
+"cat": "legendary",
+"groups": [
+"Lifeline"
+],
+"mana_only": false,
+"stats": {
+"hp": 400,
+"ten": 20
+}
+},
+"Thornmail": {
+"fr": "Cotte épineuse",
+"cost": 2450,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 150,
+"arm": 75
+}
+},
+"Titanic Hydra": {
+"fr": "Hydre titanesque",
+"cost": 3300,
+"cat": "legendary",
+"groups": [
+"Hydra"
+],
+"mana_only": false,
+"stats": {
+"ad": 40,
+"hp": 600
+}
+},
+"Trailblazer": {
+"fr": "Éclaireur",
+"cost": 2400,
+"cat": "legendary",
+"groups": [
+"Momentum"
+],
+"mana_only": false,
+"stats": {
+"hp": 250,
+"arm": 40,
+"ms": 4
+}
+},
+"Trinity Force": {
+"fr": "Force de la trinité",
+"cost": 3333,
+"cat": "legendary",
+"groups": [
+"Spellblade"
+],
+"mana_only": false,
+"stats": {
+"ad": 36,
+"ah": 15,
+"hp": 333,
+"as": 30
+}
+},
+"Umbral Glaive": {
+"fr": "Glaive de l'ombre",
+"cost": 2500,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"ah": 10,
+"leth": 15
+}
+},
+"The Collector": {
+"fr": "Le Collecteur",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 50,
+"crit": 25,
+"leth": 10
+}
+},
+"Terminus": {
+"fr": "Terminus",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Fatality",
+"Blight"
+],
+"mana_only": false,
+"stats": {
+"ad": 30,
+"as": 35
+}
+},
+"Void Staff": {
+"fr": "Bâton du vide",
+"cost": 3000,
+"cat": "legendary",
+"groups": [
+"Blight"
+],
+"mana_only": false,
+"stats": {
+"ap": 95,
+"mpen": 40
+}
+},
+"Voltaic Cyclosword": {
+"fr": "Cyclo-épée voltaïque",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"ah": 10,
+"leth": 18
+}
+},
+"Warmog's Armor": {
+"fr": "Armure de Warmog",
+"cost": 3100,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 1120,
+"hp5": 100
+}
+},
+"Winter's Approach": {
+"fr": "Approche hivernale",
+"cost": 2400,
+"cat": "legendary",
+"groups": [
+"Manaflow"
+],
+"mana_only": true,
+"stats": {
+"hp": 550,
+"ah": 15,
+"mana": 500
+}
+},
+"Wit's End": {
+"fr": "Fin de l'esprit",
+"cost": 2800,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"mr": 45,
+"ten": 20,
+"as": 50
+}
+},
+"Youmuu's Ghostblade": {
+"fr": "Lame spectrale de Youmuu",
+"cost": 2800,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"leth": 18,
+"ms": 4
+}
+},
+"Yun Tal Wildarrows": {
+"fr": "Flèches sauvages de Yun Tal",
+"cost": 3000,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"ad": 55,
+"as": 35
+}
+},
+"Zeke's Convergence": {
+"fr": "Convergence de Zeke",
+"cost": 2200,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 300,
+"arm": 25,
+"mr": 25,
+"ah": 10
+}
+},
+"Zhonya's Hourglass": {
+"fr": "Sablier de Zhonya",
+"cost": 3250,
+"cat": "legendary",
+"groups": [
+"Stasis"
+],
+"mana_only": false,
+"stats": {
+"ap": 105,
+"arm": 50
+}
+},
+"Vigilant Wardstone": {
+"fr": "Pierre de garde vigilante",
+"cost": 2300,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 250,
+"arm": 25,
+"mr": 30,
+"ah": 20
+}
+},
+"Unending Despair": {
+"fr": "Désespoir éternel",
+"cost": 2800,
+"cat": "legendary",
+"groups": [],
+"mana_only": false,
+"stats": {
+"hp": 400,
+"arm": 25,
+"mr": 25,
+"ah": 10
+}
+}
+}

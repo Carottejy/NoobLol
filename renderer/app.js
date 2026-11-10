@@ -1225,7 +1225,7 @@
     if (coachOn('counter') && L.time > 480) {
       const ad = adaptBuy(L), r = ad && ad.recos[0];
       if (r && r.id === 'nsm-next') coachSay(L, `Prochain objet conseillé : ${itemName(r.items[0])}.`, 'adapt-nsm-' + r.items[0]);
-      else if (r && r.id === 'nsm-swap') coachSay(L, `${r.text} : ${itemName(r.items[0])}.`, 'adapt-nsm-swap-' + r.items[0]);
+      else if (r && r.nsm) coachSay(L, `${r.text.split(' → ')[0]} : achète ${itemName(r.items[0])}.`, 'adapt-' + r.id + '-' + r.items[0]);
       else if (r && r.score >= 0.7 && !String(r.id).startsWith('nsm')) coachSay(L, `${r.text} : ${itemName(r.items[0])}.`, 'adapt-' + r.id);
     }
     /* 7. Point farm à 10 et 20 min, plaques à 14 min */
@@ -1279,9 +1279,9 @@
     if (!role) return { c, role: '' };
     if (nsmOn()) {
       const en = L.players.filter((p) => p.team !== L.me.team), opP = en.find((p) => LR.get(p.name) === role);
-      const B = nsmBuild(c, role, en.map((p) => D.champs[p.champ]).filter(Boolean), opP ? D.champs[opP.champ] : null, nsmState(L, opP ? opP.name : ''));
+      const B = nsmBuild(c, role, en.map((p) => D.champs[p.champ]).filter(Boolean), opP ? D.champs[opP.champ] : null);
       if (!B.unknown) {
-        const nb = { id: 'nsm', name: `🧠 NoobStatMotor · ${B.r.base}`, champ: c.id, roles: [role], start: B.start, core: B.core, boots: B.boots, situational: B.next };
+        const nb = { id: 'nsm', name: `🧠 ${B.r.base}`, champ: c.id, roles: [role], start: B.start, core: B.core, boots: B.boots, situational: B.next };
         return { c, role, personal: nb, nsm: B.r, owned: owned0, next: Builds.nextItem(itemPlan(nb), owned0, D) };
       }
     }
@@ -1810,38 +1810,55 @@
     const op = oppName ? L.players.find((p) => p.name === oppName) : null;
     return { gold: op ? goldOf(meP, L).v - goldOf(op, L).v : 0, time: L.time, laneKills: op ? meP.k - op.k : 0 };
   }
+  /* Build choisi : celui cliqué à la sélection (s'il existe), sinon la variante conseillée pour cette équipe */
+  const nsmKey = (c, role) => `${c.id}:${role}`;
+  function nsmChoice(c, role, enemyChamps) {
+    const pk = (S.nsmPick || {})[nsmKey(c, role)] || {};
+    const rec = NSM.recommend({ id: c.id, name: c.name }, role, enemyChamps.map((x) => ({ id: x.id, name: x.name })), null, pk.cat);
+    if (!rec) return null;
+    const chosen = pk.n ? rec.list.find((b) => b.n === pk.n) : null;
+    return { rec, b: chosen || rec.pick, chosen: !!chosen };
+  }
+  const sitList = (sits) => [...sits.entries()].map(([id, who]) => ({ id, fr: NSM.SIT_FR[id] || id, who: who || [] }));
   /* Le build du moteur, au format des builds de l'appli */
-  function nsmBuild(c, role, enemyChamps, oc, state) {
-    const r = NSM.build(c, { role, enemies: enemyChamps.map((x) => ({ id: x.id, name: x.name })), opp: oc ? { id: oc.id, name: oc.name } : null, state });
-    if (!r || r.unknown) return { unknown: true };
-    const ids = r.items.map((n) => ({ n, id: nsmId(n) })).filter((x) => x.id);
+  function nsmBuild(c, role, enemyChamps, oc) {
+    const ch = nsmChoice(c, role, enemyChamps);
+    if (!ch) return { unknown: true };
+    const { rec, b } = ch;
+    const ids = b.items.map((n) => ({ n, id: nsmId(n) })).filter((x) => x.id);
     const boots = (ids.find((x) => NSM.isBoots(x.n)) || {}).id || 0;
     const sup = ids.filter((x) => NSM.isSupport(x.n)).map((x) => x.id);
     const leg = ids.filter((x) => !NSM.isBoots(x.n) && !NSM.isSupport(x.n)).map((x) => x.id);
-    const lane = oc ? NSM.lane({ id: c.id, name: c.name }, role, { id: oc.id, name: oc.name }) : [];
-    return { r, start: nsmIds(NSM.start({ id: c.id, name: c.name }, role, oc ? { id: oc.id, name: oc.name } : null)), core: sup.concat(leg).slice(0, 3), boots, next: sup.concat(leg).slice(3), all: ids.map((x) => x.id),
-      lane: lane.map((x) => ({ text: x.text, items: nsmIds(x.items) })), flow: NSM.flow(state) };
+    const r = { base: `${b.cat} · ${b.variant}`, category: b.cat, variant: b.variant, n: b.n, chosen: ch.chosen, why: rec.why, situations: sitList(rec.sits), notes: rec.e.notes || [], kit: rec.e.kit, version: NSM.version, cost: b.cost };
+    return { r, rec, start: nsmIds(NSM.start(b.cat, { id: c.id, name: c.name }, oc ? { id: oc.id, name: oc.name } : null)), core: sup.concat(leg).slice(0, 3), boots, next: sup.concat(leg).slice(3), all: ids.map((x) => x.id), flow: [] };
   }
-  const nsmWhy = (r) => `${r.situations.length ? r.situations.map((x) => x.fr + (x.who.length ? ` (${x.who.join(', ')})` : '')).join(' · ') : 'rien de particulier en face'}`;
-  /* Carte complète du moteur (sélection des champions et Réglages) */
+  const nsmWhy = (r) => (r.situations.length ? r.situations.map((x) => x.fr + (x.who.length ? ` (${x.who.join(', ')})` : '')).join(' · ') : 'rien de particulier en face');
+  /* Carte de sélection : builds de ma voie, par catégorie ; clic = build suivi en jeu */
   function nsmCard(c, role, enemyChamps, oc) {
-    const B = nsmBuild(c, role, enemyChamps, oc, null);
+    const B = nsmBuild(c, role, enemyChamps, oc);
     if (B.unknown) return `<div class="card"><h2>🧠 NoobStatMotor</h2><p class="muted small">${esc(c.name)} n'est pas encore dans la base du moteur : les conseils habituels restent affichés.</p></div>`;
-    const r = B.r, ic = (id) => `<span class="itm" data-act="item" data-val="${id}">${itIcon(id, 'ico')}</span>`;
-    return `<div class="card gold"><div class="row sp"><h2 style="margin:0">🧠 NoobStatMotor · ${esc(r.base)}</h2><span class="tag">${esc(r.profileLabel)}</span></div>
-      <p class="small muted">Build calculé par règles (base du ${esc(r.version)}) : profil <b>${esc(r.profileLabel)}</b>${role ? ' en ' + ROLE_NAME[role] : ''}. Situations détectées : ${esc(nsmWhy(r))}.</p>
-      <div class="kit">
-        <div class="step"><span class="lab">1. Départ</span><div class="row">${B.start.map(ic).join('')}</div></div>
-        <div class="step main"><span class="lab">2. Ordre d'achat</span><div class="row">${B.all.map((id, i) => `${i ? '<span class="arrow">›</span>' : ''}${ic(id)}`).join('')}</div></div>
-      </div>
-      ${r.changes.length ? `<p class="small">🔧 Ajustements : ${r.changes.map(esc).join(' · ')}</p>` : ''}
-      ${r.notes.length ? r.notes.map((n) => `<p class="small muted">ℹ️ ${esc(n)}</p>`).join('') : ''}
-      ${B.lane.length ? `<h3>🎯 Contre ${esc(oc.name)} en voie</h3>${B.lane.map((x) => `<div class="row nw small" style="margin:3px 0">${x.items.map((id) => itIcon(id, 'ico sm')).join('')}<span>${esc(x.text)}</span></div>`).join('')}` : ''}</div>`;
+    const { rec } = B, r = B.r;
+    const ic = (id) => `<span class="itm" data-act="item" data-val="${id}" title="${esc(itemNm(id))}">${itIcon(id, 'ico sm')}</span>`;
+    const cats = rec.cats.map((ct) => `<button class="chip ${ct === r.category ? 'on' : ''}" data-act="nsmCat" data-val="${esc(ct)}" data-champ="${esc(c.id)}" data-role="${role}">${esc(ct)} <span class="muted small">${rec.list.filter((x) => x.cat === ct).length}</span></button>`).join('');
+    const rows = rec.list.filter((x) => x.cat === r.category).map((x) => {
+      const on = x.n === r.n, best = x.n === rec.pick.n;
+      return `<button class="nsmb ${on ? 'on' : ''}" data-act="nsmPickB" data-val="${x.n}" data-cat="${esc(x.cat)}" data-champ="${esc(c.id)}" data-role="${role}">
+        <div class="row sp nw"><span class="small"><b>${esc(x.variant)}</b>${best ? ` <span class="tag gold">⭐ conseillé${rec.why ? ' : ' + esc(NSM.SIT_FR[rec.why]) : ''}</span>` : ''}</span><span class="small muted">${on ? '✅ suivi en jeu · ' : ''}${nf(x.cost)} po</span></div>
+        <div class="row nw" style="gap:3px;margin-top:4px">${nsmIds(x.items).map(ic).join('<span class="arrow">›</span>')}</div></button>`;
+    }).join('');
+    const e = rec.e;
+    return `<div class="card gold"><div class="row sp"><h2 style="margin:0">🧠 NoobStatMotor · ${esc(c.name)}</h2><span class="small muted">fiches du ${esc(r.version)}</span></div>
+      <p class="small muted">Kit : ${esc((e.kit || []).join(', '))}.${rec.sits.size ? ` En face : ${esc(nsmWhy(r))}.` : ''}</p>
+      ${(e.notes || []).map((n) => `<p class="small">ℹ️ ${esc(n)}</p>`).join('')}
+      <div class="chips" style="margin:6px 0">${cats}</div>
+      <div class="row small" style="margin:2px 0 6px">1. Départ ${B.start.map(ic).join('')}<span class="muted">· puis le build choisi ci-dessous (clic pour le suivre en jeu)</span></div>
+      <div class="nsmlist">${rows}</div>
+      <details class="flat"><summary class="small">Corrections prévues en jeu pour ${esc(c.name)}</summary>${['ad', 'ap', 'assassin', 'tank', 'heal', 'shields', 'cc', 'ahead', 'behind'].filter((k) => e.corr[k]).map((k) => `<p class="small"><b>${({ ad: 'Adversaire AD très feed', ap: 'Adversaire AP très feed', assassin: 'Assassin feed', tank: 'Tank feed / 2 tanks', heal: 'Soins adverses', shields: 'Boucliers adverses', cc: 'Contrôles / suppression', ahead: 'En avance', behind: 'En retard' })[k]}</b> : ${esc(NSM.frText(e.corr[k].text))}</p>`).join('')}</details></div>`;
   }
   function nsmSettings() {
     const ok = typeof NSM !== 'undefined' && NSM.version;
     return `<div class="card"><h2>🧠 Moteur de builds</h2>
-      <p class="muted small">Par défaut, les builds conseillés (sélection, chargement et en jeu) viennent des statistiques des parties analysées par le collecteur. Avec <b>NoobStatMotor</b>, ils sont calculés par règles à partir de la base de builds (19 profils de champions, 10 builds chacun) : profil de ton champion selon son rôle, situations détectées dans l'équipe adverse, ajustements objet par objet, état de la partie et match-up de voie. Les runes restent celles du collecteur.</p>
+      <p class="muted small">Par défaut, les builds conseillés (sélection, chargement et en jeu) viennent des statistiques des parties analysées par le collecteur. Avec <b>NoobStatMotor</b>, ils viennent des fiches par champion (173 champions, 10 builds chacun, rattachés aux voies) : à la sélection, tu choisis la catégorie et le build de ta voie (la variante adaptée à l'équipe adverse est mise en avant) ; en jeu, les corrections de la fiche s'appliquent quand un adversaire est très feed, contre les soins, les tanks, les contrôles… (2 au maximum). Les runes restent celles du collecteur.</p>
       <div class="row"><button class="chip ${S.opt.nsm ? 'on' : ''}" data-act="nsmToggle" ${ok ? '' : 'disabled'}>${S.opt.nsm ? '✅ NoobStatMotor activé' : 'NoobStatMotor désactivé'}</button>${ok ? `<span class="small muted">Base du ${esc(NSM.version)}</span>` : '<span class="small neg">Base introuvable</span>'}</div></div>`;
   }
   function loadBuild(ld) {
@@ -1850,8 +1867,7 @@
     const role = ld.myRole, oc = ld.oppG ? byKey(ld.oppG.champ) : null;
     const enemyKeys = ld.teams[1].map((p) => +p.champ).filter(Boolean);
     if (nsmOn() && role) {
-      const st = ld.L ? nsmState(ld.L, ld.oppG && ld.oppG.live ? ld.oppG.live.name : '') : null;
-      const B = nsmBuild(c, role, enemyKeys.map(byKey).filter(Boolean), oc, st);
+      const B = nsmBuild(c, role, enemyKeys.map(byKey).filter(Boolean), oc);
       if (!B.unknown) return { c, role, oc, K: myKit(c, role), bl: botLane(ld), nsm: B.r, nsmB: B, fromStats: false, games: 0, start: B.start, core: B.core, boots: B.boots, next: B.next, recos: [] };
     }
     const rows = role && NB ? cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30)) : null;
@@ -1992,7 +2008,6 @@
     const liveOf = (g) => g && g.live && g.live.runes;
     runeTips(oc.name, liveOf(ld.oppG)).forEach((t) => T(t));
     if (b.bl && b.bl.eAdc) { const eg = ld.teams[1].find((p) => ld.role.get(p) === 'adc'); if (eg) runeTips(b.bl.eAdc.name, liveOf(eg)).slice(0, 1).forEach((t) => T(t)); }
-    if (b.nsmB) b.nsmB.lane.forEach((x) => T(x.text + (x.items.length ? ' : ' + x.items.map(itemNm).join(' ou ') : '') + '.', x.items));
     /* Support : toute la voie du bas (leur duo et ton ADC) */
     if (b.bl) {
       const { eAdc, eSup, mAdc } = b.bl;
@@ -2028,7 +2043,7 @@
     const tips = [];
     const T = (t, items) => tips.push({ t, items: (items || []).filter(Boolean) });
     (b && b.recos ? b.recos : []).filter((r) => !r.bot).forEach((r) => T(`${r.text} : ${r.items.map(itemNm).join(' ou ')}.`, r.items));
-    if (b && b.nsm) { b.nsm.situations.forEach((x) => T(`NoobStatMotor — ${x.fr}${x.who.length ? ` (${x.who.join(', ')})` : ''}.`)); b.nsm.notes.forEach((n) => T(n)); (b.nsmB.flow || []).forEach((n) => T(n)); }
+    if (b && b.nsm) { b.nsm.situations.forEach((x) => T(`NoobStatMotor — ${x.fr}${x.who.length ? ` (${x.who.join(', ')})` : ''}${b.nsm.why === x.id ? ` : variante « ${b.nsm.variant} » choisie` : ''}.`)); b.nsm.notes.forEach((n) => T(n)); }
     if (!(b && b.nsm) && !(b && b.recos && b.recos.some((r) => !r.bot && (r.id === 'mr' || r.id === 'armor')))) T('Dégâts mixtes en face : équilibre armure et résistance magique.');
     const engage = en.filter((x) => x.c.tags.includes('Tank') && (x.c.tags.includes('Support') || x.c.tags.includes('Fighter')));
     if (engage.length) T(`Ils peuvent engager fort (${names(engage)}) : reste derrière tes tanks en combat et garde Saut éclair pour te dégager.`);
@@ -2101,7 +2116,7 @@
     else {
       const following = S.gameBuild && S.gameBuild.gameId === ld.g.gameId && S.gameBuild.champ === b.c.id;
       h += `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">🛒 Build conseillé · ${esc(b.c.name)}${b.bl ? ` vs ${esc([b.bl.eSup, b.bl.eAdc].filter(Boolean).map((x) => x.name).join(' + '))}${b.bl.mAdc ? ` · avec ${esc(b.bl.mAdc.name)}` : ''}` : b.oc ? ' vs ' + esc(b.oc.name) : ''}</h2></div>
-        <p class="small muted">${b.bl ? `Pensé pour toute la voie du bas : leur support${b.bl.eAdc ? ` et leur ADC (${esc(b.bl.eAdc.name)})` : ''}${b.bl.mAdc ? `, et ton ADC (${esc(b.bl.mAdc.name)})` : ''}. ` : ''}${b.nsm ? `🧠 NoobStatMotor : profil ${esc(b.nsm.profileLabel)}, build « ${esc(b.nsm.base)} ». Situations : ${esc(nsmWhy(b.nsm))}.${b.nsm.changes.length ? ' Ajustements : ' + esc(b.nsm.changes.join(' · ')) + '.' : ''}` : b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
+        <p class="small muted">${b.bl ? `Pensé pour toute la voie du bas : leur support${b.bl.eAdc ? ` et leur ADC (${esc(b.bl.eAdc.name)})` : ''}${b.bl.mAdc ? `, et ton ADC (${esc(b.bl.mAdc.name)})` : ''}. ` : ''}${b.nsm ? `🧠 NoobStatMotor : build « ${esc(b.nsm.base)} » (${b.nsm.chosen ? 'choisi à la sélection' : 'conseillé'}). En face : ${esc(nsmWhy(b.nsm))}.` : b.fromStats ? `D'après ${nf(b.games)} parties de très bons joueurs (collecteur)${b.adapted ? ', adapté à ton adversaire' : ''}, complété avec les objets contre l'équipe adverse.` : 'Règles générales selon ton champion, ton adversaire de voie et l\'équipe adverse (le collecteur n\'a pas encore assez de parties pour ce champion et ce rôle).'}</p>
         <div class="mybuild compact" style="border:0;padding:0;background:none">
         <div class="brow"><span class="small muted">Départ</span><div class="bis">${b.start.map(ic).join('')}</div></div>
         <div class="brow"><span class="small muted">Principaux</span><div class="bis">${b.core.map(ic).join('<span class="arrow">›</span>')}${b.boots ? `<span class="rsep"></span>${ic(b.boots)}` : ''}</div></div>
@@ -2195,23 +2210,30 @@
     const role = liveRoles(L).get(meP.name) || '';
     const K = myKit(c, role);
     if (nsmOn() && role) {
-      /* NoobStatMotor : prochain objet et objet à remplacer d'après l'état de la partie (section 4.4 du fichier) */
+      /* NoobStatMotor : corrections de la fiche (adversaire très feed, soins, tanks, contrôles…) puis prochain objet du build */
       const LR = liveRoles(L), en = L.players.filter((p) => p.team !== meP.team), opP = en.find((p) => LR.get(p.name) === role);
-      const st = nsmState(L, opP ? opP.name : '');
-      const B = nsmBuild(c, role, en.map((p) => D.champs[p.champ]).filter(Boolean), opP ? D.champs[opP.champ] : null, st);
+      const enC = en.map((p) => D.champs[p.champ]).filter(Boolean);
+      const B = nsmBuild(c, role, enC, opP ? D.champs[opP.champ] : null);
       if (!B.unknown) {
-        const enNames = {}; B.r.items.forEach((n) => { enNames[nsmId(n)] = n; });
-        const ownedNames = meP.items.map((i) => enNames[i.id] || (D.items[String(i.id)] && Builds.isLegendary(D.items[String(i.id)]) ? 'id:' + i.id : '')).filter(Boolean);
-        const nx = NSM.next(B.r, ownedNames);
-        const recos = [];
-        /* même prochain objet que la carte « Mon build » */
+        /* « Très feed » : ≥ 3 éliminations d'avance, ou 1 objet légendaire de plus que la moyenne, ou ≥ 2 000 or d'avance */
+        const legN = (p) => p.items.filter((i) => i.slot < 6 && D.items[String(i.id)] && Builds.isLegendary(D.items[String(i.id)])).length;
+        const all = L.players, avgLeg = all.reduce((t, p) => t + legN(p), 0) / all.length, avgGold = all.reduce((t, p) => t + goldOf(p, L).v, 0) / all.length;
+        const feed = [];
+        en.forEach((p) => {
+          const ch = D.champs[p.champ]; if (!ch) return;
+          const g = goldOf(p, L).v, why = p.k - p.d >= 3 ? `${p.k}/${p.d}/${p.a}` : legN(p) >= avgLeg + 1 ? `${legN(p)} objets légendaires` : g >= avgGold + 2000 ? `≈${k1g(g)} po` : '';
+          if (why) feed.push({ c: { id: ch.id, name: ch.name }, why });
+        });
+        if (!R.nsmRev) { R.nsmRev = {}; Object.keys(NSM_DATA.items).forEach((n) => { const id = nsmId(n); if (id) R.nsmRev[id] = n; }); if (!R.nsmEn) R.nsmRev = null; }
+        const owned = meP.items.map((i) => (R.nsmRev || {})[i.id]).filter(Boolean);
+        const st = nsmState(L, opP ? opP.name : '');
+        const cor = NSM.corrections({ id: c.id, name: c.name }, { enemies: enC.map((x) => ({ id: x.id, name: x.name })), feed, state: st, owned });
+        const recos = cor.map((x, i) => ({ id: 'nsm-' + x.id, score: 1 - i * 0.05, text: `${x.label} → ${x.text}`, items: nsmIds(x.items).slice(0, 2), nsm: true })).filter((r) => r.items.length);
         const nb = { core: B.core, boots: B.boots, situational: B.next };
         const n2 = Builds.nextItem(itemPlan(nb), meP.items.map((i) => i.id), D);
-        if (n2 && n2.item) recos.push({ id: 'nsm-next', score: 1, text: `Prochain objet du build « ${B.r.base} » (NoobStatMotor)`, items: [+n2.item] });
-        if (nx && nx.replace && nsmId(nx.replace.by)) { const outId = +String(nx.replace.out).replace('id:', ''); recos.push({ id: 'nsm-swap', score: 0.9, text: `Remplace ${itemNm(outId) || nx.replace.out} par cet objet`, items: [nsmId(nx.replace.by)] }); }
-        B.flow.forEach((f, i) => recos.push({ id: 'nsm-flow' + i, score: 0.5, text: f, items: [] }));
+        if (n2 && n2.item && !recos.some((r) => r.items.includes(+n2.item))) recos.push({ id: 'nsm-next', score: 0.5, text: `Prochain objet du build « ${B.r.variant} »${recos.some((r) => /feed/.test(r.id)) ? ', après la correction' : ''}`, items: [+n2.item] });
         const threats = en.map((p) => ({ p, c: D.champs[p.champ], gold: goldOf(p, L).v })).filter((e) => e.c).sort((a, b2) => b2.gold - a.gold).slice(0, 3);
-        return { recos: recos.filter((r) => r.items.length || r.id.startsWith('nsm-flow')).slice(0, 3), fed: null, wAD: 0.5, threats, K, nsm: B.r };
+        return { recos: recos.slice(0, 3), fed: null, wAD: 0.5, threats, K, nsm: B.r, nsmFeed: feed };
       }
     }
     const en = L.players.filter((p) => p.team !== L.me.team).map((p) => {
@@ -2808,6 +2830,8 @@
       case 'ovLoadToggle': { const on = ((R.cfg || {}).overlay || {}).loading === false; NB.config.set({ overlay: { loading: on } }).then((c) => { R.cfg = c; R.loadovKey = ''; render(true); }).catch(() => {}); break; }
       case 'pvToggle': { const on = (((R.cfg || {}).overlay || {}).prog || {}).enabled === false; NB.config.set({ overlay: { prog: { enabled: on } } }).then((c) => { R.cfg = c; R.pvKey = ''; render(true); }).catch(() => {}); break; }
       case 'pvInd': { S.opt.pvOff = Object.assign({}, S.opt.pvOff); if (S.opt.pvOff[v]) delete S.opt.pvOff[v]; else S.opt.pvOff[v] = true; save(); R.pvKey = ''; if (R.live) progSync(R.live); render(true); break; }
+      case 'nsmCat': { S.nsmPick = S.nsmPick || {}; S.nsmPick[`${el.dataset.champ}:${el.dataset.role}`] = { cat: v }; save(); render(true); break; }
+      case 'nsmPickB': { S.nsmPick = S.nsmPick || {}; S.nsmPick[`${el.dataset.champ}:${el.dataset.role}`] = { cat: el.dataset.cat, n: +v }; save(); R.ovKey = ''; toast('🧠 Build suivi en jeu'); render(true); break; }
       case 'nsmToggle': S.opt.nsm = !S.opt.nsm; save(); R.loadMemo = null; R.ovKey = ''; toast(S.opt.nsm ? '🧠 NoobStatMotor activé : les builds sont calculés par règles' : 'Builds d\'après les statistiques du collecteur'); render(true); break;
       case 'pvReset': NB.progov.reset().then(() => toast('Encart « Ma progression » replacé')).catch(() => {}); break;
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;

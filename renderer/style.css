@@ -826,3 +826,9 @@ body[data-mode=select] .topbar { max-width: none; }
 @media (max-width: 900px) { .sel3, .sel2 { grid-template-columns: minmax(0, 1fr); } .sel3 .scol:first-child { order: 0; } }
 @media (min-width: 2200px) { body[data-mode=select] { font-size: 17px; } }
 .sel3 .scol > p.tip, .sel2 .scol > p.tip { display: block; }
+/* NoobStatMotor : liste des builds de la fiche */
+.nsmlist { display: flex; flex-direction: column; gap: 5px; }
+.nsmb { text-align: left; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; color: var(--text); font: inherit; cursor: pointer; }
+.nsmb:hover { border-color: var(--accent); }
+.nsmb.on { border-color: var(--good); box-shadow: inset 3px 0 0 var(--good); }
+.nsmb .arrow { color: var(--muted); font-size: .75rem; }
