@@ -808,3 +808,21 @@ button.bi:hover .ico, .mybuild .next.sm:hover { outline: 2px solid var(--accent)
 .gm3 .adaptrow .clamp { -webkit-line-clamp: 1; }
 .gm3 .mybuild.compact .brow > .small:first-child { width: 74px; flex-basis: 74px; white-space: nowrap; }
 .gm3 .mybuild.compact .adaptrow > .small:first-child { width: auto; flex-basis: auto; }
+
+/* ===== v3.18 : sélection des champions en pleine largeur, 3 colonnes (équipes | runes | objets) ===== */
+body[data-mode=select] #app { max-width: none; padding: 10px 16px 20px; }
+body[data-mode=select] .topbar { max-width: none; }
+.sel3 { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(340px, 1.05fr) minmax(340px, 1.05fr); gap: 12px; align-items: start; }
+.sel2 { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.sel3 .scol, .sel2 .scol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sel3 .scol > .card, .sel2 .scol > .card, .sel3 .scol > p.tip { margin: 0; }
+.scolh { padding: 8px 12px; border-left: 3px solid var(--accent); }
+.scolh h2 { margin: 0 0 2px; }
+@media (min-width: 1400px) {
+  /* Chaque colonne défile seule : runes et objets restent toujours à l'écran */
+  .sel3 .scol { max-height: calc(100vh - 168px); overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
+}
+@media (max-width: 1399px) { .sel3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .sel3 .scol:first-child { grid-column: 1 / -1; order: 3; } }
+@media (max-width: 900px) { .sel3, .sel2 { grid-template-columns: minmax(0, 1fr); } .sel3 .scol:first-child { order: 0; } }
+@media (min-width: 2200px) { body[data-mode=select] { font-size: 17px; } }
+.sel3 .scol > p.tip, .sel2 .scol > p.tip { display: block; }

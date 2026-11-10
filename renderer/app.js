@@ -610,12 +610,14 @@
       ${r.length + it.length ? r.map((b) => `<div class="mb-mini" data-act="edOpen" data-kind="runes" data-val="${b.id}">✨ <b>${esc(b.name || 'Page de runes')}</b> <span class="small muted">${rolesLabel(b)}</span> ${myRunePreview(b)}</div>`).join('') + it.map((b) => `<div class="mb-mini" data-act="edOpen" data-kind="items" data-val="${b.id}">🛒 <b>${esc(b.name || 'Build')}</b> <span class="small muted">${rolesLabel(b)}</span> <span class="row nw" style="gap:2px">${b.core.map((i) => itIcon(i)).join('')}</span></div>`).join('') : '<p class="small muted">Aucun build perso pour ce champion.</p>'}</div>`;
   }
   /* Bloc « Mes builds » pendant la sélection */
-  function myBuildsSelect(sd) {
+  /* part : 'runes' (mes pages de runes) ou 'items' (mes builds d'objets) ; sans part, les deux */
+  function myBuildsSelect(sd, part) {
     const c = byKey(sd.myChamp); if (!c) return '';
-    const r = forChamp(S.myRunes, c.id, sd.myRole), it = forChamp(S.myItems, c.id, sd.myRole);
+    let r = forChamp(S.myRunes, c.id, sd.myRole), it = forChamp(S.myItems, c.id, sd.myRole);
+    if (part === 'runes') it = []; if (part === 'items') r = [];
     if (!r.length && !it.length) return '';
     const canApply = !!(NB && sd.live);
-    let h = `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">⭐ Mes builds · ${esc(c.name)}</h2><span class="small muted">${sd.myRole ? ROLE_NAME[sd.myRole] : ''}</span></div>`;
+    let h = `<div class="card gold"><div class="row sp nw"><h2 style="margin:0">⭐ ${part === 'runes' ? 'Mes pages de runes' : part === 'items' ? 'Mes builds d\'objets' : 'Mes builds'} · ${esc(c.name)}</h2><span class="small muted">${sd.myRole ? ROLE_NAME[sd.myRole] : ''}</span></div>`;
     h += r.map((b) => { const done = R.applied.runes === 'my-' + b.id; const ok = runeComplete(b);
       return `<button class="rbtn ${done ? 'done' : ''}" ${canApply && ok ? `data-act="applyMyRunes" data-val="${b.id}"` : 'disabled'}><div class="row sp nw"><span class="small"><b>${esc(b.name || 'Ma page')}</b> · ${rolesLabel(b)}</span><span class="small apply">${done ? '✅ Appliquée' : !ok ? '⚠️ incomplète' : canApply ? '⤴ Appliquer runes' + (spellsOf(b).length === 2 ? ' + sorts' : '') : ''}</span></div><div class="rpage">${myRunePreview(b)}${spellsOf(b).length ? '<span class="rsep"></span>' + spellPair(spellsOf(b).join(',')) : ''}</div></button>`; }).join('');
     if (it.length) {
@@ -886,23 +888,30 @@
     }
     h += `<div class="card"><div class="row"><b>Mon rôle :</b>${ROLES.map((r) => `<button class="chip ${role === r ? 'on' : ''}" data-act="selRole" data-val="${r}">${ROLE_IC[r]} ${ROLE_NAME[r]}</button>`).join('')}
       ${S.select.role ? `<button class="chip" data-act="selRole" data-val="">↩ Détection automatique</button>` : (role ? `<span class="muted small">Rôle ${ROLE_SRC[sd.roleSrc] || ''}</span>` : '<span class="muted small">Rôle pas encore détecté</span>')}</div></div>`;
-    h += '<div class="cols"><div>';
-    h += faceOff(sd, opp);
-    if (opp) { const oc = byKey(opp); const f = needFull(oc.id); if (f) h += tipsCards(f, 'enemy'); }
+    /* 3 colonnes : équipes et match-up | runes et sorts | objets */
+    let left = faceOff(sd, opp);
+    if (opp) { const oc = byKey(opp); const f = needFull(oc.id); if (f) left += tipsCards(f, 'enemy'); }
+    let sug = '';
     if (!sd.locked) {
-      const sug = suggestions(sd, opp);
-      h += `<div class="card"><h2>💡 Champions conseillés ${role ? 'en ' + ROLE_NAME[role] : ''}${opp ? ' contre ' + esc(byKey(opp).name) : ''}</h2>`;
-      if (!role) h += '<p class="muted">Choisis ton rôle ci-dessus.</p>';
-      else if (!sug || !sug.length) h += '<div class="loader small">Calcul…</div>';
-      else h += sug.map((o) => { const c = byKey(o.k); return `<button class="sug" data-act="champ" data-val="${esc(c.id)}">${cIcon(c, 'ico lg')}<div class="grow"><b>${esc(c.name)}</b><div class="small muted">${o.why.slice(0, 3).join(' · ') || 'Choix sûr pour ce rôle'}</div></div></button>`; }).join('')
+      const list = suggestions(sd, opp);
+      sug = `<div class="card"><h2>💡 Champions conseillés ${role ? 'en ' + ROLE_NAME[role] : ''}${opp ? ' contre ' + esc(byKey(opp).name) : ''}</h2>`;
+      if (!role) sug += '<p class="muted">Choisis ton rôle ci-dessus.</p>';
+      else if (!list || !list.length) sug += '<div class="loader small">Calcul…</div>';
+      else sug += list.map((o) => { const c = byKey(o.k); return `<button class="sug" data-act="champ" data-val="${esc(c.id)}">${cIcon(c, 'ico lg')}<div class="grow"><b>${esc(c.name)}</b><div class="small muted">${o.why.slice(0, 3).join(' · ') || 'Choix sûr pour ce rôle'}</div></div></button>`; }).join('')
         + '<p class="muted small">👉 Clique toi-même sur le champion dans le client du jeu.</p>';
-      h += '</div>';
+      sug += '</div>';
     }
-    h += '</div><div>';
-    if (sd.myChamp) h += myBuildsSelect(sd) + pickPanel(sd, opp);
-    else h += '<div class="card"><p class="muted">Survole ou choisis ton champion dans le client : ses runes, sorts et objets conseillés apparaîtront ici.</p></div>';
-    h += '</div></div>';
-    return h;
+    if (!sd.myChamp) {
+      return h + `<div class="sel2"><div class="scol">${left}</div><div class="scol">${sug}<div class="card"><p class="muted">Survole ou choisis ton champion dans le client : ses <b>runes</b>, ses <b>sorts</b> et ses <b>objets</b> conseillés apparaîtront ici, chacun dans sa colonne.</p></div></div></div>`;
+    }
+    const pp = pickPanel(sd, opp);
+    const cut = (from, to) => { const a = from ? pp.indexOf(from) : 0; if (a < 0) return ''; const st = from ? a + from.length : 0; const ends = to.map((t) => pp.indexOf(t, st)).filter((x) => x >= 0); return pp.slice(st, ends.length ? Math.min(...ends) : pp.length); };
+    const M = { r: '<!--SEC:runes-->', i: '<!--SEC:items-->', x: '<!--SEC:extra-->' };
+    const head = cut('', [M.r, M.i, M.x]), runes = cut(M.r, [M.i, M.x]), items = cut(M.i, [M.x]), extra = cut(M.x, []);
+    const ph = (t) => `<div class="card"><p class="muted small">${t}</p></div>`;
+    const runesCol = head + myBuildsSelect(sd, 'runes') + (runes || ph('Les pages de runes conseillées apparaîtront ici (statistiques du collecteur).'));
+    const itemsCol = `<div class="card scolh"><h2>🛒 Objets</h2><p class="small muted" style="margin:0">Choisis le build d'objets à suivre : il s'affiche dans « En jeu » et dans l'encart par-dessus le jeu.</p></div>` + myBuildsSelect(sd, 'items') + (items || ph('Les objets conseillés apparaîtront ici.'));
+    return h + `<div class="sel3"><div class="scol">${left}${sug}${extra}</div><div class="scol">${runesCol}</div><div class="scol">${itemsCol}</div></div>`;
   }
   /* ---------- Mon champion : runes et kit d'objets adaptés ---------- */
   const ROLE_SRC = { client: 'attribuée par le client', manual: 'choisie dans Noob LOL', guess: 'déduite de ton champion' };
@@ -927,8 +936,8 @@
     const mu = opp ? cached(`mu:${c.key}:${opp}:${role}`, () => NB.stats.matchup(+c.key, opp, role, 30)) : null;
     if (mu && mu.games) h += `<p class="tip" style="margin-top:8px">Contre <b>${esc(oc.name)}</b> : <b class="${mu.wins / mu.games >= 0.5 ? 'pos' : 'neg'}">${pct(mu.wins, mu.games)}</b> de victoires sur ${mu.games} parties analysées.</p>`;
     const rows = cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30));
-    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div>' + nsmHtml;
-    if ((!rows || !rows.length) && nsmHtml) return h + '</div>' + nsmHtml;
+    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div><!--SEC:items-->' + nsmHtml;
+    if ((!rows || !rows.length) && nsmHtml) return h + '</div><!--SEC:items-->' + nsmHtml;
     if (!rows || !rows.length) return h + `<p class="muted small">Pas encore de parties analysées pour ${esc(c.name)} en ${ROLE_NAME[role]}. Les runes « recommandées » du client sont un bon choix. ${R.col && R.col.running ? 'Le collecteur tourne : reviens plus tard.' : 'Démarre le collecteur dans les Réglages.'}</p></div>`;
     const A = Builds.analyze(rows, D, { opp, enemies: sd.enemies });
     h += `<div class="kpis"><div><b>${pct(A.wins, A.games)}</b><span>victoires</span></div><div><b>${nf(A.games)}</b><span>parties analysées</span></div><div><b>${oc ? nf(A.vsGames) : '—'}</b><span>${oc ? 'contre ' + esc(oc.name) : 'adversaire inconnu'}</span></div></div></div>`;
@@ -936,6 +945,7 @@
     /* Runes */
     const ctx = (vs, n) => (oc ? (vs ? `<span class="tag gold">contre ${esc(oc.name)} · ${n} parties</span>` : `<span class="tag">général · seulement ${A.vsGames} partie${A.vsGames > 1 ? 's' : ''} contre ${esc(oc.name)}</span>`) : '<span class="tag">général</span>');
     if (A.adapted) h = h.replace('</div></div>', '</div></div>') + `<p class="tip adapt">🎯 Runes et objets adaptés ${oc ? `au match-up contre <b>${esc(oc.name)}</b>` : ''}${oc && A.team ? ' et ' : ''}${A.team ? 'à la composition de l\'équipe adverse' : ''}.</p>`;
+    h += '<!--SEC:runes-->';
     h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes et sorts</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
     const canApply = !!(NB && sd.live);
     R.selPages = A.runes.slice(0, 3).map((r) => runePayload(r, c, role));
@@ -945,9 +955,11 @@
     h += `<p class="muted small" style="margin-top:6px">${canApply ? 'Clique sur une page ou une paire de sorts : elle est créée / sélectionnée directement dans le client.' : 'Pendant une vraie sélection, un clic applique la page ou les sorts dans le client.'}</p></div>`;
 
     /* Kit d'objets : NoobStatMotor (option) ou statistiques du collecteur */
+    h += '<!--SEC:items-->';
     if (nsmHtml) {
       h += nsmHtml;
       if (A.skills) h += `<div class="card"><h2>🔼 Ordre des sorts</h2><div class="row"><span class="skillord">${esc(A.skills.order)}</span>${A.skills.first ? `<span class="small muted">niveaux 1-3 : ${esc(A.skills.first)}</span>` : ''}</div></div>`;
+      h += '<!--SEC:extra-->';
       const f0 = needFull(c.id);
       if (f0) h += tipsCards(f0, 'ally');
       return h;
@@ -980,6 +992,7 @@
       else h += sit.map((x) => `<div class="sit"><div class="small"><b>${esc(x.why)}</b></div>${x.items.length ? `<div class="row">${x.items.map((o) => `<span class="itm" data-act="item" data-val="${o.item}">${itIcon(o.item, 'ico')}<span class="small">${Math.round(o.share * 100)} %</span></span>`).join('')}<span class="small muted">→ à placer en 3e ou 4e objet</span></div>` : `<div class="small muted">Pense à ${esc(x.hint)}.</div>`}</div>`).join('');
       h += '<p class="muted small" style="margin-top:6px">% = part des joueurs qui le construisent face à des équipes qui ressemblent à celle-ci.</p></div>';
     }
+    h += '<!--SEC:extra-->';
     const f = needFull(c.id);
     if (f) h += tipsCards(f, 'ally');
     return h;

@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.17.0';
+var APP_VERSION = '3.18.0';
 var APP_RELEASES = [
+  { v: '3.18.0', date: '2026-11-10', notes: [
+    'Onglet Sélection réorganisé et en pleine largeur : 3 colonnes, les équipes et le match-up à gauche, les runes et sorts au centre (tes pages perso puis les pages conseillées, à appliquer d\'un clic), les objets à droite (choix du build suivi en jeu puis le kit conseillé).',
+    'Sur grand écran, chaque colonne défile seule : les runes et les objets restent toujours visibles. Sur un écran plus petit, runes et objets passent côte à côte en haut et les équipes en dessous.',
+  ]},
   { v: '3.17.0', date: '2026-11-09', notes: [
     'Réglages : nouvelle option « NoobStatMotor » (désactivée par défaut). Activée, elle calcule les builds conseillés à la sélection, au chargement et en jeu à partir de la base de builds par règles (173 champions, 19 profils, 190 builds) au lieu des statistiques du collecteur.',
     'Le moteur suit l\'algorithme de la base : profil du champion selon son rôle, situations détectées dans l\'équipe adverse (soins, assassins, tanks, dégâts AD/AP, contrôles, suppression…), choix du build le plus adapté, 2 ajustements au maximum, validation (groupes exclusifs, mana, bottes de Cassiopeia, objet de support), objets de départ et composants à acheter tôt contre ton adversaire de voie.',
