@@ -832,3 +832,15 @@ body[data-mode=select] .topbar { max-width: none; }
 .nsmb:hover { border-color: var(--accent); }
 .nsmb.on { border-color: var(--good); box-shadow: inset 3px 0 0 var(--good); }
 .nsmb .arrow { color: var(--muted); font-size: .75rem; }
+/* v3.19.1 : pages de runes compactes à la sélection */
+.sel3 .rbtn { padding: 2px 4px; margin: 2px 0; border-radius: 9px; }
+.sel3 .rbtn .row.sp { margin: 0; }
+.sel3 .rpage { flex-wrap: nowrap; gap: 3px; padding: 3px 6px; margin: 2px 0 3px; overflow: hidden; }
+.sel3 .rimg { width: 22px; height: 22px; }
+.sel3 .rimg.big { width: 30px; height: 30px; }
+.sel3 .rimg.tree { width: 16px; height: 16px; }
+.sel3 .rsep { margin: 0 2px; }
+.sel3 .shards { flex-wrap: nowrap; gap: 2px; margin-left: 2px; overflow: hidden; }
+.sel3 .shards > * { font-size: .66rem; padding: 1px 5px; white-space: nowrap; }
+.sel3 .pair { padding: 2px 6px; }
+.sel3 .pair .ico, .sel3 .pair img { width: 24px; height: 24px; }

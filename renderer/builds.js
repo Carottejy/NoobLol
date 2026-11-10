@@ -68,7 +68,7 @@ var Builds = (() => {
     res.adapted = !!(opp || cur);
     /* Runes : parmi les parties contre l'adversaire si possible, classées selon la composition adverse */
     const runeRows = useVs ? vs : rows;
-    res.runes = count(runeRows.filter((r) => r.runes), (r) => r.runes + '#' + (r.shards || ''), W).slice(0, 3)
+    res.runes = count(runeRows.filter((r) => r.runes), (r) => r.runes + '#' + (r.shards || ''), W).slice(0, 5)
       .map((o) => ({ runes: o.key.split('#')[0], shards: o.key.split('#')[1], games: o.games, wins: o.wins }));
     res.runesVs = useVs;
     res.spells = count(useVs ? vs : rows, (r) => r.spells, W).slice(0, 2).map((o) => ({ spells: o.key, games: o.games, wins: o.wins }));

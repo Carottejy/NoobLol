@@ -131,7 +131,10 @@
     else if (S.mode === 'game') v = viewGame;
     else if (S.mode === 'settings') v = viewSettings;
     else v = { home: viewHome, account: viewAccount, champs: viewChamps, meta: viewMeta, items: viewItems, runes: viewRunes, builds: viewMyBuilds, guide: viewGuide, lex: viewLex }[S.tab] || viewHome;
+    /* Les colonnes qui défilent seules gardent leur position quand l'écran se rafraîchit */
+    const scr = [...$app.querySelectorAll('.scol, .gcol')].map((e) => e.scrollTop);
     $app.innerHTML = v();
+    if (keepScroll) [...$app.querySelectorAll('.scol, .gcol')].forEach((e, i) => { if (scr[i]) e.scrollTop = scr[i]; });
     mmSync();
     window.scrollTo(0, keepScroll ? y : 0);
     tick();
@@ -889,8 +892,10 @@
     h += `<div class="card"><div class="row"><b>Mon rôle :</b>${ROLES.map((r) => `<button class="chip ${role === r ? 'on' : ''}" data-act="selRole" data-val="${r}">${ROLE_IC[r]} ${ROLE_NAME[r]}</button>`).join('')}
       ${S.select.role ? `<button class="chip" data-act="selRole" data-val="">↩ Détection automatique</button>` : (role ? `<span class="muted small">Rôle ${ROLE_SRC[sd.roleSrc] || ''}</span>` : '<span class="muted small">Rôle pas encore détecté</span>')}</div></div>`;
     /* 3 colonnes : équipes et match-up | runes et sorts | objets */
-    let left = faceOff(sd, opp);
-    if (opp) { const oc = byKey(opp); const f = needFull(oc.id); if (f) left += tipsCards(f, 'enemy'); }
+    const leftTop = faceOff(sd, opp);
+    let leftTips = '';
+    if (opp) { const oc = byKey(opp); const f = needFull(oc.id); if (f) leftTips = tipsCards(f, 'enemy'); }
+    const left = leftTop + leftTips;
     let sug = '';
     if (!sd.locked) {
       const list = suggestions(sd, opp);
@@ -909,9 +914,9 @@
     const M = { r: '<!--SEC:runes-->', i: '<!--SEC:items-->', x: '<!--SEC:extra-->' };
     const head = cut('', [M.r, M.i, M.x]), runes = cut(M.r, [M.i, M.x]), items = cut(M.i, [M.x]), extra = cut(M.x, []);
     const ph = (t) => `<div class="card"><p class="muted small">${t}</p></div>`;
-    const runesCol = head + myBuildsSelect(sd, 'runes') + (runes || ph('Les pages de runes conseillées apparaîtront ici (statistiques du collecteur).'));
+    const runesCol = myBuildsSelect(sd, 'runes') + (runes || ph('Les pages de runes conseillées apparaîtront ici (statistiques du collecteur).'));
     const itemsCol = `<div class="card scolh"><h2>🛒 Objets</h2><p class="small muted" style="margin:0">Choisis le build d'objets à suivre : il s'affiche dans « En jeu » et dans l'encart par-dessus le jeu.</p></div>` + myBuildsSelect(sd, 'items') + (items || ph('Les objets conseillés apparaîtront ici.'));
-    return h + `<div class="sel3"><div class="scol">${left}${sug}${extra}</div><div class="scol">${runesCol}</div><div class="scol">${itemsCol}</div></div>`;
+    return h + `<div class="sel3"><div class="scol">${leftTop}${head}${leftTips}${sug}${extra}</div><div class="scol">${runesCol}</div><div class="scol">${itemsCol}</div></div>`;
   }
   /* ---------- Mon champion : runes et kit d'objets adaptés ---------- */
   const ROLE_SRC = { client: 'attribuée par le client', manual: 'choisie dans Noob LOL', guess: 'déduite de ton champion' };
@@ -948,9 +953,9 @@
     h += '<!--SEC:runes-->';
     h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes et sorts</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
     const canApply = !!(NB && sd.live);
-    R.selPages = A.runes.slice(0, 3).map((r) => runePayload(r, c, role));
+    R.selPages = A.runes.slice(0, 5).map((r) => runePayload(r, c, role));
     R.selSpells = (A.spells || []).map((x) => x.spells);
-    h += A.runes.length ? A.runes.slice(0, 3).map((r, i) => `<button class="rbtn ${R.applied.runes === pageKey(r) ? 'done' : ''}" ${canApply ? `data-act="applyRunes" data-i="${i}"` : 'disabled'}><div class="row sp nw"><span class="small">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</span><span class="small apply">${R.applied.runes === pageKey(r) ? '✅ Appliquée dans le client' : canApply ? '⤴ Appliquer' : ''}</span></div>${runePage(r)}</button>`).join('') : '<p class="muted small">Pas de données de runes.</p>';
+    h += A.runes.length ? A.runes.slice(0, 5).map((r, i) => `<button class="rbtn ${R.applied.runes === pageKey(r) ? 'done' : ''}" ${canApply ? `data-act="applyRunes" data-i="${i}"` : 'disabled'}><div class="row sp nw"><span class="small">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</span><span class="small apply">${R.applied.runes === pageKey(r) ? '✅ Appliquée dans le client' : canApply ? '⤴ Appliquer' : ''}</span></div>${runePage(r)}</button>`).join('') : '<p class="muted small">Pas de données de runes.</p>';
     if (A.spells && A.spells.length) h += `<h3>Sorts d'invocateur</h3><div class="row">${A.spells.map((x, i) => `<button class="pair rbtn ${R.applied.spells === x.spells ? 'done' : ''}" ${canApply ? `data-act="applySpells" data-i="${i}"` : 'disabled'}>${spellPair(x.spells)} <span class="small">${wr(x)}</span>${R.applied.spells === x.spells ? ' ✅' : ''}</button>`).join('')}</div>`;
     h += `<p class="muted small" style="margin-top:6px">${canApply ? 'Clique sur une page ou une paire de sorts : elle est créée / sélectionnée directement dans le client.' : 'Pendant une vraie sélection, un clic applique la page ou les sorts dans le client.'}</p></div>`;
 

@@ -1,6 +1,11 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.19.0';
+var APP_VERSION = '3.19.1';
 var APP_RELEASES = [
+  { v: '3.19.1', date: '2026-11-10', notes: [
+    'Sélection : la carte de ton champion (victoires, parties analysées, parties contre ton adversaire) passe dans la colonne de gauche, sous les équipes et au-dessus des conseils de jeu.',
+    'Correction : les colonnes qui défilent (sélection et écran de jeu) remontaient toutes seules en haut à chaque rafraîchissement ; elles gardent maintenant leur position.',
+    'Pages de runes plus compactes, et jusqu\'à 5 pages conseillées au lieu de 3.',
+  ]},
   { v: '3.19.0', date: '2026-11-10', notes: [
     'NoobStatMotor utilise maintenant les fiches par champion (173 champions, 10 builds chacun, 1 730 builds) à la place de l\'ancienne base par profils.',
     'Sélection : seuls les builds de ta voie sont proposés, regroupés par catégorie (Dégâts, Combattant, Tank, Support…). Le build Standard est le choix par défaut, et la variante qui répond à l\'équipe adverse (Contre AD / assassins, Contre AP, Contre tanks, Anti-soins) est mise en avant. Un clic sur un build le fait suivre en jeu.',
