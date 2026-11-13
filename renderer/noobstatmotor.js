@@ -258,6 +258,8 @@ var NSM = (() => {
   };
   function runes(c, b) {
     const e = champ(c); if (!e || !b) return null;
+    /* page écrite dans la fiche (tableau « Runes par build ») si elle existe */
+    if (b.runes) return { name: String(b.variant || ''), runes: b.runes.runes, shards: b.runes.shards, why: b.runes.why };
     const variant = String(b.variant || '');
     const pg = basePage(e, b, /^Alternative/.test(variant) && (b.n % 2 === 0));
     let pri = pg.pri.slice(), sec = pg.sec.slice(), sh = pg.sh.slice();

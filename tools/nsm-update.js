@@ -48,6 +48,13 @@ for (const raw of lines) {
     cur.builds.push({ n: +m[1], cat: m[2].trim(), lanes: m[3].split(/,\s*/).map((x) => LANE[x.trim()]).filter(Boolean), variant: m[4].trim(), items: its, cost: +m[6] });
     continue;
   }
+  /* Tableau « Runes par build » : | # | Build | Rune clé | Principale | Secondaire | Fragments | Pourquoi | `code` | */
+  m = l.match(/^\| (\d+) \| (.+?) \| (.+?) \| (.+?) \| (.+?) \| (.+?) \| (.+?) \| `(\d+):([\d,]+)\|(\d+):([\d,]+)\|([\d,]+)` \|$/);
+  if (m) {
+    const b = cur.builds.find((x) => x.n === +m[1]);
+    if (b) b.runes = { runes: `${m[8]}:${m[9]}|${m[10]}:${m[11]}`, shards: m[12], why: m[7].trim(), key: m[3].trim() };
+    continue;
+  }
   if (/^\*\*Corrections en jeu\*\*/.test(l)) { inCorr = true; continue; }
   m = inCorr && l.match(/^- (.+?) : (.+)$/);
   if (m) {
@@ -69,4 +76,5 @@ const out = '/* Données du moteur NoobStatMotor, générées par tools/nsm-upda
   + 'var NSM_DATA = ' + JSON.stringify(data) + ';\nif (typeof module !== "undefined") module.exports = NSM_DATA;\n';
 fs.writeFileSync(path.join(ROOT, 'renderer', 'nsm-data.js'), out);
 const nb = names.reduce((t, n) => t + champions[n].builds.length, 0);
-console.log(`NoobStatMotor : base du ${data.version}, ${names.length} champions, ${nb} builds.`);
+const nr = names.reduce((t, n) => t + champions[n].builds.filter((b) => b.runes).length, 0);
+console.log(`NoobStatMotor : base du ${data.version}, ${names.length} champions, ${nb} builds, ${nr} pages de runes.`);
