@@ -169,7 +169,120 @@ var NSM = (() => {
     return out;
   }
 
+  /* ---------- Pages de runes : une par build, pensée pour ses objets ----------
+     Runes théoriques (comme les builds) : choisies selon la catégorie du build, sa variante et le kit du champion.
+     Identifiants Riot des runes (runesReforged) et des fragments. */
+  const P = { PTA: 8005, LT: 8008, FLEET: 8021, CONQ: 8010, ABSORB: 9101, TRIUMPH: 9111, POM: 8009, ALAC: 9104, HASTE: 9105, BLOOD: 9103, CDG: 8014, CUT: 8017, LAST: 8299 };
+  const DOM = { ELEC: 8112, DH: 8128, HOB: 9923, CHEAP: 8126, TASTE: 8139, SUDDEN: 8143, SIXTH: 8137, GRISLY: 8140, DEEP: 8141, TREASURE: 8135, RELENTLESS: 8105, ULTIMATE: 8106 };
+  const SOR = { AERY: 8214, COMET: 8229, PHASE: 8230, ORB: 8224, MANAFLOW: 8226, NIMBUS: 8275, TRANS: 8210, CELER: 8234, FOCUS: 8233, SCORCH: 8237, WATER: 8232, STORM: 8236 };
+  const RES = { GRASP: 8437, AFTER: 8439, GUARD: 8465, DEMOL: 8446, FONT: 8463, BASH: 8401, COND: 8429, WIND: 8444, BONE: 8473, OVER: 8451, REVIT: 8453, UNFL: 8242 };
+  const INS = { GLACIAL: 8351, BOOK: 8360, FIRST: 8369, FOOT: 8304, CASH: 8321, TONIC: 8313, BISCUIT: 8345, COSMIC: 8347, VELOCITY: 8410 };
+  const TREE = { 8000: [[P.PTA, P.LT, P.FLEET, P.CONQ], [P.ABSORB, P.TRIUMPH, P.POM], [P.ALAC, P.HASTE, P.BLOOD], [P.CDG, P.CUT, P.LAST]],
+    8100: [[DOM.ELEC, DOM.DH, DOM.HOB], [DOM.CHEAP, DOM.TASTE, DOM.SUDDEN], [DOM.SIXTH, DOM.GRISLY, DOM.DEEP], [DOM.TREASURE, DOM.RELENTLESS, DOM.ULTIMATE]],
+    8200: [[SOR.AERY, SOR.COMET, SOR.PHASE], [SOR.ORB, SOR.MANAFLOW, SOR.NIMBUS], [SOR.TRANS, SOR.CELER, SOR.FOCUS], [SOR.SCORCH, SOR.WATER, SOR.STORM]],
+    8400: [[RES.GRASP, RES.AFTER, RES.GUARD], [RES.DEMOL, RES.FONT, RES.BASH], [RES.COND, RES.WIND, RES.BONE], [RES.OVER, RES.REVIT, RES.UNFL]],
+    8300: [[INS.GLACIAL, INS.BOOK, INS.FIRST], [8306, INS.FOOT, INS.CASH], [INS.TONIC, 8352, INS.BISCUIT], [INS.COSMIC, INS.VELOCITY, 8316]] };
+  const treeOf = (id) => +Object.keys(TREE).find((t) => TREE[t].some((row) => row.includes(id)));
+  const rowOf = (id) => { const t = TREE[treeOf(id)]; return t ? t.findIndex((row) => row.includes(id)) : -1; };
+  const SH = { ADAPT: 5008, AS: 5005, AH: 5007, MS: 5010, HPS: 5001, HP: 5011, TEN: 5013 };
+  function famRunes(cat) {
+    if (/^Support engage/.test(cat)) return 'engage';
+    if (/^Support enchanteur/.test(cat)) return 'enchanter';
+    if (/AP burst/.test(cat)) return 'burst';
+    if (/AP continu/.test(cat)) return 'dps';
+    if (/AD critique/.test(cat)) return 'adc';
+    if (/à l'impact/.test(cat)) return 'onhit';
+    if (/létalité/.test(cat)) return 'lethal';
+    if (/^Tank/.test(cat)) return 'tank';
+    if (/^Combattant/.test(cat)) return 'fighter';
+    return 'adcaster';
+  }
+  /* Page de base : [voie principale, 4 runes], [voie secondaire, 2 runes], 3 fragments, raison */
+  function basePage(e, b, alt) {
+    const k = (w) => e.kit.some((x) => x.includes(w));
+    const jg = /\(jungle\)/.test(b.cat), sup = /^Support/.test(b.cat), melee = e.range === 'M', fam = famRunes(b.cat);
+    const attacks = k('attaques de base') || k('attaques entre les sorts') || k("effets à l'impact");
+    switch (fam) {
+      case 'engage': return alt ? { pri: [INS.GLACIAL, INS.FOOT, INS.BISCUIT, INS.COSMIC], sec: [RES.FONT, RES.BONE], sh: [SH.AH, SH.HPS, SH.HP], why: 'Augmentation glaciale : ralentit après tes contrôles' }
+        : { pri: [RES.AFTER, RES.FONT, RES.BONE, RES.UNFL], sec: [INS.BISCUIT, INS.COSMIC], sh: [SH.AH, SH.HPS, SH.HP], why: 'Répercussion : très résistant après ton engagement' };
+      case 'enchanter': return alt ? { pri: [RES.GUARD, RES.FONT, RES.BONE, RES.REVIT], sec: [SOR.MANAFLOW, SOR.TRANS], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Gardien : protège ton ADC des engagements' }
+        : { pri: [SOR.AERY, SOR.MANAFLOW, SOR.TRANS, SOR.SCORCH], sec: [RES.FONT, RES.REVIT], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Invocation : Aery : soins et boucliers renforcés, harcèlement' };
+      case 'burst':
+        if (sup) return { pri: [SOR.COMET, SOR.MANAFLOW, SOR.TRANS, SOR.SCORCH], sec: [INS.BISCUIT, INS.COSMIC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Comète arcanique : harcèlement depuis la voie du bas' };
+        if (jg) return { pri: [DOM.DH, DOM.SUDDEN, DOM.GRISLY, DOM.TREASURE], sec: [SOR.TRANS, SOR.STORM], sh: [SH.ADAPT, SH.ADAPT, SH.HP], why: 'Moisson noire : achève les cibles basses en jungle' };
+        if (alt !== !!k('poke à longue portée')) return { pri: [SOR.COMET, SOR.MANAFLOW, SOR.TRANS, SOR.SCORCH], sec: [INS.FOOT, INS.COSMIC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Comète arcanique : harcèlement à distance' };
+        return { pri: [DOM.ELEC, DOM.TASTE, DOM.GRISLY, k('ultime décisif') ? DOM.ULTIMATE : DOM.TREASURE], sec: [SOR.MANAFLOW, SOR.TRANS], sh: [SH.ADAPT, SH.ADAPT, SH.HP], why: 'Électrocution : pic de dégâts sur ton combo' };
+      case 'dps':
+        if (sup) return { pri: [SOR.AERY, SOR.MANAFLOW, SOR.TRANS, SOR.SCORCH], sec: [INS.BISCUIT, INS.COSMIC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Invocation : Aery : harcèlement à chaque sort' };
+        if (jg || (melee && !alt) || ((k('sorts qui montent avec les PV') || k('soins sur soi')) && !alt)) return { pri: [P.CONQ, P.TRIUMPH, P.HASTE, P.LAST], sec: [RES.WIND, RES.UNFL], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Conquérant : tes dégâts sur la durée te soignent et montent en combat long' };
+        return k('très mobile') || alt ? { pri: [SOR.PHASE, SOR.MANAFLOW, SOR.TRANS, SOR.STORM], sec: [INS.FOOT, INS.COSMIC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Ruée de phase : fuir et repositionner après tes sorts' }
+          : { pri: [SOR.COMET, SOR.MANAFLOW, SOR.TRANS, SOR.STORM], sec: [INS.FOOT, INS.COSMIC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Comète arcanique : dégâts de zone et harcèlement' };
+      case 'adc':
+        if (jg) return { pri: [P.LT, P.TRIUMPH, P.ALAC, P.CDG], sec: [DOM.SUDDEN, DOM.TREASURE], sh: [SH.AS, SH.ADAPT, SH.HP], why: 'Tempo mortel : enchaîne les attaques en jungle' };
+        if (alt) return { pri: [P.FLEET, P.POM, P.BLOOD, P.CUT], sec: [RES.WIND, RES.BONE], sh: [SH.AS, SH.ADAPT, SH.HP], why: 'Jeu de jambes : survit au harcèlement en voie' };
+        return { pri: [attacks ? P.LT : P.PTA, P.POM, P.BLOOD, P.CDG], sec: [INS.FOOT, INS.COSMIC], sh: [SH.AS, SH.ADAPT, SH.HP], why: `${attacks ? 'Tempo mortel' : 'Attaque soutenue'} : tes objets critiques profitent des attaques en chaîne` };
+      case 'onhit':
+        if (melee) return { pri: [P.CONQ, P.TRIUMPH, P.ALAC, P.LAST], sec: [RES.WIND, RES.UNFL], sh: [SH.AS, SH.ADAPT, SH.HP], why: 'Conquérant : tes effets à l\'impact en combat long' };
+        return alt ? { pri: [DOM.HOB, DOM.TASTE, DOM.GRISLY, DOM.TREASURE], sec: [P.POM, P.ALAC], sh: [SH.AS, SH.ADAPT, SH.HP], why: 'Grêle de lames : rafale d\'attaques en début de combat' }
+          : { pri: [P.LT, P.POM, P.ALAC, P.CUT], sec: [INS.FOOT, INS.COSMIC], sh: [SH.AS, SH.ADAPT, SH.HP], why: 'Tempo mortel : multiplie tes effets à l\'impact' };
+      case 'lethal':
+        if (sup) return { pri: [DOM.HOB, DOM.SUDDEN, DOM.GRISLY, DOM.RELENTLESS], sec: [INS.FOOT, INS.COSMIC], sh: [SH.ADAPT, SH.ADAPT, SH.HP], why: 'Grêle de lames : rafale au moment de l\'engagement' };
+        return alt ? { pri: [DOM.DH, DOM.SUDDEN, DOM.GRISLY, DOM.TREASURE], sec: [P.TRIUMPH, P.CDG], sh: [SH.ADAPT, SH.ADAPT, SH.HP], why: 'Moisson noire : achève les cibles basses' }
+          : { pri: [DOM.ELEC, DOM.SUDDEN, DOM.GRISLY, jg ? DOM.RELENTLESS : DOM.TREASURE], sec: [P.TRIUMPH, P.CDG], sh: [SH.ADAPT, SH.ADAPT, SH.HP], why: 'Électrocution : pic de dégâts avec tes objets de létalité' };
+      case 'tank':
+        if (jg || alt) return { pri: [RES.AFTER, RES.FONT, RES.BONE, RES.UNFL], sec: [INS.FOOT, INS.VELOCITY], sh: [SH.AH, SH.HPS, SH.HP], why: 'Répercussion : très résistant après ton engagement' };
+        return { pri: [RES.GRASP, RES.DEMOL, RES.WIND, RES.OVER], sec: [INS.BISCUIT, INS.VELOCITY], sh: [SH.AH, SH.HPS, SH.HP], why: 'Poigne de l\'immortel : gagne les échanges en voie et prend des PV' };
+      case 'fighter':
+        if (!alt && k('naturellement résistant') && k('engage et contrôles') && !jg) return { pri: [RES.GRASP, RES.DEMOL, RES.WIND, RES.OVER], sec: [P.TRIUMPH, P.ALAC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Poigne de l\'immortel : échanges courts et PV en plus' };
+        if (alt && k('très mobile')) return { pri: [SOR.PHASE, SOR.NIMBUS, SOR.CELER, SOR.WATER], sec: [RES.WIND, RES.UNFL], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Ruée de phase : entrer, frapper, ressortir' };
+        if (alt) return { pri: [RES.GRASP, RES.DEMOL, RES.WIND, RES.OVER], sec: [P.TRIUMPH, P.ALAC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Poigne de l\'immortel : échanges courts en voie' };
+        return { pri: [P.CONQ, P.TRIUMPH, attacks ? P.ALAC : P.HASTE, P.LAST], sec: jg ? [RES.BONE, RES.UNFL] : [RES.WIND, RES.UNFL], sh: [attacks ? SH.AS : SH.AH, SH.ADAPT, SH.HP], why: 'Conquérant : combats longs, soins sur tes dégâts' };
+      default:
+        if (jg) return { pri: [P.CONQ, P.TRIUMPH, P.ALAC, P.LAST], sec: [DOM.SUDDEN, DOM.TREASURE], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Conquérant : combats longs en jungle' };
+        return alt ? { pri: [INS.FIRST, INS.FOOT, INS.BISCUIT, INS.COSMIC], sec: [SOR.MANAFLOW, SOR.TRANS], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Frappe préventive : or bonus en harcelant à distance' }
+          : { pri: [P.CONQ, P.POM, P.HASTE, P.LAST], sec: [INS.FOOT, INS.COSMIC], sh: [SH.AH, SH.ADAPT, SH.HP], why: 'Conquérant : tes sorts répétés montent les dégâts' };
+    }
+  }
+  /* Voie secondaire selon la variante du build (si elle diffère de la voie principale) */
+  const SEC_BY_VARIANT = {
+    'Contre AD / assassins': [[RES.BONE, RES.UNFL], 'Os renforcés contre le burst physique'],
+    'Contre AP': [[RES.WIND, RES.UNFL], 'Second souffle contre le harcèlement magique'],
+    'Contre tanks': [[P.TRIUMPH, P.CUT], 'Abattage contre les cibles à beaucoup de PV'],
+    'Boule de neige': [[DOM.TASTE, DOM.TREASURE], 'Chasseur de trésors : plus d\'or sur tes éliminations'],
+    'Partie longue': [[SOR.TRANS, SOR.STORM], 'Tempête menaçante : plus fort à chaque minute'],
+    Sustain: [[RES.WIND, RES.REVIT], 'Second souffle et Revitalisation pour tenir'],
+    Engagement: [[SOR.CELER, SOR.WATER], 'Célérité : arriver plus vite sur la cible'],
+    Accélération: [[INS.FOOT, INS.COSMIC], 'Perspicacité cosmique : sorts et objets plus souvent'],
+    Poke: [[SOR.MANAFLOW, SOR.SCORCH], 'Bande de flux de mana et Brûlure pour harceler'],
+    'Split push': [[RES.DEMOL, RES.WIND], 'Démolition : tours plus vite en poussant seul'],
+  };
+  function runes(c, b) {
+    const e = champ(c); if (!e || !b) return null;
+    const variant = String(b.variant || '');
+    const pg = basePage(e, b, /^Alternative/.test(variant) && (b.n % 2 === 0));
+    let pri = pg.pri.slice(), sec = pg.sec.slice(), sh = pg.sh.slice();
+    const why = [pg.why];
+    const v = SEC_BY_VARIANT[Object.keys(SEC_BY_VARIANT).find((x) => variant.startsWith(x))];
+    if (v) {
+      const t = treeOf(v[0][0]);
+      if (t !== treeOf(pri[0])) { sec = v[0].slice(); why.push(v[1]); }
+      else {
+        /* même voie : on remplace la rune de la même ligne dans la voie principale */
+        v[0].forEach((id) => { const r = rowOf(id); if (r > 0) pri[r] = id; });
+        why.push(v[1]);
+      }
+    }
+    if (variant === 'Contre tanks' && treeOf(pri[0]) === 8000) pri[3] = P.CUT;
+    if (variant === 'Partie longue') sh[2] = SH.HPS;
+    if (variant === 'Accélération') sh[0] = SH.AH;
+    if (variant.startsWith('Contre AD') || variant === 'Contre AP') sh[2] = SH.HP;
+    /* validité : 2 runes secondaires de lignes différentes (1 à 3) dans une autre voie */
+    const pt = treeOf(pri[0]); let st = treeOf(sec[0]);
+    if (st === pt || treeOf(sec[1]) !== st || rowOf(sec[0]) === rowOf(sec[1]) || rowOf(sec[0]) < 1 || rowOf(sec[1]) < 1) { sec = pt === 8400 ? [INS.BISCUIT, INS.COSMIC] : [RES.WIND, RES.UNFL]; st = treeOf(sec[0]); }
+    return { name: variant, runes: `${pt}:${pri.join(',')}|${st}:${sec.join(',')}`, shards: sh.join(','), why: why.join(' · ') };
+  }
+
   if (typeof NSM_DATA !== 'undefined') init(NSM_DATA);
-  return { init, champ, traits, situations, builds, recommend, start, corrections, flowTips, isBoots, isSupport, isLegendary, item, fr, frText, norm, SIT_FR, VARIANT, get version() { return DB && DB.version; } };
+  return { init, champ, traits, situations, builds, recommend, start, corrections, flowTips, runes, isBoots, isSupport, isLegendary, item, fr, frText, norm, SIT_FR, VARIANT, get version() { return DB && DB.version; } };
 })();
 if (typeof module !== 'undefined') module.exports = NSM;

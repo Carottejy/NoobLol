@@ -617,7 +617,12 @@ test('NoobStatMotor : fiches par champion (sélection par voie, variante, correc
   assert.equal(cor[0].id, 'feed-ad'); assert.deepEqual(cor[0].items, ["Zhonya's Hourglass"]);
   assert.ok(cor.length <= 2);
   assert.ok(N.champ({ id: 'MonkeyKing', name: 'Wukong' }) && N.champ({ id: 'Kaisa', name: "Kai'Sa" }));
-  /* règles d'objets sur les 1 730 builds */
+  /* une page de runes valide par build : 4 runes principales, 2 secondaires d'une autre voie, 3 fragments */
+  for (const [n, e] of Object.entries(NSM_DATA.champions)) for (const b of e.builds) {
+    const r = N.runes(n, b); const [a, c] = r.runes.split('|'); const [pt, pr] = a.split(':'), [st, sr] = c.split(':');
+    assert.ok(pt !== st && pr.split(',').length === 4 && sr.split(',').length === 2 && r.shards.split(',').length === 3 && r.name === b.variant, n + ' #' + b.n);
+  }
+    /* règles d'objets sur les 1 730 builds */
   for (const [n, e] of Object.entries(NSM_DATA.champions)) for (const b of e.builds) {
     const g = b.items.flatMap((it) => (N.item(it) || {}).groups || []);
     assert.equal(new Set(g).size, g.length, n + ' #' + b.n);

@@ -941,8 +941,10 @@
     const mu = opp ? cached(`mu:${c.key}:${opp}:${role}`, () => NB.stats.matchup(+c.key, opp, role, 30)) : null;
     if (mu && mu.games) h += `<p class="tip" style="margin-top:8px">Contre <b>${esc(oc.name)}</b> : <b class="${mu.wins / mu.games >= 0.5 ? 'pos' : 'neg'}">${pct(mu.wins, mu.games)}</b> de victoires sur ${mu.games} parties analysées.</p>`;
     const rows = cached(`builds:${c.key}:${role}`, () => NB.stats.builds(+c.key, role, 30));
-    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div><!--SEC:items-->' + nsmHtml;
-    if ((!rows || !rows.length) && nsmHtml) return h + '</div><!--SEC:items-->' + nsmHtml;
+    const nsmRun = nsmOn() ? nsmRunePages(c, role, (sd.enemies || []).map(byKey).filter(Boolean), !!(NB && sd.live)) : null;
+    if (nsmRun) R.selPages = nsmRun.pages;
+    if (rows === undefined) return h + '<div class="loader small">Calcul des builds…</div></div>' + (nsmRun ? '<!--SEC:runes-->' + nsmRun.html : '') + '<!--SEC:items-->' + nsmHtml;
+    if ((!rows || !rows.length) && nsmHtml) return h + '</div><!--SEC:runes-->' + (nsmRun ? nsmRun.html : '') + '<!--SEC:items-->' + nsmHtml;
     if (!rows || !rows.length) return h + `<p class="muted small">Pas encore de parties analysées pour ${esc(c.name)} en ${ROLE_NAME[role]}. Les runes « recommandées » du client sont un bon choix. ${R.col && R.col.running ? 'Le collecteur tourne : reviens plus tard.' : 'Démarre le collecteur dans les Réglages.'}</p></div>`;
     const A = Builds.analyze(rows, D, { opp, enemies: sd.enemies });
     h += `<div class="kpis"><div><b>${pct(A.wins, A.games)}</b><span>victoires</span></div><div><b>${nf(A.games)}</b><span>parties analysées</span></div><div><b>${oc ? nf(A.vsGames) : '—'}</b><span>${oc ? 'contre ' + esc(oc.name) : 'adversaire inconnu'}</span></div></div></div>`;
@@ -951,12 +953,13 @@
     const ctx = (vs, n) => (oc ? (vs ? `<span class="tag gold">contre ${esc(oc.name)} · ${n} parties</span>` : `<span class="tag">général · seulement ${A.vsGames} partie${A.vsGames > 1 ? 's' : ''} contre ${esc(oc.name)}</span>`) : '<span class="tag">général</span>');
     if (A.adapted) h = h.replace('</div></div>', '</div></div>') + `<p class="tip adapt">🎯 Runes et objets adaptés ${oc ? `au match-up contre <b>${esc(oc.name)}</b>` : ''}${oc && A.team ? ' et ' : ''}${A.team ? 'à la composition de l\'équipe adverse' : ''}.</p>`;
     h += '<!--SEC:runes-->';
-    h += `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes et sorts</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
     const canApply = !!(NB && sd.live);
-    R.selPages = A.runes.slice(0, 5).map((r) => runePayload(r, c, role));
+    if (nsmRun) h += nsmRun.html;
+    h += `<div class="card"><div class="row sp"><h2 style="margin:0">${nsmRun ? '🪄 Sorts d\'invocateur' : '✨ Runes et sorts'}</h2>${ctx(A.runesVs, A.vsGames)}</div>`;
+    if (!nsmRun) R.selPages = A.runes.slice(0, 5).map((r) => runePayload(r, c, role));
     R.selSpells = (A.spells || []).map((x) => x.spells);
-    h += A.runes.length ? A.runes.slice(0, 5).map((r, i) => `<button class="rbtn ${R.applied.runes === pageKey(r) ? 'done' : ''}" ${canApply ? `data-act="applyRunes" data-i="${i}"` : 'disabled'}><div class="row sp nw"><span class="small">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</span><span class="small apply">${R.applied.runes === pageKey(r) ? '✅ Appliquée dans le client' : canApply ? '⤴ Appliquer' : ''}</span></div>${runePage(r)}</button>`).join('') : '<p class="muted small">Pas de données de runes.</p>';
-    if (A.spells && A.spells.length) h += `<h3>Sorts d'invocateur</h3><div class="row">${A.spells.map((x, i) => `<button class="pair rbtn ${R.applied.spells === x.spells ? 'done' : ''}" ${canApply ? `data-act="applySpells" data-i="${i}"` : 'disabled'}>${spellPair(x.spells)} <span class="small">${wr(x)}</span>${R.applied.spells === x.spells ? ' ✅' : ''}</button>`).join('')}</div>`;
+    h += nsmRun ? '' : A.runes.length ? A.runes.slice(0, 5).map((r, i) => `<button class="rbtn ${R.applied.runes === pageKey(r) ? 'done' : ''}" ${canApply ? `data-act="applyRunes" data-i="${i}"` : 'disabled'}><div class="row sp nw"><span class="small">${i ? 'Alternative' : '<b>Page conseillée</b>'} · ${wr(r)}</span><span class="small apply">${R.applied.runes === pageKey(r) ? '✅ Appliquée dans le client' : canApply ? '⤴ Appliquer' : ''}</span></div>${runePage(r)}</button>`).join('') : '<p class="muted small">Pas de données de runes.</p>';
+    if (A.spells && A.spells.length) h += `${nsmRun ? '' : '<h3>Sorts d\'invocateur</h3>'}<div class="row">${A.spells.map((x, i) => `<button class="pair rbtn ${R.applied.spells === x.spells ? 'done' : ''}" ${canApply ? `data-act="applySpells" data-i="${i}"` : 'disabled'}>${spellPair(x.spells)} <span class="small">${wr(x)}</span>${R.applied.spells === x.spells ? ' ✅' : ''}</button>`).join('')}</div>`;
     h += `<p class="muted small" style="margin-top:6px">${canApply ? 'Clique sur une page ou une paire de sorts : elle est créée / sélectionnée directement dans le client.' : 'Pendant une vraie sélection, un clic applique la page ou les sorts dans le client.'}</p></div>`;
 
     /* Kit d'objets : NoobStatMotor (option) ou statistiques du collecteur */
@@ -1859,6 +1862,17 @@
       <div class="row small" style="margin:2px 0 6px">1. Départ ${B.start.map(ic).join('')}<span class="muted">· puis le build choisi ci-dessous (clic pour le suivre en jeu)</span></div>
       <div class="nsmlist">${rows}</div>
       <details class="flat"><summary class="small">Corrections prévues en jeu pour ${esc(c.name)}</summary>${['ad', 'ap', 'assassin', 'tank', 'heal', 'shields', 'cc', 'ahead', 'behind'].filter((k) => e.corr[k]).map((k) => `<p class="small"><b>${({ ad: 'Adversaire AD très feed', ap: 'Adversaire AP très feed', assassin: 'Assassin feed', tank: 'Tank feed / 2 tanks', heal: 'Soins adverses', shields: 'Boucliers adverses', cc: 'Contrôles / suppression', ahead: 'En avance', behind: 'En retard' })[k]}</b> : ${esc(NSM.frText(e.corr[k].text))}</p>`).join('')}</details></div>`;
+  }
+  /* Pages de runes NoobStatMotor : une par build de la catégorie affichée, avec le même nom que le build */
+  function nsmRunePages(c, role, enemyChamps, canApply) {
+    const ch = nsmChoice(c, role, enemyChamps); if (!ch) return { html: '', pages: [] };
+    const cur = ch.b, list = ch.rec.list.filter((x) => x.cat === cur.cat);
+    list.sort((a, b) => (b.n === cur.n) - (a.n === cur.n));
+    const pages = list.map((b) => { const r = NSM.runes({ id: c.id, name: c.name }, b); return r ? { b, r, pay: Object.assign(runePayload(r, c, role), { name: `NoobLOL ${c.name} ${b.variant}`.slice(0, 40) }) } : null; }).filter(Boolean);
+    const html = `<div class="card"><div class="row sp"><h2 style="margin:0">✨ Runes · NoobStatMotor</h2><span class="tag">${esc(cur.cat)}</span></div>
+      <p class="small muted" style="margin:2px 0 4px">Une page par build, du même nom, pensée pour ses objets (runes théoriques, comme les builds).</p>
+      ${pages.map((x, i) => `<button class="rbtn ${R.applied.runes === x.pay.key ? 'done' : ''}" ${canApply ? `data-act="applyRunes" data-i="${i}"` : 'disabled'} title="${esc(x.r.why)}"><div class="row sp nw"><span class="small"><b>${esc(x.b.variant)}</b>${x.b.n === cur.n ? ' · <span class="pos">build suivi</span>' : ''} <span class="muted">— ${esc(x.r.why.split(' · ').pop())}</span></span><span class="small apply">${R.applied.runes === x.pay.key ? '✅ Appliquée' : canApply ? '⤴ Appliquer' : ''}</span></div>${runePage(x.r)}</button>`).join('')}</div>`;
+    return { html, pages: pages.map((x) => x.pay) };
   }
   function nsmSettings() {
     const ok = typeof NSM !== 'undefined' && NSM.version;

@@ -1,6 +1,10 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.19.2';
+var APP_VERSION = '3.20.0';
 var APP_RELEASES = [
+  { v: '3.20.0', date: '2026-11-13', notes: [
+    'NoobStatMotor : une page de runes par build, avec le même nom que le build (Standard, Contre AP, Contre tanks…), pensée pour ses objets. Elles remplacent les pages du collecteur dans la colonne des runes à la sélection, le build suivi en premier, et s\'appliquent dans le client d\'un clic.',
+    'Chaque page est choisie selon la catégorie du build (rune principale : Électrocution pour le burst, Conquérant pour les combattants, Tempo mortel pour les tireurs, Répercussion pour les supports d\'engagement…), sa variante (Os renforcés contre AD / assassins, Second souffle contre AP, Abattage contre les tanks, Chasseur de trésors en boule de neige…) et le kit du champion. La raison est affichée à côté de chaque page.',
+  ]},
   { v: '3.19.2', date: '2026-11-10', notes: [
     'Correction : dans « Mes dernières parties » (et la progression, la fin de partie), le poste lu dans l\'historique du client pouvait être faux, par exemple « Jungle » pour un top. Les postes sont maintenant répartis par équipe : seul le joueur avec Châtiment peut être jungle, l\'objet de support désigne le support, chaque poste n\'est donné qu\'une fois. Les parties déjà enregistrées sont relues.',
   ]},
