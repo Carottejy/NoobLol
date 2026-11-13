@@ -1,7 +1,7 @@
 {
   "name": "nooblol",
   "productName": "Noob LOL",
-  "version": "3.21.0",
+  "version": "3.21.1",
   "description": "Compagnon de jeu League of Legends pour débutants : préparation, sélection des champions et aide en jeu.",
   "author": "Carottejy",
   "license": "UNLICENSED",
@@ -74,6 +74,13 @@
         "to": "seed",
         "filter": [
           "*.nooblolstats"
+        ]
+      },
+      {
+        "from": "data",
+        "to": "data",
+        "filter": [
+          "nooblol_builds_par_champion.md"
         ]
       }
     ]

@@ -1,6 +1,9 @@
 /* Numéro de version + notes de version (affichés dans Réglages). Le numéro « officiel » de l'appli PC est celui de package.json. */
-var APP_VERSION = '3.21.0';
+var APP_VERSION = '3.21.1';
 var APP_RELEASES = [
+  { v: '3.21.1', date: '2026-11-13', notes: [
+    'La base de builds NoobStatMotor complétée (fiches par champion avec leurs 1 730 pages de runes) est livrée avec l\'appli : bouton « Ouvrir la base de builds » dans Réglages, carte Moteur de builds.',
+  ]},
   { v: '3.21.0', date: '2026-11-13', notes: [
     'NoobStatMotor : les 1 730 pages de runes sont maintenant écrites dans la base (data/nooblol_builds_par_champion.md, tableau « Runes par build » de chaque fiche). Chaque page est optimisée pour son build : effets de chaque rune du patch actuel croisés avec le kit du champion, la catégorie et la variante du build, et les statistiques de ses 6 objets ; toutes les pages valides sont comparées et la meilleure est retenue.',
     'Mana : le besoin en mana du kit est comparé au mana apporté par les premiers objets. Quand il en manque (477 builds), une rune qui rend du mana (Ruban de mana, Présence d\'esprit, Livraison de biscuits) est choisie, une seule le plus souvent, pour ne pas tomber à sec sans gaspiller d\'emplacement.',

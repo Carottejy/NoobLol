@@ -1878,7 +1878,7 @@
     const ok = typeof NSM !== 'undefined' && NSM.version;
     return `<div class="card"><h2>🧠 Moteur de builds</h2>
       <p class="muted small">Par défaut, les builds conseillés (sélection, chargement et en jeu) viennent des statistiques des parties analysées par le collecteur. Avec <b>NoobStatMotor</b>, ils viennent des fiches par champion (173 champions, 10 builds chacun, rattachés aux voies) : à la sélection, tu choisis la catégorie et le build de ta voie (la variante adaptée à l'équipe adverse est mise en avant) ; en jeu, les corrections de la fiche s'appliquent quand un adversaire est très feed, contre les soins, les tanks, les contrôles… (2 au maximum). Les runes restent celles du collecteur.</p>
-      <div class="row"><button class="chip ${S.opt.nsm ? 'on' : ''}" data-act="nsmToggle" ${ok ? '' : 'disabled'}>${S.opt.nsm ? '✅ NoobStatMotor activé' : 'NoobStatMotor désactivé'}</button>${ok ? `<span class="small muted">Base du ${esc(NSM.version)}</span>` : '<span class="small neg">Base introuvable</span>'}</div></div>`;
+      <div class="row"><button class="chip ${S.opt.nsm ? 'on' : ''}" data-act="nsmToggle" ${ok ? '' : 'disabled'}>${S.opt.nsm ? '✅ NoobStatMotor activé' : 'NoobStatMotor désactivé'}</button>${ok ? `<span class="small muted">Base du ${esc(NSM.version)} · 1 730 builds et leurs pages de runes</span>` : '<span class="small neg">Base introuvable</span>'}${NB && NB.openNsm ? '<button class="btn ghost small" data-act="openNsm">📄 Ouvrir la base de builds</button>' : ''}</div></div>`;
   }
   function loadBuild(ld) {
     if (!ld.meG || !D.champs) return null;
@@ -2851,6 +2851,7 @@
       case 'pvInd': { S.opt.pvOff = Object.assign({}, S.opt.pvOff); if (S.opt.pvOff[v]) delete S.opt.pvOff[v]; else S.opt.pvOff[v] = true; save(); R.pvKey = ''; if (R.live) progSync(R.live); render(true); break; }
       case 'nsmCat': { S.nsmPick = S.nsmPick || {}; S.nsmPick[`${el.dataset.champ}:${el.dataset.role}`] = { cat: v }; save(); render(true); break; }
       case 'nsmPickB': { S.nsmPick = S.nsmPick || {}; S.nsmPick[`${el.dataset.champ}:${el.dataset.role}`] = { cat: el.dataset.cat, n: +v }; save(); R.ovKey = ''; toast('🧠 Build suivi en jeu'); render(true); break; }
+      case 'openNsm': NB.openNsm().then((r) => { if (r) toast('Fichier introuvable'); }).catch(() => {}); break;
       case 'nsmToggle': S.opt.nsm = !S.opt.nsm; save(); R.loadMemo = null; R.ovKey = ''; toast(S.opt.nsm ? '🧠 NoobStatMotor activé : les builds sont calculés par règles' : 'Builds d\'après les statistiques du collecteur'); render(true); break;
       case 'pvReset': NB.progov.reset().then(() => toast('Encart « Ma progression » replacé')).catch(() => {}); break;
       case 'ovReset': NB.overlay.reset().then(() => toast('Encart replacé en bas de l\'écran du jeu')).catch(() => {}); break;

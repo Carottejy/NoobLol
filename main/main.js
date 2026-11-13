@@ -385,6 +385,11 @@ function handlers() {
   h('overlay:openItem', (id) => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); send('open:item', String(id)); } return true; });
   h('overlay:reset', () => { cfg.set({ overlay: { x: null, y: null } }); if (overlay && !overlay.isDestroyed()) overlay.setBounds(overlayBounds()); return true; });
   h('app:openData', () => shell.openPath(app.getPath('userData')));
+  /* Base de builds NoobStatMotor livrée avec l'appli (fichier .md lisible) */
+  h('app:openNsm', () => {
+    const f = [path.join(process.resourcesPath || '', 'data', 'nooblol_builds_par_champion.md'), path.join(__dirname, '..', 'data', 'nooblol_builds_par_champion.md')].find((x) => { try { return fs.statSync(x).isFile(); } catch (e) { return false; } });
+    return f ? shell.openPath(f) : 'introuvable';
+  });
   h('open:external', (url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return true; });
   h('update:check', () => checkUpdate());
   h('update:state', () => upd);
